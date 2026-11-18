@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: Playwright 1.58 does not support Ubuntu 26 yet
     steps:
       - uses: actions/checkout@v4
         with:
