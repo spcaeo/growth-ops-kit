@@ -4,6 +4,7 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+- Audit M4: the hard-coded cut-off date in `ev.task-steps` is gone. A done step needs its proof in every project; a project that adopted proofs later sets `proof_required_since` in growth.json.
 - Audit M2: `growth ready` runs the status check of every internal link (it passed `--no-link-status` before). The cap is `link_check_cap` in growth.json (default 200, was a fixed 80) and the OK line says how many of the unique internal targets were checked; a skipped status check that was asked for is a BLOCKED-SKIP.
 - Audit H3: `growth ready --key` is bound to the path (`growth preflight` records the key in `journal/preflight.json`; READY refuses a different one). Research files belong to a key only when their name starts with `<key>-` and no longer pre-flighted key owns them (key `pricing` no longer picks up `enterprise-pricing-review-...` or `pricing-guide-review-...`). The default page key and the page-archive folder are now the path slug (`blog__my-post`, from `paths.snapshot_slug`), so `/a/b-c` and `/a-b/c` no longer collide; an archive made under the old folder name needs renaming.
 - Audit H4: the gate tells two kinds of SKIP apart. `SKIP` means the rule does not apply (another stack, a feature that is off). `BLOCKED-SKIP` means it applies but could not run (no headless browser, no way to date the page, no research record yet); it is counted in the `Gate:` line and `growth ready` refuses the page while any is left.

@@ -207,8 +207,11 @@ def task_steps(ctx):
     last_done = max((i for i, s in enumerate(steps) if s.get("status") == "done"), default=-1)
     stale = [s for s in steps[:max(last_done, 0)] if s.get("status") == "todo" and not after.search(s.get("what", ""))]   # none done yet: nothing is stale
     probs += [f"{task['id']} step {s.get('n')} still todo while later steps are done: {s.get('what', '')[:60]}" for s in stale]
+    # growth.json proof_required_since ("YYYY-MM-DD" or "YYYY-MM-DD HH:MM"): steps ticked done before it may lack proof (a
+    # project that adopted proofs later); with no setting every done step needs its proof
+    since = str(ctx.cfg.get("proof_required_since") or "")
     probs += [f"{task['id']} step {s.get('n')} done with no proof" for s in steps
-              if s.get("status") == "done" and not s.get("output") and s.get("at", "") >= "2026-11-18 13"]
+              if s.get("status") == "done" and not s.get("output") and (not since or s.get("at", "")[:len(since)] >= since)]
     ctx.verdict(probs, f"{task['id']}: {len(steps)} steps, none skipped or left open",
                 "do the step, or tick it with its proof: growth tasks tick <task> <n> --output <proof>; raise a step with the owner before skipping it (rule 0)")
 
