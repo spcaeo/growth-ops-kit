@@ -95,8 +95,10 @@ JS_MEASURE = r"""
     // WCAG 2.5.8 exempts a target that sits inline in a sentence or block of text (its size is set by the line height of the text
     // around it). A link is "in a sentence" when it is inline and the text around it, inside its nearest block, holds real words:
     // a list of links with only separators ("|", a dot) between them is NOT a sentence.
+    // "inline" includes inline-flex / inline-block / inline-grid: a link laid out as inline-flex to sit next to its icon
+    // ("Space-O Technologies ↗" in a footer sentence) still sits in the line of the sentence (friction 44, 19 Nov 2026)
     const inSentence = (el) => {
-      if (getComputedStyle(el).display !== 'inline') return false;
+      if (!/^inline(-flex|-block|-grid)?$/.test(getComputedStyle(el).display)) return false;
       let box = el.parentElement;
       while (box && getComputedStyle(box).display === 'inline') box = box.parentElement;
       if (!box) return false;
