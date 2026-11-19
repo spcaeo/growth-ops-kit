@@ -22,7 +22,7 @@ def growth(*args, cwd=None, env=None):
 
 
 def test_help_lists_every_tool_with_one_line():
-    r = growth("help")
+    r = growth("help", "--all")
     assert r.returncode == 0
     for line in r.stdout.splitlines():
         pass
@@ -42,8 +42,13 @@ def test_internal_modules_are_real_and_not_also_commands():
         assert m not in ns["TOOLS"], f"{m} is listed as an internal module and as a growth command: pick one"
 
 
-def test_no_args_is_help():
-    assert growth().stdout == growth("help").stdout
+def test_no_args_is_the_short_menu_and_help_all_lists_every_tool():
+    menu = growth().stdout
+    assert menu == growth("help").stdout
+    for cmd in ("setup", "page", "check", "ready", "measure", "status"):
+        assert f"growth {cmd}" in menu
+    assert len(menu.splitlines()) < 20 and "Tools:" not in menu and "help --all" in menu
+    assert "Tools:" in growth("help", "--all").stdout
 
 
 def test_every_listed_tool_file_exists():

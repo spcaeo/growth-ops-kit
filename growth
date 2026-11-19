@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """growth: the one command for the Growth Ops Kit.
 
-  growth help                 list every tool with one line each
+  growth                      the few commands you need (setup, page, check, ready, measure, status)
+  growth help --all           list every tool with one line each
   growth <tool> [args]        run kit/tools/<tool>.py (adapters and hooks too); hyphens and underscores both work
   growth gate page /x --url http://127.0.0.1:3801/x --type money
   growth new-project <folder> --site https://example.com
@@ -76,6 +77,7 @@ TOOLS = {
     "registry_sync": ("tools/registry_sync.py", "keep rules/registry.json in step with the code (files, needs)"),
     "leak_check": ("tools/leak_check.py", "fail on keys, .env files, personal emails, phone numbers and private words (--history: every commit)"),
     "new_project": ("tools/new_project.py", "make a project folder from templates/project (growth new-project <folder> --site <url>)"),
+    "front_door": ("tools/front_door.py", "(library) the plain front door behind setup, page, check, ready, measure and status"),
     "wizard": ("tools/wizard.py", "the setup wizard: one guided setup (market, access, harness, detection, research browser); --check, --repair, status, confirm"),
     "detect": ("tools/detect.py", "detect a site's stack, sitemap shape, trailing-slash form, language copies, redirects and content folders"),
     "harness": ("tools/harness.py", "(library) the agent harness of a project: install and check hooks, status line, permissions, skills, CLAUDE.md, git hooks"),
@@ -89,6 +91,25 @@ TOOLS = {
     "page_tracker": ("page-tracker/tracker.py", "the page tracker: sync, report (did our page changes help?); also serve, ai-summary"),
 }
 ALIASES = {"design": "site_design", "serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
+
+
+MENU = """Growth Ops Kit: the commands you need
+
+  growth setup [folder] [--site URL]   one-time setup: a few plain questions
+  growth page <url-or-path>            start a page job (plan, checks, brief for your agent)
+  growth check [path]                  check the page you are working on
+  growth ready [path]                  is the page ready to show you?
+  growth measure [path]                did the page help? (after it is live)
+  growth status                        what is open, how far along, what is next
+
+Start here:  growth setup --site https://your-site.example
+Every other tool (there are over fifty):  growth help --all
+"""
+FRONT_DOOR = ("setup", "page", "check", "ready", "measure", "status")
+
+
+def menu():
+    print(MENU)
 
 
 def usage():
@@ -113,9 +134,14 @@ def resolve(name):
 
 def main(argv):
     if not argv or argv[0] in ("help", "-h", "--help"):
-        usage()
+        if "--all" in argv[1:]:
+            usage()
+        else:
+            menu()
         return 0
     name, rest = argv[0], argv[1:]
+    if name in FRONT_DOOR:
+        return subprocess.call([python(), str(KIT / "tools" / "front_door.py"), name, *rest], env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
     if name == "hook":
         if rest[:1] == ["stage"]:        # PostToolUse hook: re-read the checkpoints at a stage boundary
             name, rest = "workflow", ["stage"]
