@@ -93,3 +93,17 @@ def test_a_link_alone_in_a_list_item_is_still_small(tmp_path):
 def test_a_big_enough_link_in_a_sentence_and_a_button_are_unchanged(tmp_path):
     body = "<footer><button style='width:10px;height:10px'>x</button></footer>"
     assert taps(tmp_path, body)
+
+
+def test_inline_flex_link_with_an_icon_in_a_sentence_is_not_a_small_target(tmp_path):
+    # friction 44: the footer's "A <a style=inline-flex>Space-O Technologies <svg/></a> company" was counted on every page
+    css = "footer p a{display:inline-flex;align-items:center;gap:3px}"
+    body = ("<footer><p>A <a href='https://example.com'>Parent Co<svg width='12' height='12'></svg></a> company, "
+            "since 2010.</p></footer>")
+    assert taps(tmp_path, body, css) == []
+
+
+def test_inline_block_links_with_only_separators_are_still_small(tmp_path):
+    css = "footer a{display:inline-block}"
+    body = "<footer><a href='/a'>Privacy</a> | <a href='/b'>Terms</a></footer>"
+    assert len(taps(tmp_path, body, css)) == 2
