@@ -94,7 +94,12 @@ def line(data: dict, style: str = "bars", manual: str = "") -> str:
     open_t = [t for t in tasks if t.get("status") != "done" and any(s.get("status") != "done" for s in t.get("steps") or [])]
     if not open_t:
         return f"no open task · {len(tasks)} task(s) recorded" if tasks else "no task yet: growth tasks add \"...\""
-    main = max(open_t, key=lambda t: len(t.get("steps") or []))   # the main job: the open task with most steps
+    # the main job: a task being worked on (status doing) first, then one still to start; a task that is blocked or waiting
+    # (for a date, for the owner) never takes the bar from live work (friction 47: blocked T3, 60 steps, hid doing T13).
+    # Among equals, the one with most steps.
+    tstat = lambda t: (t.get("status") or "todo").lower()  # noqa: E731
+    rank = lambda t: (tstat(t) in ACTIVE, tstat(t) not in STUCK, len(t.get("steps") or []))  # noqa: E731
+    main = max(open_t, key=rank)
     steps = main.get("steps") or []
     done = sum(1 for s in steps if s.get("status") == "done")
     # "now" is the step being worked on (status doing), else the first step still to do; stuck steps are listed apart,
@@ -102,7 +107,7 @@ def line(data: dict, style: str = "bars", manual: str = "") -> str:
     now = next((s for s in steps if (s.get("status") or "").lower() in ACTIVE), None) or \
         next((s for s in steps if (s.get("status") or "todo").lower() not in ("done", *STUCK)), None)
     stuck = [s for s in steps if (s.get("status") or "").lower() in STUCK]
-    parts = [f"{main.get('id', '?')} {bar(done, len(steps), style)} {done}/{len(steps)}"]
+    parts = [f"{main.get('id', '?')}{' (waiting)' if tstat(main) in STUCK else ''} {bar(done, len(steps), style)} {done}/{len(steps)}"]
     if now:
         parts.append(f"now: {now.get('n', '?')} {label(now)}")
     if stuck:
@@ -110,7 +115,8 @@ def line(data: dict, style: str = "bars", manual: str = "") -> str:
     if manual:
         parts.append(manual)
     if len(open_t) > 1:
-        parts.append(f"+{len(open_t) - 1} other open")
+        waiting = sum(1 for t in open_t if t is not main and tstat(t) in STUCK)
+        parts.append(f"+{len(open_t) - 1} other open" + (f" ({waiting} waiting)" if waiting else ""))
     return " · ".join(parts)
 
 
