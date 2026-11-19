@@ -166,12 +166,21 @@ def check_date(value, what="--recheck"):
         sys.exit(f"{what} must be a real date as YYYY-MM-DD, got '{value}'")
 
 
+def attach_fingerprint(e, url=""):
+    """Evidence entries (click-test, share-preview, speed) store the page's fingerprint (fingerprint.py), so the gate can tell
+    the page's built output has not changed since. Best effort: with no build to read nothing is stored."""
+    import fingerprint
+    from config import SITE_REPO
+    fingerprint.attach(e, CFG, PROJECT, SITE_REPO if CFG.get("site_repo") else None, url)
+
+
 def cmd_add(a, kind=None, text=None):
     a.recheck = check_date(a.recheck)
     e = {"id": next_id(), "at": now(), "kind": kind or a.kind, "pages": norm_pages(a.page), "tags": a.tag or [],
          "title": a.title or (text or a.text or "")[:90], "text": text or a.text or "", "source": a.source or "",
          "status": "open" if (kind or a.kind) in ("question", "owner-action", "finding") else ("open" if a.recheck else "done"),
          "recheck_on": a.recheck or "", "by": "lead"}
+    attach_fingerprint(e, getattr(a, "url", "") or "")
     append(e)
     render()
     print(e["id"])
@@ -264,6 +273,7 @@ def cmd_run(a):
          "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
          "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
          "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method}
+    attach_fingerprint(e, getattr(a, "url", "") or "")
     append(e)
     render()
     print(rid, rf.relative_to(PROJECT))
@@ -378,6 +388,7 @@ def main():
         s.add_argument("--title")
         s.add_argument("--source")
         s.add_argument("--recheck")
+        s.add_argument("--url", default="", help="the page's preview address, read for its fingerprint when there is no build_dir")
         if name == "add":
             s.add_argument("--kind", default="finding", choices=["finding", "decision", "note", "question"])
             s.add_argument("--text", default="")
@@ -391,7 +402,7 @@ def main():
     s.add_argument("--kind", default="ai-answer"); s.add_argument("--engine", required=True)
     s.add_argument("--market"); s.add_argument("--settings"); s.add_argument("--query", required=True)
     s.add_argument("--response-file"); s.add_argument("--response"); s.add_argument("--title")
-    s.add_argument("--summary"); s.add_argument("--named"); s.add_argument("--recheck")
+    s.add_argument("--url", default=""); s.add_argument("--summary"); s.add_argument("--named"); s.add_argument("--recheck")
     s.add_argument("--capture-method", help="how the answer was captured: browser, api, copied, ... (default: response-file or typed-inline)")
     s = sub.add_parser("action"); s.add_argument("task"); s.add_argument("--page", action="append")
     s.add_argument("--tag", action="append"); s.add_argument("--due"); s.add_argument("--why"); s.add_argument("--source")

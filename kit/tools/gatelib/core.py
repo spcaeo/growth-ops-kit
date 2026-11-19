@@ -263,6 +263,23 @@ class Ctx:
                     out.append(os.path.relpath(f, repo))
         return out
 
+    def fingerprint_now(self):
+        """The fingerprint of the page as built now (fingerprint.py): build_dir, else the preview URL the gate reads. Cached; None
+        when neither can be read. Nothing is rebuilt."""
+        if "fingerprint" not in self.cache:
+            import fingerprint
+            try:
+                self.cache["fingerprint"] = fingerprint.current(self.cfg, self.project, self.repo, self.need_path(), self.url or "")
+            except Missing:
+                self.cache["fingerprint"] = None
+        return self.cache["fingerprint"]
+
+    def unchanged_since(self, then) -> bool:
+        """Is the page's built output the same as the fingerprint `then` stored with the evidence? False when there is none
+        (old evidence: the caller keeps the commit-based rule) or the page cannot be read now."""
+        import fingerprint
+        return bool(then) and fingerprint.same(then, self.fingerprint_now())
+
     def last_change_time(self):
         """Unix time of the page's last change, so evidence (screenshots, click-through, share preview) can be checked
         for being newer. With a site checkout: its newest commit. With none (a static site): the newest file in the
