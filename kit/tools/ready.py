@@ -76,7 +76,7 @@ def manual_problems(path, key):
     return checkpoints.manual_status(plan.read_text())[2]
 
 
-GATE_LINE = re.compile(r"^Gate: (\d+) FAIL, (\d+) WARN, (\d+) OK, (\d+) SKIP", re.M)
+GATE_LINE = re.compile(r"^Gate: (\d+) FAIL, (\d+) WARN, (\d+) OK, (\d+) SKIP, (\d+) BLOCKED-SKIP", re.M)
 RESULT_LINE = re.compile(r"^(?:(?:FAIL|WARN|OK)\s+\S+\s+\[([\w.-]+)\]|(?:BLOCKED-)?SKIP ([\w.-]+):)", re.M)
 
 
@@ -111,6 +111,9 @@ def gate_problem(r, ptype):
         want = expected_checks(ptype)
     except Exception as e:  # noqa: BLE001
         return f"gate checks could not be loaded: {type(e).__name__}: {str(e)[:120]}"
+    if int(summ[0][4]) or re.search(r"^BLOCKED-SKIP ", out, re.M):
+        names = sorted({m for m in re.findall(r"^BLOCKED-SKIP ([\w.-]+):", out, re.M)})
+        return f"{int(summ[0][4])} required check(s) could not run ({', '.join(names[:6])}); install what they need or fix the setup, then run ready again"
     got = {a or b for a, b in RESULT_LINE.findall(out)}
     if want - got:
         return f"gate did not report {len(want - got)} expected check(s): {', '.join(sorted(want - got)[:6])}"

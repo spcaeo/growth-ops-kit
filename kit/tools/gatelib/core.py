@@ -35,11 +35,13 @@ class Missing(Exception):
 
 class Skip(Exception):
     """The check does not apply to this project (an adapter for another stack, a house feature that is switched off).
-    It is printed as 'SKIP <id>: <why>' and counted apart from OK: never a fake OK."""
+    It is printed as 'SKIP <id>: <why>' and counted apart from OK: never a fake OK.
+    Skip(why, blocked=True) means the rule DOES apply but could not run (no headless browser, no way to date the page):
+    printed 'BLOCKED-SKIP <id>: <why>', and `growth ready` refuses a page while any is left (audit H4)."""
 
-    def __init__(self, why):
+    def __init__(self, why, blocked=False):
         super().__init__(why)
-        self.why = why
+        self.why, self.blocked = why, blocked
 
 
 class NeedsPage(Missing):
@@ -73,15 +75,16 @@ def check(cid, rule, types=ALL, what="", stage="build", needs="live"):
 
 @dataclass
 class Line:
-    level: str                      # FAIL / WARN / OK
+    level: str                      # FAIL / WARN / OK / SKIP
     rule: str
     cid: str
     what: str
     fix: str = ""
+    blocked: bool = False           # a SKIP of a rule that applies but could not run (never counts as passed)
 
     def text(self):
         if self.level == "SKIP":
-            return f"SKIP {self.cid}: {self.what}"
+            return f"{'BLOCKED-SKIP' if self.blocked else 'SKIP'} {self.cid}: {self.what}"
         s = f"{self.level:<4} {self.rule:<5} [{self.cid}] {self.what}"
         return s + (f" -> {self.fix}" if self.fix and self.level != "OK" else "")
 
@@ -118,8 +121,8 @@ class Ctx:
     _cur: Check | None = None
 
     # ---- result helpers ------------------------------------------------------------------
-    def skip(self, why):
-        self.lines.append(Line("SKIP", self._cur.rule, self._cur.cid, why))
+    def skip(self, why, blocked=False):
+        self.lines.append(Line("SKIP", self._cur.rule, self._cur.cid, why, blocked=blocked))
 
     def stack(self):
         return (self.cfg.get("stack") or "static").lower()
@@ -223,7 +226,7 @@ class Ctx:
             snaps = self.project / "archive" / "pages" / slug
             newest = max((os.stat(f).st_mtime for f in snaps.rglob("*") if f.is_file() and f.parent.name.endswith("-before")), default=0) if snaps.is_dir() else 0
         if not newest:
-            raise Skip("no way to date this page's last change (no site checkout): set growth.json site_repo or site_dir, or archive the page first (growth page_archive capture <path> --stage before)")
+            raise Skip("no way to date this page's last change (no site checkout): set growth.json site_repo or site_dir, or archive the page first (growth page_archive capture <path> --stage before)", blocked=True)
         return int(newest)
 
     def research(self, pattern):
@@ -380,7 +383,7 @@ def run_check(ctx: Ctx, c: Check):
         c.fn(ctx)
     except Skip as m:
         del ctx.lines[n:]
-        ctx.skip(m.why)
+        ctx.skip(m.why, m.blocked)
         ctx._cur = None
         return
     except NeedsPage as m:
