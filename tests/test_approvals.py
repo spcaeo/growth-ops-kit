@@ -99,3 +99,24 @@ def test_tasks_answer_goes_through_the_same_owner_door(tmp_path):
     r = growth(tmp_path, "tasks", "answer", "Q1", "yes", cwd=p)
     assert r.returncode != 0 and "own terminal" in (r.stdout + r.stderr)
     assert json.loads((p / "docs" / "tasks.json").read_text())["questions"][0]["answer"] is None
+
+
+def test_pending_approves_everything_waiting_with_one_code(tmp_path):
+    """growth approve pending: every unapproved exception on one screen, one typed code, one log line each."""
+    p = project(tmp_path)
+    cfg = json.loads((p / "growth.json").read_text())
+    import datetime as _dt
+    until = (_dt.date.today() + _dt.timedelta(days=20)).isoformat()
+    cfg["design_exceptions"] = [{"check": "faq.box", "why": "built in the browser by the site's script", "until": until},
+                                {"check": "ui.phone", "why": "inline links in a sentence are exempt", "until": until},
+                                {"check": "ev.review", "why": "this can never be excused at all", "until": until}]
+    (p / "growth.json").write_text(json.dumps(cfg))
+    rc, out = owner_approve(tmp_path, "pending", cwd=p, typed="approve 0000x")
+    assert rc != 0 and "did not match" in out and not (p / "docs" / "approvals.jsonl").exists()
+    rc, out = owner_approve(tmp_path, "pending", cwd=p)
+    assert "2 item(s)" in out and "cannot approve: exception ev.review" in out
+    lines = [json.loads(l) for l in (p / "docs" / "approvals.jsonl").read_text().splitlines()]
+    assert [(e["kind"], e["ref"]) for e in lines] == [("exception", "faq.box"), ("exception", "ui.phone")]
+    assert all("batch" in e["via"] for e in lines)
+    rc, out = owner_approve(tmp_path, "pending", cwd=p)
+    assert "nothing waits for your approval" in out                       # already approved: nothing left

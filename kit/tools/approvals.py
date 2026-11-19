@@ -9,6 +9,7 @@
   growth approve answer <Q-id> "the answer"      answer an owner question in docs/tasks.json
   growth approve review <research/file.md>       sign off an independent review file
   growth approve baseline <key> --reason "..."   allow one re-freeze of a page's research baseline
+  growth approve pending                         everything that waits for you, on one screen, one code
   growth approve list | verify                   show the log; check nobody edited it by hand
   growth approve key                             make the signing key (~/.config/growth-ops-kit/approvals.key)
 
@@ -329,6 +330,72 @@ def approve(docs, kind: str, ref: str, content, summary: str, show: str = "", tt
     return e
 
 
+def approve_many(docs, items, tty=None) -> list:
+    """Many approvals on one screen with one code (the owner reads the whole list once). items: dicts with kind, ref,
+    content, summary, show and an optional after(entry) callback. Each item is still recorded as its own log line."""
+    if not items:
+        return []
+    t = tty or Terminal.open()
+    code = f"{secrets.randbelow(10 ** 4):04d}"
+    lines = [f"  {i}. {it['kind']} {it['ref']}: {it['summary']}" for i, it in enumerate(items, 1)]
+    t.write(f"\nYou are approving {len(items)} item(s):\n" + "\n".join(lines)
+            + f"\n\nType exactly   approve {code}   to approve ALL of them, anything else to stop.\n> ")
+    got = (t.readline() or "").strip()
+    if got != f"approve {code}":
+        raise SystemExit("not approved: the words typed did not match")
+    ensure_key()
+    out = []
+    for it in items:
+        e = record(docs, it["kind"], it["ref"], it["content"], it["summary"], via=f"terminal {getattr(t, 'name', 'tty')} (batch)")
+        if it.get("after"):
+            it["after"](e)
+        out.append(e)
+    t.write(f"approved: {', '.join(e['id'] for e in out)}\n")
+    return out
+
+
+def pending_items(project, docs, today):
+    """What waits for the owner: design exceptions with no (or a changed) approval, and a recorded research browser or
+    Google region the owner has not confirmed. Items that cannot be approved (bad exception) are returned as problems."""
+    items, problems = [], []
+    cfg = _json(project / "growth.json")
+    for e in cfg.get("design_exceptions") or []:
+        if not isinstance(e, dict) or not e.get("check"):
+            continue
+        if status(docs, "exception", e["check"], e)[0] == "ok":
+            continue
+        why = exception_problem(e, today)
+        if why:
+            problems.append(f"exception {e['check']}: {why}")
+            continue
+        items.append({"kind": "exception", "ref": e["check"], "content": e,
+                      "summary": f"design exception {e['check']} until {e['until']}: {e['why'][:80]}"})
+    import wizard_state as ws
+    import research_gate as gate
+    for what in ("browser", "region"):
+        st = ws.get(project, what) or {}
+        ans = st.get("answer") if isinstance(st.get("answer"), dict) else {}
+        if not ans or ans.get("owner_confirmed"):
+            continue
+        if what == "browser":
+            if not ans.get("name"):
+                continue
+            c, line = browser_content(ans["name"]), f"research browser {ans['name']}"
+        else:
+            market = cfg.get("market") or {}
+            seen = ans.get("seen", "")
+            if not gate.region_matches(seen, market):
+                problems.append(f"region: Google reads \"{seen}\", not {gate.country_name(market)}")
+                continue
+            c, line = region_content(seen, gate.country_name(market)), f"Google results region {seen}"
+        if status(docs, what, what, c)[0] == "ok":
+            continue
+        items.append({"kind": what, "ref": what, "content": c, "summary": line,
+                      "after": (lambda e, w=what, a=ans: ws.record(project, w, "done", answer={**a, "owner_confirmed": True,
+                                                                                             "approval": e["id"]}, source="owner"))})
+    return items, problems
+
+
 def _answer_journal(project, docs, jid: str, text: str, tty) -> int:
     e = journal_entries(project).get(jid)
     if not e or e.get("kind") not in ("question", "owner-action"):
@@ -394,6 +461,15 @@ def main(argv=None, tty=None) -> int:
             print(f"approvals log OK: {len(entries)} entries" + ("" if read_key() else " (not signed: run growth approve key)"))
         return 1 if probs else 0
     today = dt.date.today()
+    if what == "pending":
+        items, problems = pending_items(project, docs, today)
+        for p in problems:
+            print("cannot approve: " + p)
+        if not items:
+            print("nothing waits for your approval" + (" (fix the lines above first)" if problems else ""))
+            return 1 if problems else 0
+        approve_many(docs, items, tty)
+        return 1 if problems else 0
     if what == "exception":
         if not rest:
             raise SystemExit("growth approve exception <check-id>")
