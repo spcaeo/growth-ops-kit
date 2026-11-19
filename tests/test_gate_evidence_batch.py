@@ -52,3 +52,41 @@ def test_stale_open_finding_fails_ev_open_findings():
         c = Ctx(project=p, path="/x", cfg={})
         run_check(c, CHECKS["ev.open-findings"])
         assert c.lines[0].level == "FAIL"
+
+
+# ---- #49
+
+def review_ctx(tmp, key, names):
+    from gatelib.core import Ctx
+    (tmp / "research").mkdir(exist_ok=True)
+    for n in names:
+        (tmp / "research" / n).write_text("x\n")
+    return Ctx(project=tmp, path="/" + key, key=key, cfg={})
+
+
+def run_review(ctx):
+    from gatelib import CHECKS
+    from gatelib.core import run_check
+    run_check(ctx, CHECKS["ev.review"])
+    return ctx.lines[0].level
+
+
+def test_a_key_containing_review_does_not_pass_on_the_checkpoints_file(tmp_path):
+    ctx = review_ctx(tmp_path, "asana-review", ["asana-review-checkpoints.md"])
+    assert run_review(ctx) == "FAIL"
+
+
+def test_a_key_containing_review_does_not_pass_on_another_research_file(tmp_path):
+    ctx = review_ctx(tmp_path, "asana-review", ["asana-review-research-check-2026-11-18.md", "asana-review-dossier.md"])
+    assert run_review(ctx) == "FAIL"
+
+
+def test_a_dated_audit_or_review_file_passes(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    assert run_review(review_ctx(tmp_path / "a", "asana-review", ["asana-review-audit-2026-11-18.md"])) == "OK"
+    assert run_review(review_ctx(tmp_path / "b", "lawn", ["lawn-opus-review-2026-11-18.md"])) == "OK"
+
+
+def test_an_undated_review_name_fails(tmp_path):
+    assert run_review(review_ctx(tmp_path, "lawn", ["lawn-review.md"])) == "FAIL"

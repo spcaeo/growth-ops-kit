@@ -11,6 +11,13 @@ from .core import ALL, Missing, check, mtime
 import paths  # noqa: E402  kit/tools/paths.py: one form of a site path
 
 FRESH_DAYS = 30
+# One naming rule for research files, the same in book/playbooks/cluster-redesign.md. The page key comes first and the
+# pattern is matched on the rest of the name: "-audit-<date>" or "-review-<date>" for the independent review (a date is
+# required, so a page key that merely contains "review" does not pass); "-research-check", "-fact-check", "-claims" or
+# "-research-<date>" for the fact check.
+DATE = r"\d{4}-\d{2}-\d{2}"
+REVIEW_NAME = rf"-(audit|review)-.*{DATE}"
+RESEARCH_NAME = rf"-(research-check|fact-check|claims)\b|-research-{DATE}"
 
 
 def at(e, tz):
@@ -88,7 +95,8 @@ def research_fresh(ctx, pattern, what, fix, min_lines=1):
 @check("ev.research-check", "5", ALL, "a fact check of the page's claims against official sources, within 30 days", needs="project")
 def research_check(ctx):
     research_fresh(ctx, r"research-check|fact-check|claims", "fact check",
-                   "check every claim against its official source and save research/<page>-research-check-<date>.md (rules 5, 6)")
+                   "check every claim against its official source and save research/<page>-research-check-<date>.md, or the researcher's "
+                   "research/<page>-research-<date>.md (rules 5, 6)")
 
 
 @check("ev.dossier", "27", ("money", "hub"), "the page's research dossier (32 questions, competitors) exists", needs="project")
@@ -104,8 +112,8 @@ def dossier(ctx):
 
 @check("ev.review", "109", ALL, "an independent review or audit of the built page, within 30 days", needs="project")
 def review(ctx):
-    research_fresh(ctx, r"audit|review", "independent review",
-                   "have a reviewer (a different model from the builder) audit the page; save research/<page>-...-audit-<date>.md (rule 109)")
+    research_fresh(ctx, REVIEW_NAME, "independent review",
+                   "have a reviewer (a different model from the builder) audit the page; save research/<page>-audit-<date>.md or <page>-review-<date>.md (rule 109)")
 
 
 @check("ev.ai-baseline", "152", ("money",), "AI-answer baseline: 10+ journal runs for the page in the US market within 30 days", needs="project")

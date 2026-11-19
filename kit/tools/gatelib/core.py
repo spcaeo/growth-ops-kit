@@ -227,10 +227,13 @@ class Ctx:
         return int(newest)
 
     def research(self, pattern):
-        """Research files whose name contains the page key and matches pattern (a regex)."""
+        """Research files whose name contains the page key and matches pattern (a regex). The pattern is matched on the
+        name WITHOUT the page key, so a key such as "product-review" cannot satisfy a "review" check by itself; the
+        checkpoints file preflight writes is never evidence of anything."""
         rdir = self.need_file(self.project / "research", "mkdir research (research files live there)")
         key = self.need_key()
-        return sorted(f for f in rdir.iterdir() if key in f.name and re.search(pattern, f.name))
+        return sorted(f for f in rdir.iterdir() if key in f.name and f.is_file() and not f.name.endswith("-checkpoints.md")
+                      and re.search(pattern, f.name.replace(key, "", 1)))
 
     def need_key(self):
         if not self.key:
