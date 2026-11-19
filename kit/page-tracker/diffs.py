@@ -36,7 +36,7 @@ def flat(d, pre=""):
         elif isinstance(v, (str, int, float, bool)) or v is None:
             out[key] = v
         else:
-            out[key] = json.dumps(v, ensure_ascii=False, sort_keys=True)[:400]
+            out[key] = json.dumps(v, ensure_ascii=False, sort_keys=True, default=str)[:400]
     return out
 
 
