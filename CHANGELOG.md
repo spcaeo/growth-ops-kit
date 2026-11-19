@@ -28,7 +28,9 @@ The kit and the book share one version number. Dates are written year-month-day.
 - Doctor A2: once `old_brand_words` was filled it could never pass, because the brand sheet's "never say" line and the
   steps log (which quotes the owner) counted as leftovers. Lines that ban the words, `growth.json` and the steps log no
   longer count; a real mention in any other project file still FAILs. New `build_dir` (the site's production build):
-  A2 also searches its pages (html, txt, xml, md, json), so a leftover on the site itself fails too.
+  A2 also searches its pages (html, txt, xml, md, json), so a leftover on the site itself fails too. The line says
+  how many files were searched and how many mention the old brand, with the build's absolute path; with no build
+  (unset, missing, or no page files) A2 is TODO, never OK.
 
 ## 2.0.1 - 2026-11-18
 

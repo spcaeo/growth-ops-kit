@@ -72,9 +72,9 @@ SITE_EXT = {".html", ".htm", ".txt", ".xml", ".md", ".json", ".webmanifest"}
 
 
 def old_brand_hits(words, root, skip_dirs=(), skip_files=(), exts=None):
-    """Files under root with a line naming an old-brand word, except lines that BAN the words (a brand sheet's
+    """(files searched, files with a line naming an old-brand word), except lines that BAN the words (a brand sheet's
     "never say" line) and the files that define or quote them."""
-    rx, hits = re.compile(words, re.I), []
+    rx, hits, searched = re.compile(words, re.I), [], 0
     for f in sorted(Path(root).rglob("*")):
         rel = f.relative_to(root)
         if not f.is_file() or any(part in skip_dirs for part in rel.parts[:-1]) or f.name in skip_files:
@@ -85,9 +85,10 @@ def old_brand_hits(words, root, skip_dirs=(), skip_files=(), exts=None):
             text = f.read_text(errors="strict")
         except (UnicodeDecodeError, OSError):
             continue
+        searched += 1
         if any(rx.search(l) and not BAN_LINE.search(l) for l in text.splitlines()):
             hits.append(str(rel))
-    return hits
+    return searched, hits
 
 
 def built_site():
@@ -99,20 +100,28 @@ def built_site():
     return PROJECT / CFG["site_dir"] if CFG.get("site_dir") else None
 
 
-leftover, site_hits, site_note = [], [], ""
+leftover, site_hits, site_note, site_ok = [], [], "", True
 if CFG.get("old_brand_words"):
-    leftover = old_brand_hits(CFG["old_brand_words"], PROJECT, SKIP_DIRS, QUOTE_FILES)
+    n_proj, leftover = old_brand_hits(CFG["old_brand_words"], PROJECT, SKIP_DIRS, QUOTE_FILES)
     site = built_site()
-    if site and site.is_dir():
-        site_hits = old_brand_hits(CFG["old_brand_words"], site, exts=SITE_EXT)
-        site_note = f"; built site {site.name}/ searched: {len(site_hits)} file(s)"
+    if site is None:
+        site_ok, site_note = None, "; built site not searched: set growth.json build_dir (the production build)"
+    elif not site.is_dir():
+        site_ok, site_note = None, f"; built site not searched: {site.resolve()} does not exist (build the site)"
     else:
-        site_note = "; built site not searched (set growth.json build_dir)"
+        n_site, site_hits = old_brand_hits(CFG["old_brand_words"], site, exts=SITE_EXT)
+        if n_site == 0:
+            site_ok, site_note = None, f"; built site not searched: no page files in {site.resolve()} (build the site)"
+        else:
+            site_note = f"; built site {site.resolve()}: {n_site} files searched, {len(site_hits)} mention the old brand"
+    site_note = f"; project: {n_proj} files searched, {len(leftover)} mention the old brand" + site_note
 bad = leftover + [f"site: {h}" for h in site_hits]
-row("A2 Project adapted to this business", not bad and bool(CFG.get("site_url")),
+ok2 = bool(CFG.get("site_url")) and not bad and site_ok
+row("A2 Project adapted to this business", ok2 if ok2 or bad or not CFG.get("site_url") else None,
     "growth.json filled in + no old-brand words" + site_note
-    + (f" ({len(bad)} files still mention the old site: {', '.join(bad[:5])})" if bad else ""),
-    "fill in growth.json (site_url, name, product) and rewrite the files that still name the old site")
+    + (f" (still named in: {', '.join(bad[:5])})" if bad else ""),
+    "fill in growth.json (site_url, name, product), rewrite the files that still name the old site, "
+    "and set build_dir to a production build so the site is searched too")
 # A3 site repo studied (optional: a site with no code checkout is read through its live pages only)
 if not CFG.get("site_repo"):
     row("A3 Site repo cloned and studied", True, "no site repo (growth.json site_repo is empty): live-page checks only")
