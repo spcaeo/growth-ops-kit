@@ -32,10 +32,16 @@ from config import CFG, PROJECT as ROOT, SITE_URL, TZ, UA  # noqa: E402
 
 OUT = ROOT / "inventory"
 SILOS = CFG.get("silos", {})                                  # {slug: label}
-MONEY_CORE = set(CFG.get("money_core", []))                  # money pages = these + every silo's top page
-CORE = {k: tuple(v) for k, v in CFG.get("core_pages", {}).items()}   # {path: [type, buyer stage]}
+def key(path):
+    """One form of a site path for matching: no trailing slash, "/" for the home page. The sitemap may say /x/ while the
+    page tracker and growth.json say /x; every lookup goes through this."""
+    return path.rstrip("/") or "/"
+
+
+MONEY_CORE = {key(p) for p in CFG.get("money_core", [])}                  # money pages = these + every silo's top page
+CORE = {key(k): tuple(v) for k, v in CFG.get("core_pages", {}).items()}   # {path: [type, buyer stage]}
 BLOG = CFG.get("blog_path", "/blog").rstrip("/")
-NEW_PAGES = set(CFG.get("new_pages", []))
+NEW_PAGES = {key(p) for p in CFG.get("new_pages", [])}
 GSC_NONE = "none yet (no Search Console rows in page-tracker/tracker.db: run `growth page-tracker sync`, then this again)"
 
 
@@ -81,8 +87,8 @@ def page_facts(doc):
 
 def classify(path):
     """(silo label, pillar path, type, buyer stage) from the address and growth.json."""
-    if path in CORE:
-        kind, st = CORE[path]
+    if key(path) in CORE:
+        kind, st = CORE[key(path)]
         return "Core", "", kind, st
     first = path.strip("/").split("/")[0]
     if first in SILOS:
@@ -102,10 +108,10 @@ def google():
     try:
         c = sqlite3.connect(f"file:{db}?mode=ro", uri=True).cursor()
         rng = c.execute("select min(day),max(day) from search where path!='*'").fetchone()
-        s = {p: (cl, im, pos) for p, cl, im, pos in c.execute(
+        s = {key(p): (cl, im, pos) for p, cl, im, pos in c.execute(
             "select path,sum(clicks),sum(impressions),round(sum(position*impressions)/nullif(sum(impressions),0),1) "
             "from search where path!='*' group by path")}
-        r = {p: v for p, v in c.execute("select path,sum(readers) from daily group by path")}
+        r = {key(p): v for p, v in c.execute("select path,sum(readers) from daily group by path")}
         return s, r, f"{rng[0]} to {rng[1]}"
     except sqlite3.Error:
         return {}, {}, ""
@@ -118,13 +124,13 @@ def build(sm: dict, pages: dict, gsc=None, readers=None, work=None):
     for path, lastmod in sm.items():
         status, doc = pages.get(path, (0, ""))
         silo, pillar, kind, stage = classify(path)
-        g = gsc.get(path, (0, 0, None))
+        g = gsc.get(key(path), (0, 0, None))
         row = {"path": path, "in_sitemap": True, "lastmod": lastmod, "status": "live" if status == 200 else f"http {status}",
                "type": kind, "silo": silo, "pillar": pillar, "stage": stage,
-               "gsc_clicks": g[0] or 0, "gsc_impressions": g[1] or 0, "gsc_position": g[2], "visitors": readers.get(path, 0),
+               "gsc_clicks": g[0] or 0, "gsc_impressions": g[1] or 0, "gsc_position": g[2], "visitors": readers.get(key(path), 0),
                **page_facts(doc)}
-        row["money_page"] = row["status"] == "live" and (kind == "pillar" or path in MONEY_CORE)
-        mine = [w for w in work if w["path"] == path]
+        row["money_page"] = row["status"] == "live" and (kind == "pillar" or key(path) in MONEY_CORE)
+        mine = [w for w in work if key(w["path"]) == key(path)]
         row["touched"] = f'{mine[-1]["at"]} {mine[-1]["task"]} {mine[-1]["action"]}' if mine else ""
         rows.append(row)
     return rows

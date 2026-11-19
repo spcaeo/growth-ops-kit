@@ -25,6 +25,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 - The booking paths (`conversion_path`, `cta.contact_path`) are compared without a trailing slash: a site whose
   addresses end in "/" (for example "/contact/") was told "no link to the booking path at all" on every page.
 
+- Sites whose addresses end in "/": the page tracker asked analytics for /x while Search Console keys the page as
+  /x/, so every page's Google numbers came back 0 (and page_journeys' replies, keyed /x/, were never matched). The
+  tracker learns the site's form from its sitemap (`trailing_slash` in sitemap-cache.json; `page_tracker.trailing_slash`
+  overrides) and sends that form. The inventory matches sitemap paths, tracker numbers and growth.json lists
+  (money_core, core_pages, new_pages) with or without the slash.
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.
