@@ -143,3 +143,19 @@ def test_an_owner_delegation_lets_the_leads_verdict_stand_in(tmp_path):
     approvals.record(q / "docs", "decision", "J0003", approvals.decision_content(old), by="owner")
     ln = line(Ctx(project=q, path="/x", key="x", cfg={}, docs=q / "docs"), "ev.decision")
     assert ln.level == "FAIL" and "ended" in ln.what
+
+
+def test_a_delegation_in_growth_json_lets_the_leads_verdict_stand_in(tmp_path):
+    v = {"id": "J0002", "at": "2026-11-19 16:00", "kind": "decision", "pages": ["/x"], "tags": [],
+         "title": "Lead VERDICT: OK", "text": "reviewed"}
+    p = project(tmp_path, [v])
+    good = {"decision_delegation": {"to": "lead", "pages": ["/x/"], "until": "2099-12-31",
+                                    "why": "owner in chat: publish without waiting for me"}}
+    c = lambda cfg, path="/x": Ctx(project=p, path=path, key="x", cfg=cfg, docs=p / "docs")   # noqa: E731
+    assert line(c({}), "ev.decision").level == "FAIL"
+    assert line(c(good), "ev.decision").level == "OK"
+    assert line(c(good, "/other"), "ev.decision").level == "FAIL"                       # page not listed
+    old = {"decision_delegation": {**good["decision_delegation"], "until": "2020-01-01"}}
+    assert line(c(old), "ev.decision").level == "FAIL"                                   # expired
+    bare = {"decision_delegation": {**good["decision_delegation"], "why": ""}}
+    assert line(c(bare), "ev.decision").level == "FAIL"                                  # no owner words
