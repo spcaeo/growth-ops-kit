@@ -211,7 +211,7 @@ def open_findings(ctx):
     cut = dt.datetime.now(tz(ctx)) - dt.timedelta(days=7)
     old = [e["id"] for e in ctx.page_entries() if e.get("status") == "open" and e.get("kind") in ("finding", "question")
            and (at(e, tz(ctx)) or cut) < cut]
-    ctx.verdict(old, "no stale open findings", "fix the real page now, then growth journal done <id> (rule 130)")
+    ctx.verdict(old, "no stale open findings", "fix the real page now, then growth journal close <id> --output \"what was done and its proof\" (rule 130)")
 
 
 @check("ev.inventory", "OR-inventory", ALL, "the inventory is fresh (7 days) and holds the page", needs="project")
