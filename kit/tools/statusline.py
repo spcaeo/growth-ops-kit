@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Claude Code status line: the open task's progress, always visible at the bottom of the agent's window.
 
-  T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 Search Console research · +1 other open
+  T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 Search Console research · manual checks 3/12 · +1 other open
+
+"manual checks 3/12" counts the project's own rules in the page's checkpoints file (research/<key>-checkpoints.md, the one
+the open task names, else the newest) that are ticked with a proof, out of all of them; it hides when the file has none.
 
 Read from the project's task list (docs/tasks.json, or growth.json "project_docs"), the one record `growth tasks` keeps.
 `growth new-project` registers it in .claude/settings.json ("statusLine"), so the owner sees each step tick off from
@@ -70,7 +73,23 @@ ACTIVE = ("doing", "in_progress", "in progress", "active")
 STUCK = ("blocked", "waiting-owner", "waiting")
 
 
-def line(data: dict, style: str = "bars") -> str:
+def manual_checks(project: Path, data: dict) -> str:
+    """"manual checks n/m" from the page's checkpoints file, or "" (no file, none, or unreadable)."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import checkpoints
+        files = sorted((project / "research").glob("*-checkpoints.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+        words = " ".join(f"{t.get('title', '')} {t.get('owner_words', '')}" for t in data.get("tasks") or [] if t.get("status") != "done").lower()
+        pick = next((f for f in files if f.name[:-len("-checkpoints.md")].lower() in words), files[0] if files else None)
+        if pick is None:
+            return ""
+        total, done, _ = checkpoints.manual_status(pick.read_text())
+        return f"manual checks {done}/{total}" if total else ""
+    except Exception:  # noqa: BLE001  (never break the status line)
+        return ""
+
+
+def line(data: dict, style: str = "bars", manual: str = "") -> str:
     tasks = data.get("tasks") or []
     open_t = [t for t in tasks if t.get("status") != "done" and any(s.get("status") != "done" for s in t.get("steps") or [])]
     if not open_t:
@@ -88,6 +107,8 @@ def line(data: dict, style: str = "bars") -> str:
         parts.append(f"now: {now.get('n', '?')} {label(now)}")
     if stuck:
         parts.append("blocked: " + ", ".join(str(s.get("n", "?")) for s in stuck))
+    if manual:
+        parts.append(manual)
     if len(open_t) > 1:
         parts.append(f"+{len(open_t) - 1} other open")
     return " · ".join(parts)
@@ -101,7 +122,8 @@ def main() -> None:
         pass
     try:
         project = project_dir()
-        print(line(json.loads(tasks_file(project).read_text()), settings(project).get("statusline_style") or "bars"))
+        data = json.loads(tasks_file(project).read_text())
+        print(line(data, settings(project).get("statusline_style") or "bars", manual_checks(project, data)))
     except FileNotFoundError:
         print("no task list yet (docs/tasks.json)")
     except Exception as e:  # noqa: BLE001  (a status line must never break the agent's window)

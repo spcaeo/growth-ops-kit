@@ -71,6 +71,7 @@ TOOLS = {
     "registry_sync": ("tools/registry_sync.py", "keep rules/registry.json in step with the code (files, needs)"),
     "leak_check": ("tools/leak_check.py", "fail on keys, .env files, personal emails, phone numbers and private words (--history: every commit)"),
     "new_project": ("tools/new_project.py", "make a project folder from templates/project (growth new-project <folder> --site <url>)"),
+    "workflow": ("tools/workflow.py", "the task workflow as a rule: `check` (Stop hook: no open task, steps with no proof) and `stage` (re-read the page's checkpoints)"),
     "hook": ("hooks/stop_hook.sh", "run a Claude Code hook by name (growth hook stop): found through the PATH, so settings.json holds no absolute path"),
     "install_hooks": ("hooks/install_hooks.py", "install the git pre-commit hooks (kit, project, site)"),
     "checks": ("adapters/nextjs/checks.sh", "(Next.js adapter) run only the tests and build a change touches"),
@@ -105,10 +106,13 @@ def main(argv):
         return 0
     name, rest = argv[0], argv[1:]
     if name == "hook":
-        if rest[:1] != ["stop"]:
-            print("growth hook: say which hook. Available: stop", file=sys.stderr)
+        if rest[:1] == ["stage"]:        # PostToolUse hook: re-read the checkpoints at a stage boundary
+            name, rest = "workflow", ["stage"]
+        elif rest[:1] != ["stop"]:
+            print("growth hook: say which hook. Available: stop, stage", file=sys.stderr)
             return 2
-        rest = rest[1:]
+        else:
+            rest = rest[1:]
     tool = resolve(name)
     if tool is None:
         print(f"growth: no tool '{name}'. Run: growth help", file=sys.stderr)

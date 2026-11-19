@@ -62,7 +62,7 @@ page work starts before every step is OK.**
 2. **Money pages first.** Take the next page from the inventory's "Money pages" table (most Google demand with the
    weakest position and clicks), unless the owner names one. Posts are worked when they feed a money page.
 3. **Open the task:** `growth tasks add "<job>: <page>" "<owner's words>"`, then copy **every step of the job's
-   playbook** into it with `growth tasks step` so each step is visible and ticked off.
+   playbook** into it with `growth tasks step` (a step starts as todo; a done step needs `--output`) so each step is visible and ticked off. The Stop hook enforces this: it blocks while files changed and no task is open, or a done step has no proof. A chat that is not page work: `growth tasks add "Chat: <topic>" "" --type chat`.
 4. **Snapshot the page:** `growth page_snapshot <path> --task T# --action "<job> start"`: its title, headings, FAQs,
    links and schema, all its Search Console data (every query with clicks, impressions, click rate, position; daily;
    countries) and its analytics (crawlers, AI visits, journeys). The touch is logged against the inventory.

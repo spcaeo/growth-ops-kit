@@ -35,11 +35,13 @@ def slug(path: Path) -> str:
 
 
 def transcript_dirs(project: Path = PROJECT, home: Path | None = None, cfg: dict | None = None):
-    """The agent's transcript folders for this project: the project's own path (the session started inside it), the
-    folder above it (the session started in a workspace that holds it), or growth.json "transcripts_dir"."""
+    """The agent's transcript folders for this project: only the project's own path (the session started inside it), or
+    growth.json "transcripts_dir" (a string, or a list of folders, for a session started in a workspace above the project).
+    The folder above is never read by default: it holds the owner's unrelated sessions and floods the check with false alarms (#21)."""
     root = (home or Path.home()) / ".claude" / "projects"
     given = (cfg or {}).get("transcripts_dir")
-    cands = [Path(given).expanduser()] if given else [root / slug(project), root / slug(project.parent)]
+    given = [given] if isinstance(given, str) else (given or [])
+    cands = [Path(g).expanduser() for g in given] if given else [root / slug(project)]
     return [c for c in cands if c.is_dir()]
 
 
@@ -108,8 +110,8 @@ def main():
     a = ap.parse_args()
     msgs = owner_messages(a.since)
     if a.cmd == "check" and not transcript_dirs(cfg=CFG):
-        tried = [str(Path.home() / ".claude" / "projects" / slug(PROJECT)), str(Path.home() / ".claude" / "projects" / slug(PROJECT.parent))]
-        print(f"NO TRANSCRIPTS no agent transcripts found at {' or '.join(tried)}; set growth.json transcripts_dir to the folder that holds them. "
+        tried = str(Path.home() / ".claude" / "projects" / slug(PROJECT))
+        print(f"NO TRANSCRIPTS no agent transcripts found at {tried}; start the agent from the project folder, or set growth.json transcripts_dir to the folder that holds them. "
               "Nothing was checked.")
         sys.exit(3)
     rows = [l for l in LOG.read_text().splitlines() if l.startswith("|")] if LOG.exists() else []
