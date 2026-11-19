@@ -59,13 +59,24 @@ function tabGoogle(p) {
     ${crossCheck(p.gs, [p], 'This page')}
     ${competingSection([p.path], { h: 'Searches this page shares with our other pages' })}
     <div class="grid2"><div><h3>Top searches</h3>${topTable(p.gq, 'Search', 'query')}</div><div><h3>Top countries</h3>${topTable(p.gc, 'Country', 'country')}</div></div>
-    <p class="sub">Searches and countries: Google's last 28 days as of ${p.gsnap ? esc(longDay(p.gsnap)) : '–'}, page copies added together. Readers in the chart are Skald's.</p>${splitBox(p)}`;
+    <p class="sub">Searches and countries: Google's last 28 days as of ${p.gsnap ? esc(longDay(p.gsnap)) : '–'}, page copies added together. Readers in the chart are Skald's.</p>${splitBox(p)}${marketBox(p)}`;
 }
 /** Google's figures per address when a page has old addresses (growth.json page_aliases / redirects_file). */
 function splitBox(p) {
   if (!p.split || !p.split.length) return '';
   return `<h3>Which address Google shows</h3><div class="box"><table><thead><tr><th>Address</th><th class="r">Clicks</th><th class="r">Impressions</th></tr></thead><tbody>${
     p.split.map(r => `<tr><td>${copyable(r[0], { label: 'address' })}</td><td class="num r">${fmtN(r[1])}</td><td class="num r">${fmtN(r[2])}</td></tr>`).join('')}</tbody></table></div><p class="sub">All addresses are added together in the numbers above.</p>`;
+}
+/** The target market measured from Google's country rows, with the estimate and what it assumes. */
+function marketBox(p) {
+  const m = p.market;
+  if (!m) return '';
+  const pos = x => x == null ? '–' : x.toFixed(1);
+  return `<h3>Target market</h3><div class="box"><table><thead><tr><th></th><th class="r">Clicks</th><th class="r">Impressions</th><th class="r">Position</th></tr></thead><tbody>
+    <tr><td>All countries</td><td class="num r">${fmtN(m.all.clicks)}</td><td class="num r">${fmtN(m.all.impressions)}</td><td class="num r">${pos(m.all.position)}</td></tr>
+    <tr><td>Target market, measured</td><td class="num r">${fmtN(m.measured.clicks)}</td><td class="num r">${fmtN(m.measured.impressions)}</td><td class="num r">${pos(m.measured.position)}</td></tr>
+    <tr><td>Target market, estimated (upper bound)</td><td class="num r">–</td><td class="num r">${m.estimate.impressions == null ? '–' : fmtN(m.estimate.impressions)}</td><td class="num r">–</td></tr></tbody></table></div>
+    <p class="sub">${esc(m.definition)}. The estimate ${esc(m.estimate.assumption)}.${m.definition_changed ? ' <b>The definition changed between snapshots: do not compare before and after across it.</b>' : ''}</p>`;
 }
 function tabMilestones(p) {
   const ms = p.milestones.map(m => `<div><span>${esc(m.kind.replace(/_/g, ' '))}${m.who ? ' · ' + copyable(m.who, { label: 'crawler name' }) : ''}</span><span class="num">${esc(m.at.slice(0, 16).replace('T', ' '))}</span></div>`).join('');

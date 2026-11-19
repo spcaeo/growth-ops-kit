@@ -38,6 +38,7 @@ def db():
         position REAL, PRIMARY KEY(path, snapshot, country));
     CREATE TABLE IF NOT EXISTS search_split(path TEXT, snapshot TEXT, address TEXT, clicks INTEGER, impressions INTEGER,
         frm TEXT, til TEXT, PRIMARY KEY(path, snapshot, address));
+    CREATE TABLE IF NOT EXISTS market_definition(snapshot TEXT PRIMARY KEY, definition TEXT);
     CREATE TABLE IF NOT EXISTS search_index(path TEXT, inspected_at TEXT, status TEXT, verdict TEXT, coverage TEXT,
         last_crawl TEXT, PRIMARY KEY(path, inspected_at));
     CREATE TABLE IF NOT EXISTS bounce(path TEXT, snapshot TEXT, first TEXT, last TEXT, landed INTEGER, went_on INTEGER,
@@ -256,6 +257,9 @@ def pull_search(c, full=False):
             pos = round(m["pw"] / m["impressions"], 2) if m["impressions"] else None
             ctr = round(m["clicks"] / m["impressions"], 4) if m["impressions"] else None
             c.execute("INSERT OR REPLACE INTO search VALUES(?,?,?,?,?,?,?)", (path, day, m["clicks"], m["impressions"], ctr, pos, int(bool(m["final"]))))
+    if config.target_markets():
+        import market
+        c.execute("INSERT OR REPLACE INTO market_definition VALUES(?,?)", (snap, market.definition(config.target_markets())))
     c.commit()
 
 def bounce_plan(c, newest):

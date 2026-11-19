@@ -45,6 +45,27 @@ def _split(c, path):
     return [list(r) for r in rows] if len(rows) > 1 else []
 
 
+def _market(c, path, countries):
+    """The target market's measured figures next to the estimate (market.py), over the last 28 whole days Google has settled."""
+    targets = config.target_markets()
+    if not targets or not countries:
+        return None
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(config.CODE_DIR), "tools"))
+    import market
+    day = c.execute("SELECT max(day) FROM search WHERE path=? AND final=1", (path,)).fetchone()[0]
+    if not day:
+        return None
+    frm = (dt.date.fromisoformat(day) - dt.timedelta(days=27)).isoformat()
+    cl, im, pw = c.execute("SELECT sum(clicks), sum(impressions), sum(position * impressions) FROM search WHERE path=? "
+                           "AND day BETWEEN ? AND ?", (path, frm, day)).fetchone()
+    total = (cl or 0, im or 0, round(pw / im, 1) if im and pw else None)
+    out = market.measure([(r[0], r[1], r[2], r[3]) for r in countries], total, targets)
+    defs = [r[0] for r in c.execute("SELECT DISTINCT definition FROM market_definition")]
+    out["definition_changed"] = len(defs) > 1       # a before/after across two definitions does not compare like with like
+    return out
+
+
 def write(c):
     pages = []
     for path, slug, kind, title in c.execute("SELECT path, slug, kind, title FROM pages ORDER BY slug").fetchall():
@@ -71,7 +92,7 @@ def write(c):
         pages.append(dict(path=path, slug=slug, kind=kind, title=title, main=main and main["live_at"], changes=changes,
                           days=days, milestones=ms, bounce=bounce, bw=bw, gs=_search(c, path), gq=queries[:15], gc=countries[:15],
                           gsnap=qsnap or csnap, top=timeonpage.export(c, path), edits=diffs.export_saves(c, path),
-                          split=_split(c, path),
+                          split=_split(c, path), market=_market(c, path, countries),
                           diff_file="diffs/" + diffs.page_file_name(path),
                           jw=[dict(change_at=r[0], win=r[1], side=r[2], frm=r[3], to=r[4], **json.loads(r[5] or "{}"))
                               for r in c.execute("SELECT change_at, win, side, frm, til, data FROM journey_window WHERE path=?", (path,))],

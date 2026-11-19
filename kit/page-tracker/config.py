@@ -132,6 +132,11 @@ def variants(path):
     return out
 
 
+def target_markets():
+    """Country codes of the target market (growth.json target_markets), as the search tool lists them."""
+    return [str(x).lower() for x in (GROWTH.get("target_markets") or [])]
+
+
 _ALIASES = None
 
 
