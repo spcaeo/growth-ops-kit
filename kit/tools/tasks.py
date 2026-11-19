@@ -5,6 +5,8 @@ Data: docs/tasks.json (one file, easy to read, copy and reuse for another projec
 
   growth tasks list                       # all tasks with status
   growth tasks show T5                    # one task with every step
+  growth tasks add "Title" "Owner's words" [--playbook new-post] [--research]   # new task, prints its id; a job with a
+                                          # research step is refused until the research browser and Google region are confirmed
   growth tasks add "Title" "Owner's words" [--type chat]   # new task, prints its id (--type chat: a chat that is not page work, needs no steps)
   growth tasks step T5 "What to do" [--status todo|doing|done|blocked] [--output proof]   # default todo; done needs --output
   growth tasks tick T5 3 [--status done] --output "proof"   # update step 3 in place (never re-add it)
@@ -20,7 +22,8 @@ from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import DOCS, TZ as _TZ  # noqa: E402
+from config import CFG, DOCS, PROJECT, TZ as _TZ  # noqa: E402
+import research_gate  # noqa: E402
 
 DATA = DOCS / "tasks.json"  # the project's task list (growth.json: project_docs)
 TZ = _TZ  # growth.json timezone
@@ -79,6 +82,17 @@ def main(argv: list) -> None:
             out = f' -> {s["output"]}' if s.get("output") else ""
             print(f'  {s["n"]:>2}. [{s["status"]}] {s["at"]}  {s["what"]}{out}')
     elif cmd == "add":
+        playbook, research = opt(args, "--playbook"), "--research" in args
+        if research:
+            args.remove("--research")
+        if playbook:
+            known = research_gate.playbook_has_research(playbook)
+            if known is None:
+                sys.exit(f"no playbook '{playbook}' in the kit's book/playbooks/")
+            research = research or known
+        blocked = research_gate.problem(PROJECT, CFG) if research else None
+        if blocked:
+            sys.exit("this job has a research step and may not start yet: " + blocked)
         kind = opt(args, "--type", "page")
         assert kind in {"page", "chat"}, kind
         tid = f'T{max((int(t["id"][1:]) for t in db["tasks"]), default=0) + 1}'

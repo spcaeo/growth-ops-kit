@@ -29,7 +29,7 @@ adapter), not for the demo site or any other stack.
 git clone <this repository> growth-ops-kit
 cd growth-ops-kit
 ./setup.sh                                   # checks your tools, installs the add-ons, links `growth`, runs the tests on the demo site
-growth new-project ~/Projects/my-site-growth --site https://example.com
+growth wizard ~/Projects/my-site-growth --site https://example.com     # the guided setup (resumes where it stopped)
 ```
 
 Any folder works; the paths above are only examples. Keep three separate folders: the kit (this repository), the
@@ -40,11 +40,23 @@ repository: it holds your notes, research and the task list, which are not part 
 prints to your shell profile (for example `export PATH="$HOME/.local/bin:$PATH"`) and open a new terminal; or run
 `./growth ...` from the kit folder.
 
+If the PATH line is missing, `setup.sh` offers to add it to your shell profile itself (it asks first).
+
+`growth wizard` is the one guided setup. It starts by asking the target country and language, then, once, for all access:
+the site repo, analytics keys, the live-site rule and preview address, who approves releases, and one yes for the whole
+agent harness (Stop hook, status bar, permissions, skills, `CLAUDE.md` lines; git hooks are asked separately). It detects
+the stack, sitemap shape, trailing-slash form, language copies, redirects and content folders instead of asking, opens the
+task "Project setup" (one step per `growth doctor` step, ticked as doctor turns each OK), and keeps `setup-state.json` so a
+stopped run resumes at the first open step (`growth wizard --check` re-tests everything; `--repair` installs what is
+missing). It never calls setup done until the research browser (Claude in Chrome, `/chrome`) is connected and Google's
+results region is set to the target country and confirmed by you; the code cannot do those two itself, so they are guided
+steps it waits on. `growth new-project` alone makes the folder and the harness without the questions.
+
 `setup.sh` ends with a green test run on the demo site (Brightline Lawn Care, a made-up lawn-care company in
 `examples/demo-site/`). `growth new-project` makes a project folder from `templates/project/` with your site address
 in `growth.json`, the `/onboard` skill, and the Stop hook that makes the agent follow the rules (`.claude/`).
 
-Then, in your agent (Claude Code), open the project folder and run `/onboard`. It asks the owner one question at a
+Then, in your agent (Claude Code), open the project folder and run `/onboard` (it runs the same wizard, then does the work steps). It asks the owner one question at a
 time, fills `growth.json`, `BRAND.md` and `SETUP.md`, and stops when `growth doctor` says every step is OK. After that, pick a job
 from [book/playbooks/](book/playbooks/README.md).
 

@@ -3,8 +3,10 @@
 
   growth doctor
 
-Prints one line per step (OK / TODO / FAIL) with the command that fixes it. Read-only: it never changes anything,
-never prints a key, and calls the analytics server only to list its tools (only when that connector is switched on).
+Prints one line per step (OK / TODO / FAIL) with the command that fixes it. It never changes the project, never prints a
+key, and calls the analytics server only to list its tools (only when that connector is switched on). The one thing it
+writes is the tick of each step in the setup task (docs/tasks.json, task "Project setup"): a step is ticked with its own
+result line as proof when it turns OK, and un-ticked when it is TODO or FAIL again.
 """
 import json
 import re
@@ -284,13 +286,17 @@ row("A9 Owner journal page current", True if _fresh else ("busy" if _recent and 
 # A10 the agent's guards: the Stop hook is wired into Claude Code's settings for this project
 _settings = PROJECT / ".claude" / "settings.json"
 _hook = False
+_stage = False
 try:
-    _stop = json.dumps(json.loads(_settings.read_text()).get("hooks", {}).get("Stop", []))
+    _hooks = json.loads(_settings.read_text()).get("hooks", {})
+    _stop = json.dumps(_hooks.get("Stop", []))
     _hook = "stop_hook.sh" in _stop or "hook stop" in _stop
+    _stage = "hook stage" in json.dumps(_hooks.get("PostToolUse", []))
 except (OSError, ValueError, AttributeError):
     pass
-row("A10 Agent guards installed (Stop hook)", _hook, ".claude/settings.json runs kit/hooks/stop_hook.sh when the agent stops"
-    if _hook else ".claude/settings.json has no Stop hook, so nothing stops an agent that skips the rules",
+row("A10 Agent guards installed (Stop hook)", (None if not _stage else True) if _hook else False,
+    ".claude/settings.json runs kit/hooks/stop_hook.sh when the agent stops, and `growth hook stage` after each task step"
+    if _hook and _stage else "the Stop hook is there, but the `hook stage` PostToolUse hook (re-reads the checkpoints at each stage) is not" if _hook else ".claude/settings.json has no Stop hook, so nothing stops an agent that skips the rules",
     "growth new-project <this folder> --site <url> --force   (adds the missing .claude files; never overwrites)")
 
 # A11 the golden rule's guard needs the one preview address
@@ -307,6 +313,7 @@ _cmds = []
 try:
     _cfg = json.loads(_settings.read_text())
     _cmds = [h.get("command", "") for e in _cfg.get("hooks", {}).get("Stop", []) for h in e.get("hooks", [])]
+    _cmds += [h.get("command", "") for e in _cfg.get("hooks", {}).get("PostToolUse", []) for h in e.get("hooks", [])]
     _cmds += [str((_cfg.get("statusLine") or {}).get("command", ""))]
 except (OSError, ValueError, AttributeError):
     pass
@@ -327,6 +334,33 @@ row("A12 Hook commands find the kit", None if not _cmds else not _gone,
      f"the kit folder named in .claude/settings.json is not here: {', '.join(sorted(set(_gone)))}"),
     "run bash setup.sh in the kit checkout (links growth onto the PATH), or set GROWTH_KIT to the kit folder, or: growth new-project <this folder> --site <url> --force")
 
+# A13 the agent harness is complete: each piece listed with its own state and fix (growth wizard --repair installs what is missing)
+import harness as _harness
+_pieces = _harness.check(PROJECT, CFG)
+_todo = [p for p in _pieces if p[1] == "todo"]
+row("A13 Agent harness complete", None if _todo else True,
+    "; ".join(f"{p[0]}: {'OK' if p[1] == 'ok' else ('n/a' if p[1] == 'na' else 'TODO')}" for p in _pieces)
+    + ("" if not _todo else " | " + "; ".join(f"{p[0]}: {p[2]}" for p in _todo)),
+    "growth wizard --repair")
+
+# A14 the research browser is connected and Google is set to the target country (a FAIL, not a TODO, when jobs need web research)
+import research_gate as _gate
+if not _gate.required(CFG):
+    row("A14 Research browser connected, market region set", True, "not required (growth.json research_browser.required is not true)")
+else:
+    _gp = _gate.problems(PROJECT, CFG)
+    _m = CFG.get("market") or {}
+    row("A14 Research browser connected, market region set", False if _gp else True,
+        ("; ".join(_gp)) if _gp else f"research browser connected, Google region {_gate.country_name(_m)} confirmed, parameters {_m.get('google_params')}",
+        "growth wizard (it walks you through both: connect the browser with /chrome, set Google's Results region, confirm)")
+
+# A15 work is tracked: files changed in the project or the site repo with no open task is work outside the workflow (#24)
+import workflow as _workflow
+_wp = _workflow.problems(PROJECT)
+row("A15 Work is tracked in a task", None if _wp else True,
+    "no unticked work: every changed file belongs to an open task, every done step has proof" if not _wp else _wp[0][:220],
+    "growth tasks add \"<title>\" \"<owner's words>\" (a chat that is not page work: --type chat)")
+
 w = max(len(r[0]) for r in rows)
 print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")
 for step, st, what, fix in rows:
@@ -335,4 +369,9 @@ done = sum(1 for r in rows if r[1] in ("OK  ", "BUSY"))
 busy = sum(1 for r in rows if r[1] == "BUSY")
 print(f"\n{done}/{len(rows)} setup steps done." + (f" ({busy} BUSY: work in progress, not a fault)" if busy else "")
       + ("" if done == len(rows) else " Page work starts only when all are OK (book/01-flow.md)."))
+try:    # tick the setup task from these results (the task and doctor share one step list)
+    import setup_task
+    setup_task.sync(PROJECT, [(r[0], r[1], r[2]) for r in rows], CFG)
+except Exception:  # noqa: BLE001  (a task file problem is A6's to report, never a crash here)
+    pass
 sys.exit(0 if all(r[1] != "FAIL" for r in rows) else 1)

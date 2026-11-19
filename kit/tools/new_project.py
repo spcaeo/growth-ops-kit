@@ -20,6 +20,8 @@ from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import KIT_DIR, TEMPLATES  # noqa: E402
+import harness  # noqa: E402
+import setup_task  # noqa: E402
 
 WORK_DIRS = ("journal", "research", "inventory", "archive", "page-tracker")
 GITIGNORE = """# Growth project: data the tools write, keys and scratch files stay out of git.
@@ -66,55 +68,15 @@ def fill(text: str, values: dict) -> str:
     return text
 
 
-def agent_files(folder: Path, name: str, site: str, kit_root: Path) -> list[Path]:
-    """The agent's own files inside the project: the onboard skill (filled with what the kit already knows) and the Stop hook
-    in .claude/settings.json. Never overwrites a skill that exists; adds the hook to an existing settings file without
-    touching its other settings. Returns the files written."""
-    made = []
-    skill_src = KIT_DIR / "skills" / "onboard" / "SKILL.md"
-    skill = folder / ".claude" / "skills" / "onboard" / "SKILL.md"
-    if skill_src.is_file() and not skill.exists():
-        skill.parent.mkdir(parents=True, exist_ok=True)
-        text = skill_src.read_text().replace("](../../../book/", f"]({kit_root}/book/")
-        text = text.replace("# Onboard (re-runnable)", f"# Onboard (re-runnable)\n\nThis project: **{name}** ({site}). The kit is at `{kit_root}`; "
-                            "the book is in its `book/` folder.", 1)
-        skill.write_text(text)
-        made.append(skill)
-    settings = folder / ".claude" / "settings.json"
-    # Resolved at run time through the `growth` command on the PATH (setup.sh links it); the kit's folder on this machine
-    # is only the last fallback, so a project folder shared with a teammate or a kit moved elsewhere still runs its hooks.
-    run_growth = f'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" "$(command -v growth || echo "${{GROWTH_KIT:-{kit_root}}}/growth")"'
-    command = f"{run_growth} hook stop"
-    status_command = f"{run_growth} statusline"
-    try:
-        cfg = json.loads(settings.read_text()) if settings.exists() else {}
-    except ValueError:
-        raise SystemExit(f"{settings} is not valid JSON; fix it, then run this again")
-    stop = cfg.setdefault("hooks", {}).setdefault("Stop", [])
-    changed = False
-    if "stop_hook.sh" not in json.dumps(stop) and "hook stop" not in json.dumps(stop):
-        stop.append({"hooks": [{"type": "command", "command": command,
-                                "statusMessage": "Checking every owner message is logged and every rule has its check"}]})
-        changed = True
-    for entry in stop:                                        # our own older form (absolute kit path) is moved to the new one
-        for h in entry.get("hooks", []):
-            if "${GROWTH_KIT:-" in h.get("command", "") and "stop_hook.sh" in h["command"]:
-                h["command"] = command
-                changed = True
-    if "statusLine" not in cfg:   # the owner watches the open task tick off at the bottom of the window (never replaced)
-        cfg["statusLine"] = {"type": "command", "padding": 0, "command": status_command}
-        changed = True
-    elif "${GROWTH_KIT:-" in str(cfg["statusLine"].get("command", "")) and "statusline.py" in cfg["statusLine"]["command"]:
-        cfg["statusLine"]["command"] = status_command
-        changed = True
-    if changed:
-        settings.parent.mkdir(parents=True, exist_ok=True)
-        settings.write_text(json.dumps(cfg, indent=2) + "\n")
-        made.append(settings)
-    return made
+def agent_files(folder: Path, name: str, site: str, kit_root: Path, permissions: bool = True) -> list[Path]:
+    """The agent's own files inside the project (the whole harness: skills, Stop hook with its status message, status line,
+    permissions, CLAUDE.md lines). Written by harness.install, which never overwrites what exists and adds to an existing
+    settings file without touching its other settings. Returns the files written."""
+    return harness.install(folder, name, site, kit_root, permissions=permissions)
 
 
-def make(folder: Path, site: str, name: str = "", stack: str = "static", force: bool = False, template: Path = TEMPLATES):
+def make(folder: Path, site: str, name: str = "", stack: str = "static", force: bool = False, template: Path = TEMPLATES,
+         with_harness: bool = True, permissions: bool = True):
     site = site.rstrip("/")
     if not re.match(r"^https?://[^/\s]+\.[^/\s]+$", site) and not re.match(r"^https?://localhost(:\d+)?$", site):
         raise SystemExit(f"--site must look like https://example.com (got '{site}')")
@@ -148,7 +110,9 @@ def make(folder: Path, site: str, name: str = "", stack: str = "static", force: 
         keep = folder / d / ".gitkeep"
         if not keep.exists():
             keep.write_text("")
-    made += agent_files(folder, values["name"], site, KIT_DIR.parent)
+    if with_harness:      # the wizard passes harness=False and installs it after the owner's one yes
+        made += agent_files(folder, values["name"], site, KIT_DIR.parent, permissions)
+    setup_task.ensure(folder)     # setup is the first task (docs/tasks.json): one step per doctor step
     entries = folder / "journal" / "entries.jsonl"
     if not entries.exists():
         entries.write_text("")                       # the page journal starts empty
@@ -166,8 +130,9 @@ def main(argv=None):
     ap.add_argument("--name", default="", help="the business's short name (default: from the address)")
     ap.add_argument("--stack", choices=["static", "nextjs"], default="static")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--no-permissions", action="store_true", help="leave the permissions block out of .claude/settings.json")
     a = ap.parse_args(argv)
-    folder, made = make(Path(a.folder), a.site, a.name, a.stack, a.force)
+    folder, made = make(Path(a.folder), a.site, a.name, a.stack, a.force, permissions=not a.no_permissions)
     import os
     import subprocess
     # the owner's journal page, built once so `growth doctor` step A9 starts green

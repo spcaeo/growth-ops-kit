@@ -20,6 +20,17 @@ starts from zero: it reads what is recorded, skips what is done, and asks only w
 - Never ask for a secret in chat. Keys come only through the analytics tool's one-time code into
   the file named in `growth.json` `keys_file` (outside git, mode 600) and are never printed.
 
+## Step 0. Run the wizard
+
+Run `growth wizard` in the project folder (or `growth wizard <folder> --site <url>` for a new one). It does the setup in
+order and remembers where it is in `setup-state.json` (each answer with its date, source and test), so a stopped run
+resumes at the first open step. When it prints `QUESTION <step>: ...` and stops (exit code 3), ask the owner that one
+question (see "How to ask"), record the answer with `growth wizard answer <step> '<json>'`, and run it again. When it
+prints `WAITING browser` or `WAITING region`, walk the owner through the guided step (A14 below). The wizard opens the
+setup task ("Project setup": one step per doctor step) and doctor ticks it, so the status bar shows setup progress from
+the first question. Setup is **not done** until the research browser is connected and the target country's Google region
+is set and confirmed by the owner (A14); no research step may start before that.
+
 ## Step 1. Where are we
 
 Run `growth doctor`. Read the project's `growth.json`, `SETUP.md`, `BRAND.md`, `docs/steps-log.md` and
@@ -42,6 +53,9 @@ Run `growth doctor`. Read the project's `growth.json`, `SETUP.md`, `BRAND.md`, `
 | A10 Agent guards | `growth new-project <this folder> --site <url> --force` adds the missing `.claude` files (the Stop hook); never overwrites. | nothing |
 | A11 Preview address | Set `preview_url` in `growth.json` to the one address every review happens on. | the preview address, if you cannot find it |
 | A12 Hook commands find the kit | `growth new-project <this folder> --site <url> --force` rewrites old absolute-path hook commands to `growth hook stop` / `growth statusline`. | nothing |
+| A13 Agent harness complete | `growth wizard --repair` installs what is missing (Stop hook with its status message, status bar, permissions block, skills, CLAUDE.md lines, git hooks the owner said yes to); never overwrites the owner's own settings. | nothing, unless git hooks were never answered |
+| A14 Research browser connected, market region set | The wizard's two guided steps. Browser: the owner types `/chrome` in Claude Code, picks the browser, checks "By default: on"; you confirm with `growth wizard confirm browser --name "<name>"`. Region: open Google's Search settings in that browser, read the Results region it reports (never trust a note that it is set; "Current Region" is a failure), then `growth wizard confirm region --seen "<what Google says>" --owner-confirmed` only after the owner says yes. Re-check at the start of each research step with `growth wizard research-check --connected "<names from list_connected_browsers>"`. | the browser to use; yes that the region is right |
+| A15 Work is tracked in a task | Open a task for the work (`growth tasks add ...`, steps copied from the playbook, each ticked with proof). A chat that is not page work: `growth tasks add "Chat: <topic>" "" --type chat`. | nothing |
 
 ## Step 3. Drift check (on a re-run)
 
