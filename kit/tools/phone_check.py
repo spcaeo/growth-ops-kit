@@ -10,7 +10,8 @@ scrolls to the end and back so in-view parts settle, then reports:
   - assets:   any /_next/static file that answers 400 or more (a broken build serves an unstyled page)
   - overflow: the page scrolls sideways, or a box clips its content sideways with no visible scroll cue (rule 68)
   - text:     visible text drawn under 12 px on screen, SVG text included (font size x the drawing's scale) (rule 70)
-  - taps:     a header, nav, menu or footer link or button under 24 x 24 px (rule 70; WCAG 2.2 target size)
+  - taps:     a header, nav, menu or footer link or button under 24 x 24 px (rule 70; WCAG 2.2 target size). A link inline in a
+              sentence is exempt (WCAG 2.5.8); a list of links with only separators between them is not
 Text and tap sizes are judged at phone widths (under 640 px); overflow and assets at every width.
 Exit 1 on any problem. Local dev server only.
 """
@@ -91,12 +92,32 @@ JS_MEASURE = r"""
       }
       if (px < 11.95) out.text.push(`${label(el)} draws at ${px.toFixed(1)}px`);
     }
+    // WCAG 2.5.8 exempts a target that sits inline in a sentence or block of text (its size is set by the line height of the text
+    // around it). A link is "in a sentence" when it is inline and the text around it, inside its nearest block, holds real words:
+    // a list of links with only separators ("|", a dot) between them is NOT a sentence.
+    const inSentence = (el) => {
+      if (getComputedStyle(el).display !== 'inline') return false;
+      let box = el.parentElement;
+      while (box && getComputedStyle(box).display === 'inline') box = box.parentElement;
+      if (!box) return false;
+      let around = '';
+      const walk = (n) => {
+        for (const c of n.childNodes) {
+          if (c === el) continue;
+          if (c.nodeType === 3) around += ' ' + c.textContent;
+          else if (c.nodeType === 1 && !c.matches('a[href], button') && getComputedStyle(c).display === 'inline') walk(c);
+        }
+      };
+      walk(box);
+      return /[\p{L}]{2,}/u.test(around);
+    };
     const tapSel = ':is(header, footer, nav):not(main *) :is(a[href], button), [role=menu] :is(a, button), [role=menuitem]';
     document.querySelectorAll(tapSel).forEach((el) => {
       if (!vis(el)) return;
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return;
       if (r.bottom < -50) return;  // the skip link, parked above the page until it gets focus
+      if (inSentence(el)) return;
       if (r.width < 23.5 || r.height < 23.5) out.taps.push(`${label(el)} is ${Math.round(r.width)}x${Math.round(r.height)}px`);
     });
   }

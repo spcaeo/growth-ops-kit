@@ -50,28 +50,37 @@ JS_MEASURE = r"""
     const a = top[3];
     return [0, 1, 2].map((k) => top[k] * a + bottom[k] * (1 - a)).concat(1);
   };
-  // text colour: the element's own text, or its first text-bearing child
+  // text colour: the link's OWN text when it has any ("Move <b>offer</b>" reads the link's colour, not the <b>'s), else its first
+  // visible text-bearing child (a label inside an icon button); screen-reader-only and aria-hidden children are skipped
+  const hasText = (n) => [...n.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim());
+  const hiddenKid = (c) => { if (c.closest('[aria-hidden=true]')) return true; const r = c.getBoundingClientRect(); const k = getComputedStyle(c); return r.width <= 1 || r.height <= 1 || k.clip === 'rect(0px, 0px, 0px, 0px)'; };
   let textEl = el;
-  for (const c of el.querySelectorAll('*')) { if (c.childNodes.length && [...c.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) { textEl = c; break; } }
+  if (!hasText(el)) { for (const c of el.querySelectorAll('*')) { if (hasText(c) && !hiddenKid(c)) { textEl = c; break; } } }
   const tcs = getComputedStyle(textEl);
   let fg = parse(tcs.color);
-  // background: walk up, collecting layers until an opaque one
-  const layers = [];
-  let complex = false;
-  for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
-    const s = getComputedStyle(n);
-    if (s.backgroundImage && s.backgroundImage !== 'none' && !/^url\(.*\.svg/.test(s.backgroundImage)) {
-      if (/gradient|url\(/.test(s.backgroundImage) && n === el) complex = true;
+  // background: walk up from `start`, collecting layers until an opaque one
+  const paint = (start, own) => {
+    const layers = [];
+    let complex = false;
+    for (let n = start; n && n.nodeType === 1; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.backgroundImage && s.backgroundImage !== 'none' && !/^url\(.*\.svg/.test(s.backgroundImage)) {
+        if (/gradient|url\(/.test(s.backgroundImage) && n === own) complex = true;
+      }
+      const b = parse(s.backgroundColor);
+      if (b && b[3] > 0) { layers.push(b); if (b[3] >= 1) break; }
     }
-    const b = parse(s.backgroundColor);
-    if (b && b[3] > 0) { layers.push(b); if (b[3] >= 1) break; }
-  }
-  let bg = [255, 255, 255, 1];
-  for (let k = layers.length - 1; k >= 0; k--) bg = layers[k][3] >= 1 ? layers[k] : over(layers[k], bg);
+    let bg = [255, 255, 255, 1];
+    for (let k = layers.length - 1; k >= 0; k--) bg = layers[k][3] >= 1 ? layers[k] : over(layers[k], bg);
+    return { bg, complex };
+  };
+  const own = paint(el, el);
+  const bg = own.bg, complex = own.complex;
+  const outerBg = paint(el.parentElement, null).bg;   // what is painted OUTSIDE the element: where a focus ring sits
   if (fg && fg[3] < 1) fg = over(fg, bg);
   const size = parseFloat(tcs.fontSize), weight = parseInt(tcs.fontWeight, 10) || 400;
   const s = getComputedStyle(el);
-  return { fg, bg, size, weight, complex,
+  return { fg, bg, outerBg, size, weight, complex, offset: parseFloat(s.outlineOffset) || 0,
            outline: s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0 ? parse(s.outlineColor) : null,
            shadow: s.boxShadow !== 'none' };
 }
@@ -92,6 +101,14 @@ def ratio(a, b):
 
 def hexc(c):
     return "#%02x%02x%02x" % tuple(int(round(x)) for x in c[:3])
+
+
+def ring_ratio(m):
+    """(ratio, colour it sits on) of a focus ring. The ring is drawn outside the element (outline-offset 0 or more), so it is
+    compared with the colour painted outside the element, never with the button's own fill. A ring pulled inside (a negative
+    offset) sits on the element's fill."""
+    on = m["bg"] if m.get("offset", 0) < 0 else m.get("outerBg") or m["bg"]
+    return ratio(m["outline"], on), on
 
 
 def check(url, width=1366, height=900):
@@ -140,8 +157,9 @@ def check(url, width=1366, height=900):
                         continue
                     if r < need:
                         problems.append(f'"{it["text"] or it["tag"]}" {st}: text {row["fg"]} on {row["bg"]} = {r:.2f}:1 (needs {need}:1)')
-                    if st == "focus" and m["outline"] and ratio(m["outline"], m["bg"]) < 3 and not m["shadow"]:
-                        problems.append(f'"{it["text"] or it["tag"]}" focus ring {hexc(m["outline"])} on {row["bg"]} under 3:1')
+                    ring = ring_ratio(m) if st == "focus" and m["outline"] and not m["shadow"] else None
+                    if ring is not None and ring[0] < 3:
+                        problems.append(f'"{it["text"] or it["tag"]}" focus ring {hexc(m["outline"])} on {hexc(ring[1])} under 3:1')
         finally:
             browser.close()
     return sorted(set(problems)), rows
