@@ -2,6 +2,19 @@
 
 The kit and the book share one version number. Dates are written year-month-day.
 
+## Unreleased
+
+- One sitemap reader (`kit/tools/sitemaps.py`, also `growth sitemaps <url-or-file>`) for the inventory, the link graph,
+  the page tracker and the technical SEO check. A sitemap index is followed to its pages; before, the inventory and the
+  tracker took an index's child sitemap files as pages, and MAP-02 said a page in a child sitemap was "not in the
+  sitemap". A saved index (`--offline`) reads its children from its own folder, so a local build's `dist/` works.
+  `growth inventory --base <preview>` reads the preview's own sitemap and every child sitemap from the preview (never
+  the production host named in `<loc>`), so a page that exists only on the branch is listed. The technical SEO check
+  reads the sitemap robots.txt names (for example /sitemap_index.xml), else /sitemap.xml.
+  `inventory.json` meta and `INVENTORY.md` now say which address the pages were read from (`base`) and which sitemap;
+  "Search Console: not connected" is now "none yet ... run `growth page-tracker sync`" when the tracker has no rows;
+  doctor's A7 fix line says `growth inventory --base <preview_url>` when a preview is set.
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.

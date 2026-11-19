@@ -54,6 +54,7 @@ TOOLS = {
     "link_graph": ("tools/link_graph.py", "crawl the site's internal links into a graph and report orphans, weak pages and clusters"),
     "link_map": ("adapters/nextjs/link_map.py", "(Next.js adapter) internal link map and link planner read from the site's code"),
     "page_archive": ("tools/page_archive.py", "before-and-after full-page screenshots and HTML of a page (rule 36i)"),
+    "sitemaps": ("tools/sitemaps.py", "list the pages of a sitemap (URL or saved file); a sitemap index is followed to its pages"),
     "page_snapshot": ("tools/page_snapshot.py", "snapshot a page's facts before touching it, and log the touch in the inventory work log"),
     "phone_check": ("tools/phone_check.py", "phone readability in a real browser: small text, tap targets, sideways scroll"),
     "contrast_check": ("tools/contrast_check.py", "contrast of every link, button and control at rest, hover and focus (rule 36j)"),

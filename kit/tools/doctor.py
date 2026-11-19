@@ -79,7 +79,9 @@ try:
     row("A6 Task tracker", True, f"{len(t['tasks'])} tasks ({open_t} open), {open_q} open owner questions")
 except Exception:
     row("A6 Task tracker", False, "docs/tasks.json missing or unreadable", "growth tasks add ... (book/01-flow.md A6)")
-# A7 inventory
+# A7 inventory: read the pages from the preview (a local build) when there is one, never page by page from the live site
+INVENTORY_FIX = (f"build the site, serve it, then growth inventory --base {CFG['preview_url']}" if CFG.get("preview_url")
+                 else "growth inventory (run a production build of the site first for page elements)")
 inv = PROJECT / "inventory" / "inventory.json"
 if inv.exists():
     meta = json.loads(inv.read_text())["meta"]
@@ -89,9 +91,9 @@ if inv.exists():
     fresh = meta["generated"][:10] >= (date.today() - timedelta(days=7)).isoformat()
     row("A7 Full site inventory", (live == meta["sitemap_urls"] and fresh) or None,
         f"{live} live pages vs {meta['sitemap_urls']} in the sitemap; built {meta['generated']}",
-        "growth inventory (run a production build of the site first for page elements)")
+        INVENTORY_FIX)
 else:
-    row("A7 Full site inventory", False, "inventory/inventory.json missing", "growth inventory")
+    row("A7 Full site inventory", False, "inventory/inventory.json missing", INVENTORY_FIX)
 # A7b site link graph
 lg = PROJECT / "inventory" / "link-graph.db"
 if lg.exists():

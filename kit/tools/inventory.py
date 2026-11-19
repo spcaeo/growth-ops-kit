@@ -21,11 +21,13 @@ import re
 import sqlite3
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import sitemaps  # noqa: E402
 from config import CFG, PROJECT as ROOT, SITE_URL, TZ, UA  # noqa: E402
 
 OUT = ROOT / "inventory"
@@ -34,16 +36,16 @@ MONEY_CORE = set(CFG.get("money_core", []))                  # money pages = the
 CORE = {k: tuple(v) for k, v in CFG.get("core_pages", {}).items()}   # {path: [type, buyer stage]}
 BLOG = CFG.get("blog_path", "/blog").rstrip("/")
 NEW_PAGES = set(CFG.get("new_pages", []))
+GSC_NONE = "none yet (no Search Console rows in page-tracker/tracker.db: run `growth page-tracker sync`, then this again)"
 
 
 def now():
     return datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z")
 
 
-def parse_sitemap(xml: str, site_url: str):
-    """{path: lastmod} from a sitemap's <loc> entries."""
-    return {u.strip().replace(site_url, "", 1) or "/": lm for u, lm in
-            re.findall(r"<loc>([^<]+)</loc>\s*(?:<lastmod>([^<]+)</lastmod>)?", xml)}
+def paths_of(entries, site_url: str):
+    """{path: lastmod} from the sitemap's (loc, lastmod) entries."""
+    return {u.strip().replace(site_url, "", 1) or "/": lm for u, lm in entries}
 
 
 def fetch(url):
@@ -135,13 +137,18 @@ def main(argv=None):
     ap.add_argument("--no-pages", action="store_true", help="the sitemap only: do not fetch each page")
     a = ap.parse_args(argv)
     base = (a.base or SITE_URL).rstrip("/")
+    sitemap_path = urllib.parse.urlsplit(CFG.get("sitemap_url") or "/sitemap.xml").path or "/sitemap.xml"
     if a.offline:
-        xml = Path(a.offline).read_text()
+        source, get = a.offline, None
+    elif a.base:   # a preview: its own sitemap, and every child sitemap from it too (a new page exists only there)
+        source, get = base + sitemap_path, sitemaps.on_origin(base)
     else:
-        code, xml = fetch(CFG.get("sitemap_url") or base + "/sitemap.xml")
-        if code != 200:
-            sys.exit(f"could not read the sitemap ({CFG.get('sitemap_url') or base + '/sitemap.xml'}): http {code}")
-    sm = parse_sitemap(xml, SITE_URL)
+        source, get = CFG.get("sitemap_url") or base + sitemap_path, None
+    try:
+        entries = sitemaps.read(source, get=get)   # follows a sitemap index; only sitemap files are read here
+    except sitemaps.SitemapError as e:
+        sys.exit(f"could not read the sitemap: {e}")
+    sm = paths_of(entries, SITE_URL)
     pages = {}
     if not a.no_pages:
         for p in sm:
@@ -151,7 +158,8 @@ def main(argv=None):
     work = json.loads(work_f.read_text()) if work_f.exists() else []
     rows = build(sm, pages, gsc, readers, work)
     OUT.mkdir(exist_ok=True)
-    meta = {"generated": now(), "search_console_range": gsc_range, "sitemap_urls": len(sm), "rows": len(rows)}
+    meta = {"generated": now(), "base": base, "sitemap_source": str(source), "search_console_range": gsc_range,
+            "sitemap_urls": len(sm), "rows": len(rows)}
     (OUT / "inventory.json").write_text(json.dumps({"meta": meta, "pages": rows}, indent=1, ensure_ascii=False) + "\n")
     cols = ["path", "money_page", "touched", "status", "type", "silo", "pillar", "stage", "in_sitemap", "lastmod", "words", "faqs",
             "schema", "noindex", "gsc_impressions", "gsc_clicks", "gsc_position", "visitors", "title", "h1", "meta_description"]
@@ -167,7 +175,8 @@ def main(argv=None):
 def write_md(rows, meta):
     live = [r for r in rows if r["status"] == "live"]
     L = [f"# {SITE_URL.split('://')[-1]} page inventory", "",
-         f"Generated {meta['generated']} by `growth inventory`. Search Console: {meta['search_console_range'] or 'not connected'} "
+         f"Generated {meta['generated']} by `growth inventory`. Pages read from {meta.get('base') or SITE_URL}; sitemap: "
+         f"{meta.get('sitemap_source') or 'the site'}. Search Console: {meta['search_console_range'] or GSC_NONE} "
          "(impressions = times shown in Google). Full rows: `inventory.csv` / `inventory.json`.", "",
          "## Totals", "", "| What | Count |", "| --- | ---: |"]
     count = lambda f: sum(1 for r in rows if f(r))  # noqa: E731
