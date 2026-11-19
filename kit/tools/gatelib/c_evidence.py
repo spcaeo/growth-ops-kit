@@ -212,6 +212,17 @@ def task_steps(ctx):
     since = str(ctx.cfg.get("proof_required_since") or "")
     probs += [f"{task['id']} step {s.get('n')} done with no proof" for s in steps
               if s.get("status") == "done" and not s.get("output") and (not since or s.get("at", "")[:len(since)] >= since)]
+    # a proof must name something checkable that exists (audit H1): "x", "abc" or a made-up commit is not proof;
+    # proof_required_since grandfathers older steps here too
+    import checkpoints
+    repos = [ctx.repo] if ctx.repo else []
+    for s in steps:
+        if s.get("status") == "done" and s.get("output") and (not since or s.get("at", "")[:len(since)] >= since):
+            why = checkpoints.proof_problem(s["output"], ctx.project, repos)
+            if why:
+                probs.append(f"{task['id']} step {s.get('n')} proof is not checkable: {why[:110]}")
+    probs += [f"{task['id']} was closed with open steps {f.get('open_steps')} (forced: {f.get('reason', '')[:60]})"
+              for f in task.get("forced") or [] if task.get("status") == "done"]
     ctx.verdict(probs, f"{task['id']}: {len(steps)} steps, none skipped or left open",
                 "do the step, or tick it with its proof: growth tasks tick <task> <n> --output <proof>; raise a step with the owner before skipping it (rule 0)")
 

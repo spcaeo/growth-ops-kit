@@ -75,7 +75,7 @@ def test_manual_checks_count_shows_for_the_open_page_job(tmp_path):
     data = {"tasks": [{"id": "T1", "title": "Page pricing", "status": "doing", "steps": [{"n": 1, "what": "x", "status": "todo"}]}]}
     (tmp_path / "docs" / "tasks.json").write_text(json.dumps(data))
     (tmp_path / "research" / "pricing-checkpoints.md").write_text(
-        "## 5. Manual checks (3)\n\n- [x] rule 1: a -- seen J1\n- [ ] rule 2: b\n- [x] rule 3: c -- ok seen\n")
+        "## 5. Manual checks (3)\n\n- [x] rule 1: a -- seen J1\n- [ ] rule 2: b\n- [x] rule 3: c -- seen in research/pricing-shots/a-390.png\n")  # audit H1: "ok seen" is not proof
     (tmp_path / "research" / "other-checkpoints.md").write_text("## 5. Manual checks (1)\n\n- [ ] rule 9: z\n")
     assert statusline.manual_checks(tmp_path, data) == "manual checks 2/3"       # the file the open task names
     assert statusline.line(data, "bars", "manual checks 2/3") == "T1 ▱▱▱▱▱▱▱▱▱▱ 0/1 · now: 1 x · manual checks 2/3"

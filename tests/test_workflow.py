@@ -53,7 +53,10 @@ def test_page_task_needs_steps_and_a_done_step_needs_proof(tmp_path):
     assert run(p, "workflow", "check").returncode == 0
     r = run(p, "tasks", "step", "T1", "Edit it", "--status", "done")
     assert r.returncode != 0 and "--output" in (r.stderr + r.stdout)
-    assert run(p, "tasks", "step", "T1", "Edit it", "--status", "done", "--output", "commit abc1234").returncode == 0
+    # audit H1: the proof must name something that exists; "commit abc1234" (no such commit) is refused now
+    assert run(p, "tasks", "step", "T1", "Edit it", "--status", "done", "--output", "commit abc1234").returncode != 0
+    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=p, capture_output=True, text=True).stdout.strip()
+    assert run(p, "tasks", "step", "T1", "Edit it", "--status", "done", "--output", f"commit {head}").returncode == 0
     db = json.loads((p / "docs" / "tasks.json").read_text())
     db["tasks"][0]["steps"][0].update(status="done", output="")  # a hand-edited lie
     (p / "docs" / "tasks.json").write_text(json.dumps(db))
