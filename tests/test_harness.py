@@ -124,7 +124,8 @@ def test_owner_only_commands_and_protected_files_are_denied():
     for cmd in ("approve", "wizard confirm", "tasks answer", "journal answer", "install_hooks remove"):
         assert f"Bash(growth {cmd}*)" in deny and f"Bash(*/growth {cmd}*)" in deny, cmd
     for f in (".claude/settings.json", "growth.json", "approvals.jsonl", ".git/hooks/**", "docs/tasks.json", "setup-state.json"):
-        assert f"Edit(**/{f})" in deny and f"Write(**/{f})" in deny, f
+        assert f"Edit(**/{f})" in deny, f           # Edit rules cover every file-writing tool in Claude Code
+    assert not any(d.startswith("Write(") for d in deny)   # Write(path) rules are never matched: only warnings
     assert "Read(~/.config/growth-ops-kit/**)" in deny
     assert any(d.startswith("Edit(//") and d.endswith("/**)") for d in deny)          # the kit folder itself
 

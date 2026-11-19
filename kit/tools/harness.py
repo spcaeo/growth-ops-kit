@@ -96,10 +96,11 @@ def permissions_wanted(cfg: dict, kit_root: Path = KIT_ROOT) -> tuple[list[str],
     deny = list(DENY_ALWAYS)
     for cmd in OWNER_ONLY:
         deny += [f"Bash(growth {cmd}*)", f"Bash(*/growth {cmd}*)"]
+    # Edit(path) rules cover every file-writing tool in Claude Code; a Write(path) rule is not matched and only prints a
+    # warning on every start (a real scheduled run logged 17 such lines), so the kit writes Edit rules only.
     for f in PROTECTED_FILES:
-        deny += [f"Edit(**/{f})", f"Write(**/{f})"]
-    deny += [f"Edit(/{kit_root}/**)", f"Write(/{kit_root}/**)",
-             "Read(~/.config/growth-ops-kit/**)", "Edit(~/.config/growth-ops-kit/**)", "Write(~/.config/growth-ops-kit/**)"]
+        deny += [f"Edit(**/{f})"]
+    deny += [f"Edit(/{kit_root}/**)", "Read(~/.config/growth-ops-kit/**)", "Edit(~/.config/growth-ops-kit/**)"]
     for cmd in cfg.get("deploy_commands") or []:
         deny.append(f"Bash({cmd}*)")
     host = urlsplit(cfg.get("site_url") or "").netloc
