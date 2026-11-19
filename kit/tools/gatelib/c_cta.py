@@ -61,14 +61,45 @@ def raw_booking(ctx):
     return "|".join([RAW_BOOKING] + extra)
 
 
+def booking_allowed(ctx):
+    """(allowed [(match, why)], problems): growth.json booking_allowed, the site's OWN booking links that it uses on
+    purpose (for example inside its booking dialog). Every entry needs a match and a reason in words."""
+    allowed, probs = [], []
+    for e in ctx.cfg.get("booking_allowed") or []:
+        match = (e.get("match") or "").strip() if isinstance(e, dict) else ""
+        why = (e.get("why") or "").strip() if isinstance(e, dict) else ""
+        if not match or len(why) < 10:
+            probs.append(f"growth.json booking_allowed entry {e!r} needs a 'match' and a 'why' (the reason, in words)")
+        else:
+            allowed.append((match, why))
+    return allowed, probs
+
+
 @check("cta.one-path", "32", what="every call to action goes to the one booking path; no raw booking link", needs="live")
 def one_path(ctx):
     root = ctx.root()
-    probs = [f"raw booking link {a.get('href')[:60]}" for a in find_all(root, "a") if re.search(raw_booking(ctx), a.get("href"))]
+    allowed, probs = booking_allowed(ctx)
+    excused = {}
+    for a in find_all(root, "a"):
+        href = a.get("href")
+        if not re.search(raw_booking(ctx), href):
+            continue
+        hit = next((m for m, _ in allowed if m in href), None)
+        if hit:
+            excused[hit] = excused.get(hit, 0) + 1
+        else:
+            probs.append(f"raw booking link {href[:60]}")
     if not domx.booking_links(ctx, root):
         probs.append("no link to the booking path at all")
-    ctx.verdict(probs, f"{len(domx.booking_links(ctx, root))} booking links, all through {sorted(ctx.booking_paths())}",
-                f"link to {ctx.cfg.get('conversion_path', 'the booking path')} through the site's shared booking button, never a pasted booking URL (rule 32)")
+    fix = (f"link to {ctx.cfg.get('conversion_path', 'the booking path')} through the site's shared booking button, never a "
+           "pasted booking URL (rule 32)")
+    if probs or not excused:
+        ctx.verdict(probs, f"{len(domx.booking_links(ctx, root))} booking links, all through {sorted(ctx.booking_paths())}", fix)
+        return
+    why = dict(allowed)
+    ctx.warn("allowed exception: " + "; ".join(f"{n} link(s) to {m} (why: {why[m]})" for m, n in excused.items())
+             + f"; every other call to action goes through {sorted(ctx.booking_paths())}",
+             "allowed by growth.json booking_allowed; remove the entry to make these links FAIL again")
 
 
 @check("cta.label-same", "32a", types=("money", "hub", "core"), what="every primary booking button has the same label (growth.json cta.label when set)", needs="live")

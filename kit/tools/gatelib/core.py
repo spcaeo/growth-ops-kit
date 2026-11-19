@@ -316,8 +316,9 @@ class Ctx:
         return self.cfg.get("site_url", "").rstrip("/")
 
     def booking_paths(self):
-        """The paths a call to action may go to: the conversion path and the contact path (growth.json)."""
-        return {p for p in (self.cfg.get("conversion_path"), (self.cfg.get("cta") or {}).get("contact_path")) if p}
+        """The paths a call to action may go to: the conversion path and the contact path (growth.json), without a
+        trailing slash, as every caller compares them (a site whose addresses end in "/" set "/contact/" and matched none)."""
+        return {p.rstrip("/") for p in (self.cfg.get("conversion_path"), (self.cfg.get("cta") or {}).get("contact_path")) if p}
 
     def internal_path(self, href):
         """Site path of an internal href, or None for an external/other link."""
