@@ -72,7 +72,7 @@ def test_tasks_add_with_a_research_playbook_is_refused_until_ready(tmp_path):
     folder, _ = project(tmp_path)
     r = growth(tmp_path, "tasks", "add", "New post", "write it", "--playbook", "new-post", cwd=folder)
     assert r.returncode != 0 and "research step" in (r.stdout + r.stderr) and "/chrome" in (r.stdout + r.stderr)
-    assert growth(tmp_path, "tasks", "add", "Release", "", "--playbook", "fix-a-fact", cwd=folder).returncode == 0   # no research step
+    assert growth(tmp_path, "tasks", "add", "Release", "", "--playbook", "release", cwd=folder).returncode == 0   # no research step (fix-a-fact re-reads the vendor page now, so it is research)
     assert growth(tmp_path, "tasks", "add", "x", "", "--research", cwd=folder).returncode != 0
     growth(tmp_path, "wizard", "confirm", "browser", "--name", "Browser 1", cwd=folder)
     growth(tmp_path, "wizard", "confirm", "region", "--seen", "United States", "--owner-confirmed", cwd=folder)
