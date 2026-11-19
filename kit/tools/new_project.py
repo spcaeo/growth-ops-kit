@@ -69,20 +69,31 @@ def agent_files(folder: Path, name: str, site: str, kit_root: Path) -> list[Path
         skill.write_text(text)
         made.append(skill)
     settings = folder / ".claude" / "settings.json"
-    command = f'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" bash "${{GROWTH_KIT:-{kit_root}}}/kit/hooks/stop_hook.sh"'
+    # Resolved at run time through the `growth` command on the PATH (setup.sh links it); the kit's folder on this machine
+    # is only the last fallback, so a project folder shared with a teammate or a kit moved elsewhere still runs its hooks.
+    run_growth = f'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" "$(command -v growth || echo "${{GROWTH_KIT:-{kit_root}}}/growth")"'
+    command = f"{run_growth} hook stop"
+    status_command = f"{run_growth} statusline"
     try:
         cfg = json.loads(settings.read_text()) if settings.exists() else {}
     except ValueError:
         raise SystemExit(f"{settings} is not valid JSON; fix it, then run this again")
     stop = cfg.setdefault("hooks", {}).setdefault("Stop", [])
     changed = False
-    if "stop_hook.sh" not in json.dumps(stop):
+    if "stop_hook.sh" not in json.dumps(stop) and "hook stop" not in json.dumps(stop):
         stop.append({"hooks": [{"type": "command", "command": command,
                                 "statusMessage": "Checking every owner message is logged and every rule has its check"}]})
         changed = True
+    for entry in stop:                                        # our own older form (absolute kit path) is moved to the new one
+        for h in entry.get("hooks", []):
+            if "${GROWTH_KIT:-" in h.get("command", "") and "stop_hook.sh" in h["command"]:
+                h["command"] = command
+                changed = True
     if "statusLine" not in cfg:   # the owner watches the open task tick off at the bottom of the window (never replaced)
-        cfg["statusLine"] = {"type": "command", "padding": 0,
-                             "command": f'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" python3 "${{GROWTH_KIT:-{kit_root}}}/kit/tools/statusline.py"'}
+        cfg["statusLine"] = {"type": "command", "padding": 0, "command": status_command}
+        changed = True
+    elif "${GROWTH_KIT:-" in str(cfg["statusLine"].get("command", "")) and "statusline.py" in cfg["statusLine"]["command"]:
+        cfg["statusLine"]["command"] = status_command
         changed = True
     if changed:
         settings.parent.mkdir(parents=True, exist_ok=True)

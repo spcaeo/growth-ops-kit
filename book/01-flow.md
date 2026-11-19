@@ -54,6 +54,7 @@ page work starts before every step is OK.**
 | A9 | Owner journal page current | `growth owner_journal --no-open` rebuilds `journal/owner-journal.html` from the steps log and the journal, so the owner can read what was asked and done. | the page is newer than the steps log and the journal |
 | A10 | Agent guards installed | `growth new-project` writes `.claude/settings.json` with the Stop hook (`kit/hooks/stop_hook.sh`), which blocks an unlogged owner message, a preview address shown before READY, and a helper agent on the wrong model. | `.claude/settings.json` holds the Stop hook |
 | A11 | Preview address set | Set `preview_url` in `growth.json` to the one address every review happens on. Without it the golden rule (no address to the owner before READY) is off. | `preview_url` is set |
+| A12 | Hook commands find the kit | The Stop hook and status line in `.claude/settings.json` run through the `growth` command on the PATH (`bash setup.sh` links it), with the kit's folder only as the fallback. If the kit moved or the project came from a teammate, fix the link or set `GROWTH_KIT`. | every hook command resolves |
 
 ## B. Choose the work
 
