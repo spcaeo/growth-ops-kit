@@ -32,6 +32,10 @@ cd growth-ops-kit
 growth new-project ~/Projects/my-site-growth --site https://example.com
 ```
 
+Any folder works; the paths above are only examples. Keep three separate folders: the kit (this repository), the
+project folder `growth new-project` makes, and your site's own repository. Do not put the project folder inside the site
+repository: it holds your notes, research and the task list, which are not part of the site.
+
 `setup.sh` links the `growth` command into `~/.local/bin`. If it says that folder is not on your PATH, add the line it
 prints to your shell profile (for example `export PATH="$HOME/.local/bin:$PATH"`) and open a new terminal; or run
 `./growth ...` from the kit folder.
@@ -43,6 +47,19 @@ in `growth.json`, the `/onboard` skill, and the Stop hook that makes the agent f
 Then, in your agent (Claude Code), open the project folder and run `/onboard`. It asks the owner one question at a
 time, fills `growth.json`, `BRAND.md` and `SETUP.md`, and stops when `growth doctor` says every step is OK. After that, pick a job
 from [book/playbooks/](book/playbooks/README.md).
+
+## What you get per stack
+
+Checks that read the live page (the gate's page, SEO, link and speed checks, the page tracker, the link graph, the owner
+journal) work on every stack, from the web address alone. Checks that read a site's code need an adapter.
+
+| Stack (`growth.json` `stack`) | Live-page checks | Code checks | Notes |
+| --- | --- | --- | --- |
+| `nextjs` | all | all (Next.js adapter) | the only adapter today |
+| `static` (Astro, Hugo, Eleventy, plain HTML, anything else) | all | none: each prints "SKIP: no adapter for static", never a fake OK | set `"stack": "static"`; check the code rules by hand |
+
+Roadmap: an Astro adapter (content collections in `src/content/`, build and redirect checks), then Hugo. Want another
+stack? Open an issue and say which code checks you need first.
 
 ## What is where
 

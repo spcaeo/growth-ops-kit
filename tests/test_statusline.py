@@ -66,3 +66,21 @@ def test_new_project_registers_statusline_and_keeps_other_settings(tmp_path):
     (tmp_path / ".claude" / "settings.json").write_text(json.dumps(cfg))
     new_project.agent_files(tmp_path, "Demo", "https://example.com", ROOT)
     assert json.loads((tmp_path / ".claude" / "settings.json").read_text())["statusLine"]["command"] == "my own"
+
+
+def test_manual_checks_count_shows_for_the_open_page_job(tmp_path):
+    (tmp_path / "growth.json").write_text("{}")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "research").mkdir()
+    data = {"tasks": [{"id": "T1", "title": "Page pricing", "status": "doing", "steps": [{"n": 1, "what": "x", "status": "todo"}]}]}
+    (tmp_path / "docs" / "tasks.json").write_text(json.dumps(data))
+    (tmp_path / "research" / "pricing-checkpoints.md").write_text(
+        "## 5. Manual checks (3)\n\n- [x] rule 1: a -- seen J1\n- [ ] rule 2: b\n- [x] rule 3: c -- ok seen\n")
+    (tmp_path / "research" / "other-checkpoints.md").write_text("## 5. Manual checks (1)\n\n- [ ] rule 9: z\n")
+    assert statusline.manual_checks(tmp_path, data) == "manual checks 2/3"       # the file the open task names
+    assert statusline.line(data, "bars", "manual checks 2/3") == "T1 ▱▱▱▱▱▱▱▱▱▱ 0/1 · now: 1 x · manual checks 2/3"
+    r = subprocess.run([sys.executable, str(ROOT / "kit/tools/statusline.py")], input="{}", text=True, capture_output=True,
+                       env={"GROWTH_PROJECT": str(tmp_path), "PATH": ""})
+    assert "· manual checks 2/3" in r.stdout
+    (tmp_path / "research" / "pricing-checkpoints.md").write_text("## 1. Before the build (0)\n")
+    assert statusline.manual_checks(tmp_path, data) == ""                          # no manual items: nothing shown
