@@ -236,7 +236,13 @@ else:
 # A8 tracker running + backfilled, no auto-start
 db = PROJECT / "page-tracker" / "tracker.db"
 auto_jobs = auto_start_jobs(PROJECT)
-jobs_note = f"auto-start jobs: {len(auto_jobs)}" + (f" ({', '.join(auto_jobs)})" if auto_jobs else "")
+# Jobs the owner chose to schedule (growth.json automation.jobs, each with a why) are allowed: the owner may want the kit
+# to run by itself (a daily operator run, a lead review). They still show in the line; unlisted ones still block A8.
+_allowed = {j.get("label") for j in ((CFG.get("automation") or {}).get("jobs") or []) if isinstance(j, dict) and j.get("why")}
+_listed = [j for j in auto_jobs if any(a and a in j for a in _allowed)]
+auto_jobs = [j for j in auto_jobs if j not in _listed]
+jobs_note = f"auto-start jobs: {len(auto_jobs)}" + (f" ({', '.join(auto_jobs)})" if auto_jobs else "") + (
+    f"; scheduled by the owner (growth.json automation.jobs): {', '.join(_listed)}" if _listed else "")
 if db.exists():
     c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     locked = False                       # a sync is writing right now: wait, it is not a fault
