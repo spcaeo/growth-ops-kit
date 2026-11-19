@@ -132,6 +132,25 @@ def variants(path):
     return out
 
 
+def target_markets():
+    """Country codes of the target market (growth.json target_markets), as the search tool lists them."""
+    return [str(x).lower() for x in (GROWTH.get("target_markets") or [])]
+
+
+_ALIASES = None
+
+
+def aliases(path):
+    """Old addresses of a page (growth.json page_aliases, redirects_file), as written, to be added to its own figures:
+    Google keeps showing a moved page's old address for months."""
+    global _ALIASES
+    if _ALIASES is None:
+        sys.path.insert(0, os.path.join(os.path.dirname(CODE_DIR), "tools"))
+        import aliases as _a
+        _ALIASES = _a.load(GROWTH, PROJECT)
+    return list(_ALIASES.get(path.rstrip("/") or "/", []))
+
+
 def cluster_of(path):
     """Cluster id for a page path, from the rules (first match wins; exact beats prefix, the longest prefix wins)."""
     p = path.rstrip("/") or "/"

@@ -54,6 +54,32 @@ GENERIC_ANCHORS = {"click here", "here", "read more", "learn more", "more", "see
                    "all articles", "all posts", "view all articles", "book a call", "book a demo", "schedule a call", "contact us", "contact", "next", "previous", "back"}
 
 
+SLASH = False   # the site's own address form ends in "/": requests use it (set by cmd_crawl / cmd_update, see use_site_form)
+
+
+def req_path(key):
+    """The address to REQUEST for a graph key (paths are keyed without a trailing slash). A static server answers 301 to
+    the slash form, so on a trailing-slash site ask for /x/ the way the sitemap gives it; never /file.txt/."""
+    if SLASH and key != "/" and "." not in key.rsplit("/", 1)[-1]:
+        return key + "/"
+    return key
+
+
+def use_site_form(c, locs=None):
+    """Decide the request form: growth.json trailing_slash, else the sitemap (most addresses end in "/"), else what the
+    last crawl found (kept in meta)."""
+    global SLASH
+    if CFG.get("trailing_slash") is not None:
+        SLASH = bool(CFG["trailing_slash"])
+    elif locs:
+        ends = [urlparse(u).path.endswith("/") for u in locs if urlparse(u).path not in ("", "/")]
+        SLASH = bool(ends) and sum(ends) * 2 > len(ends)
+    else:
+        row = c.execute("SELECT value FROM meta WHERE key='trailing_slash'").fetchone()
+        SLASH = bool(row and row[0] == "1")
+    c.execute("INSERT OR REPLACE INTO meta VALUES ('trailing_slash', ?)", ("1" if SLASH else "0",))
+
+
 def now():
     return datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -67,6 +93,7 @@ class PageParser(HTMLParser):
         self.stack, self.links = [], []
         self.title = self.h1 = self.canonical = ""
         self.noindex = False
+        self.alternates = []   # <link rel=alternate hreflang=...> addresses: the same page in another language or region
         self.skip = 0
         self.heading = ""
         self._cap = None      # ("title"|"h"|"a", tag, parts, extra)
@@ -121,8 +148,11 @@ class PageParser(HTMLParser):
             if (a.get("name") or "").lower() == "robots" and "noindex" in (a.get("content") or "").lower():
                 self.noindex = True
         elif tag == "link":
-            if (a.get("rel") or "").lower() == "canonical":
+            rels = (a.get("rel") or "").lower().split()
+            if "canonical" in rels:
                 self.canonical = a.get("href") or ""
+            elif "alternate" in rels and a.get("hreflang") and a.get("href"):
+                self.alternates.append(a["href"])
         if self._a is not None and tag != "a":
             self._a["parts"].append(" ")  # keep words from neighbouring spans apart
         if tag in VOID:
@@ -250,9 +280,9 @@ def resolve_target(origin, path, hosts, delay):
     """Follow redirects by HEAD (GET if HEAD is refused). Returns (first_status, final_path_or_url, final_status)."""
     first, cur, status = None, path, 0
     for _ in range(6):
-        status, hdr, _ = fetch(origin + cur, "HEAD", delay)
+        status, hdr, _ = fetch(origin + req_path(cur), "HEAD", delay)
         if status in (403, 405, 501):
-            status, hdr, _ = fetch(origin + cur, "GET", delay)
+            status, hdr, _ = fetch(origin + req_path(cur), "GET", delay)
         first = first or status
         if status in (301, 302, 303, 307, 308) and hdr.get("Location"):
             nxt = norm_target(hdr["Location"], origin + cur, hosts)
@@ -289,6 +319,7 @@ CREATE INDEX IF NOT EXISTS links_dst ON links(dst);
 CREATE TABLE IF NOT EXISTS targets(path TEXT PRIMARY KEY, status INT, final TEXT, final_status INT, checked_at TEXT);
 CREATE TABLE IF NOT EXISTS links_history(id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT, taken_at TEXT, label TEXT,
   in_body INT, in_total INT, out_body INT, out_total INT, inbound TEXT, outbound TEXT);
+CREATE TABLE IF NOT EXISTS alternates(src TEXT, dst TEXT);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -328,6 +359,11 @@ def label_for(path, labels, sitemap_paths):
 def save_page(c, path, status, parsed, labels, sitemap_paths, origin, hosts, stamp):
     cluster, hub, kind = label_for(path, labels, sitemap_paths)
     c.execute("DELETE FROM links WHERE src=?", (path,))
+    c.execute("DELETE FROM alternates WHERE src=?", (path,))
+    for href in (parsed.alternates if parsed else []):
+        alt = norm_target(href, origin + path, hosts)
+        if alt and alt != path:
+            c.execute("INSERT INTO alternates VALUES (?,?)", (path, alt))
     c.execute("INSERT OR REPLACE INTO pages VALUES (?,?,?,?,?,?,?,?,?,?,?)",
               (path, status, parsed.title if parsed else "", parsed.h1 if parsed else "", cluster, hub, kind,
                int(bool(parsed and parsed.noindex)), parsed.canonical if parsed else "", int(path in sitemap_paths), stamp))
@@ -342,11 +378,15 @@ def save_page(c, path, status, parsed, labels, sitemap_paths, origin, hosts, sta
 
 
 def crawl_one(origin, path, delay, rp):
-    url = origin + path
+    url = origin + req_path(path)
     if rp is not None and not rp.can_fetch(UA["User-Agent"], url):
         return path, -1, None, ""
     status, hdr, body = fetch(url, "GET", delay)
     loc = hdr.get("Location", "") if hdr else ""
+    if status in (301, 302, 307, 308) and loc and urlparse(urljoin(url, loc)).netloc == urlparse(url).netloc \
+            and re.sub(r"/+$", "", urlparse(urljoin(url, loc)).path) == path.rstrip("/"):
+        status, hdr, body = fetch(urljoin(url, loc), "GET", delay)   # same page, other slash form: follow that one hop
+        loc = hdr.get("Location", "") if hdr else ""
     return path, status, (parse_page(body) if status == 200 and body else None), loc
 
 
@@ -422,6 +462,7 @@ def cmd_crawl(a):
     if rp and rp.crawl_delay("*"):
         delay = max(delay, float(rp.crawl_delay("*")))
     c = connect()
+    use_site_form(c, locs)
     t0 = time.time()
     print(f"crawling {len(paths)} pages from {origin} (concurrency {a.concurrency}, delay {delay}s)", file=sys.stderr)
     if not a.limit:
@@ -452,6 +493,7 @@ def cmd_update(a):
     origin = site_origin(a.base)
     hosts = hosts_for(origin)
     c = connect(create=False)
+    use_site_form(c)
     paths = [to_path(p) for p in a.paths]
     sitemap_paths = {r[0] for r in c.execute("SELECT url FROM pages WHERE in_sitemap=1")} | set(paths)
     for p in paths:
@@ -511,6 +553,7 @@ class Graph:
         for l in self.links:
             l["final"] = self.final(l["dst"])
         self.live = {u for u, p in self.pages.items() if p["status"] == 200 and not p["noindex"]}
+        self._group = page_groups([(r[0], r[1]) for r in c.execute("SELECT src, dst FROM alternates")], set(self.pages))
         self.inb, self.outb = defaultdict(list), defaultdict(list)
         for l in self.links:
             self.outb[l["src"]].append(l)
@@ -520,6 +563,10 @@ class Graph:
             self.last = json.loads(c.execute("SELECT value FROM meta WHERE key='last_crawl'").fetchone()[0])
         except Exception:  # noqa: BLE001
             self.last = {}
+
+    def same_page(self, path):
+        """One address for a page and its language or region copies (its hreflang alternates, else a locale prefix)."""
+        return self._group.get(path) or strip_locale(path)
 
     def final(self, dst):
         t = self.targets.get(dst)
@@ -553,6 +600,50 @@ class Graph:
             return []
 
 
+def strip_locale(path):
+    """/en-us/x -> /x for each prefix in growth.json link_graph.locale_prefixes (used when a page has no hreflang)."""
+    for pre in (CFG.get("link_graph") or {}).get("locale_prefixes") or []:
+        pre = "/" + pre.strip("/")
+        if path == pre:
+            return "/"
+        if path.startswith(pre + "/"):
+            return path[len(pre):]
+    return path
+
+
+def page_groups(edges, known):
+    """path -> the one address shared by a page and its hreflang alternates (the shortest address of the group)."""
+    parent = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    for a, b in edges:
+        parent[find(a)] = find(b)
+    for a, b in edges:       # the locale-prefix rule also joins copies that declare no hreflang
+        for x in (a, b):
+            if strip_locale(x) != x:
+                parent[find(x)] = find(strip_locale(x))
+    groups = defaultdict(list)
+    for x in list(parent):
+        groups[find(x)].append(x)
+    return {x: min(m, key=lambda q: (len(q), q)) for m in groups.values() for x in m}
+
+
+PAGER_WORDS = {"next", "previous", "prev", "older", "newer", "older posts", "newer posts", "next page", "previous page",
+               "older entries", "newer entries", "load more"}
+
+
+def is_pagination(l):
+    """A pager link: rel next/prev, a bare page number ("2"), a word like "older", or a /page/N address."""
+    a = nrm(l["anchor"])
+    return bool(set((l.get("rel") or "").split()) & {"next", "prev"} or a.isdigit() or a in PAGER_WORDS
+                or re.search(r"/page/\d+$", l["dst"]))
+
+
 def nrm(s):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", s.lower().replace("'", "").replace("’", ""))).strip()
 
@@ -580,12 +671,20 @@ def analyse(g):
     A["non200"] = [(u, p["status"]) for u, p in sorted(g.pages.items()) if p["status"] != 200]
     # anchors
     by_anchor = defaultdict(lambda: defaultdict(set))
+    raw = defaultdict(set)      # the same count without joining language copies, to say how many that join removed
+    pager = 0
     for l in g.links:
-        if l["zone"] in CONTENT and l["final"] != l["src"]:
-            by_anchor[nrm(l["anchor"])][l["final"]].add(l["src"])
+        if l["zone"] in CONTENT and g.same_page(l["final"]) != g.same_page(l["src"]):
+            if is_pagination(l):
+                pager += 1
+                continue
+            by_anchor[nrm(l["anchor"])][g.same_page(l["final"])].add(l["src"])
+            raw[nrm(l["anchor"])].add(l["final"])
     brand = {nrm(CFG.get("name", "")), nrm(CFG.get("product", ""))}
     A["anchor_multi"] = {a: t for a, t in by_anchor.items() if len(t) >= 2 and a and a not in GENERIC_ANCHORS and a not in brand}
     A["anchor_generic"] = {a: t for a, t in by_anchor.items() if len(t) >= 2 and a in GENERIC_ANCHORS}
+    A["anchor_ignored"] = dict(pagination_links=pager, language_copies=sum(
+        1 for a, t in raw.items() if len(t) >= 2 and a and a not in GENERIC_ANCHORS and a not in brand and a not in A["anchor_multi"]))
     over = []
     for p in live:
         cnt = defaultdict(set)
@@ -684,6 +783,8 @@ def build_report(g, A):
         ("Links to a redirecting address", sum(len(v) for v in A["redirects"].values())),
         ("Broken links (4xx, 5xx, no answer)", sum(len(v) for v in A["broken"].values())),
         ("Anchor words that go to 2+ pages (rule 90)", len(A["anchor_multi"])),
+        ("  not counted: only a language copy of the same page", A["anchor_ignored"]["language_copies"]),
+        ("  not counted: pager links (next, older, page numbers)", A["anchor_ignored"]["pagination_links"]),
         ("Pages with one anchor overused (exact match)", len(A["exact_overuse"]))])
     L += ["", "## Cluster health", "",
           "Hub = the cluster's pillar page. Spoke = every other page of the cluster. Links counted: body and related boxes "
@@ -736,7 +837,7 @@ def build_report(g, A):
     if A["anchor_multi"]:
         L += md_table(["Anchor words", "Goes to (number of pages linking)"], [
             (f"`{a}`", "; ".join(f"`{t}` ({len(s)})" for t, s in sorted(tg.items(), key=lambda x: -len(x[1]))))
-            for a, tg in sorted(A["anchor_multi"].items(), key=lambda x: -sum(len(s) for s in x[1].values()))[:40]])
+            for a, tg in sorted(A["anchor_multi"].items(), key=lambda x: (-len(x[1]), -sum(len(s) for s in x[1].values())))[:40]])
     else:
         L.append("None.")
     if A["anchor_generic"]:
