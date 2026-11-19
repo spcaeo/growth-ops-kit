@@ -145,3 +145,38 @@ def test_a_preflight_record_with_no_key_is_refused(rdy, demo_project, capsys):
     (demo_project / "journal" / "preflight.json").write_text(json.dumps({"/x": {"ok": True}}))
     assert rdy(0, gate_out()) == 1
     assert "did not record a page key" in capsys.readouterr().out
+
+
+# ---- audit M2: READY looks at the status of every internal link ----
+
+def test_ready_runs_the_gate_with_link_status_on(rdy, monkeypatch):
+    import ready
+    seen = []
+    monkeypatch.setattr(ready, "run_gate", lambda cmd: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0, gate_out(), ""))
+    monkeypatch.setattr(sys, "argv", ["ready", "/x", "--type", "post", "--key", "x"])
+    ready.main()
+    assert seen and "--no-link-status" not in seen[0]
+
+
+def seo_all(cache, **cfg):
+    from gatelib.core import CHECKS, Ctx, run_check
+    from techseo.report import Result
+    ctx = Ctx(project=Path("."), cfg=cfg, ptype="post")
+    ctx.cache.update(cache)
+    ctx.cache["tseo"] = cache["tseo"]
+    run_check(ctx, CHECKS["seo.all"])
+    return ctx.lines[0]
+
+
+def test_a_skipped_link_status_blocks_when_it_was_asked_for():
+    from techseo.report import Result
+    line = seo_all({"tseo": [Result("LNK-02", "SKIP", "live site: links are not fetched")]})
+    assert line.level == "SKIP" and line.blocked
+    line = seo_all({"tseo": [Result("LNK-02", "SKIP", "switched off")], "no_link_status": True})
+    assert line.level == "OK" and not line.blocked
+
+
+def test_the_link_status_count_is_part_of_the_ok_line():
+    from techseo.report import Result
+    line = seo_all({"tseo": [Result("LNK-02", "OK", "all 3 unique internal targets answer 200 (3 of 3 unique internal targets checked)")]})
+    assert line.level == "OK" and "3 of 3 unique internal targets checked" in line.what

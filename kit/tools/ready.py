@@ -5,7 +5,7 @@
   growth ready --list                                           # what is READY now
 
 A page is READY only when the full gate, run on the one preview address (growth.json preview_url) against the
-worktree that serves it (growth.json preview_repo), shows 0 FAIL. That includes the independent review (rule 109),
+worktree that serves it (growth.json preview_repo), shows 0 FAIL. That includes the status of every internal link (growth.json link_check_cap, default 200), the independent review (rule 109),
 fresh screenshots and click-test, the fact check, the AI baseline and the speed run: no exceptions, no "known" FAILs.
 Manual checkpoints (research/<key>-checkpoints.md, see `growth checkpoints`) must each be ticked with a proof.
 READY is recorded in journal/ready.json with the commit it was checked at; any later commit makes it not READY again.
@@ -171,7 +171,7 @@ def main():
         sys.exit("growth.json has no preview_url: set the one address the owner sees previews on")
     url = CFG["preview_url"].rstrip("/") + path
     cmd = [sys.executable, str(KIT_DIR / "tools" / "gate.py"), "page", path, "--url", url,
-           "--type", a.type, "--key", a.key, "--no-link-status"] + (["--repo", str(repo)] if repo else [])
+           "--type", a.type, "--key", a.key] + (["--repo", str(repo)] if repo else [])
     r = run_gate(cmd)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
     broken = key_problem(path, a.key) or gate_problem(r, a.type)
