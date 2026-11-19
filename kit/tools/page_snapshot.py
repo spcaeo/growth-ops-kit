@@ -3,6 +3,7 @@
 Skald data + its inventory row, and log the touch in the inventory work log (owner rules, 17 Nov 2026).
 
   growth page_snapshot /pricing --task T10 --action "audit start"
+  growth page_snapshot /pricing --base http://127.0.0.1:4321   # read the page from a preview or local build, not live
 
 Writes inventory/pages/<slug>/<YYYY-MM-DD>.md (readable) and .json (raw), and appends to
 inventory/work-log.json. Read-only on the site and on Skald. The Skald token is read from
@@ -53,8 +54,9 @@ def skald(name, args):
         return f"(Skald {name} failed: {e})"
 
 
-def elements(path):
-    raw = urllib.request.urlopen(urllib.request.Request(SITE_URL + path, headers=UA), timeout=30).read().decode()
+def elements(path, base=""):
+    """The page's own elements, read from `base` (a preview or a local build of the live release) or the live site."""
+    raw = urllib.request.urlopen(urllib.request.Request((base or SITE_URL).rstrip("/") + path, headers=UA), timeout=30).read().decode()
     clean = lambda x: re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", x))).strip()
     body = re.search(r"<body[^>]*>(.*)</body>", raw, re.S).group(1)
     main = re.sub(r"<script.*?</script>|<style.*?</style>|<svg.*?</svg>|<nav.*?</nav>|<footer.*?</footer>|<header class=.site-header.*?</header>",
@@ -96,27 +98,30 @@ def main():
     ap.add_argument("--task", default="")
     ap.add_argument("--action", default="snapshot")
     ap.add_argument("--days", type=int, default=90)
+    ap.add_argument("--base", default="", help="read the page from this address (a preview or a local build) instead of the live site")
     a = ap.parse_args()
-    path = a.path.rstrip("/") or "/"
+    key = a.path.rstrip("/") or "/"   # one form for matching; the site's own form comes from its inventory row
     today = date.today()
     frm = (today - timedelta(days=a.days)).isoformat()
     inv = json.loads((INV / "inventory.json").read_text())["pages"]
-    row = next((r for r in inv if r["path"] == path and r["status"] == "live"), None)
+    row = next((r for r in inv if (r["path"].rstrip("/") or "/") == key and r["status"] == "live"), None)
     if not row:
-        raise SystemExit(f"{path} is not a live page in the inventory. Run growth inventory first.")
+        raise SystemExit(f"{a.path} is not a live page in the inventory. Run growth inventory first.")
+    path = row["path"]   # the address as the site serves it (with its trailing slash, if the site uses one)
     snap = {
         "path": path, "taken": datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "task": a.task, "action": a.action,
+        "base": a.base or SITE_URL,
         "inventory": row,
-        "elements": elements(path),
+        "elements": elements(path, a.base),
         "search_console_google": skald("search_performance", {"path": path, "from": frm, "to": today.isoformat()}),
         "search_console_google_28d": skald("search_performance", {"path": path}),
         "bing": skald("search_performance", {"path": path, "from": frm, "to": today.isoformat(), "engine": "bing"}),
         "skald_page_story": skald("page_story", {"path": path}),
         "skald_journeys": skald("page_journeys", {"paths": [path]}),
         "skald_marked_changes": skald("page_changes", {"path": path}),
-        **tracker_rows(path),
+        **tracker_rows(key),
     }
-    slug = "home" if path == "/" else path.strip("/").replace("/", "__")
+    slug = "home" if key == "/" else key.strip("/").replace("/", "__")
     out = INV / "pages" / slug
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{today}.json").write_text(json.dumps(snap, indent=1, ensure_ascii=False) + "\n")
@@ -125,7 +130,7 @@ def main():
           "## Where it sits (inventory)", "",
           f"Silo **{row['silo']}** · type **{row['type']}** · pillar `{row['pillar'] or '-'}` · stage **{row['stage']}** · "
           f"links in {row.get('links_in')} / out {row.get('links_out')} {row.get('link_flags') or ''}", "",
-          "## Page elements (live)", "", f"- Title: {e['title']}", f"- Meta description: {e['meta_description']}",
+          f"## Page elements (read from {snap['base']})", "", f"- Title: {e['title']}", f"- Meta description: {e['meta_description']}",
           f"- Canonical: {e['canonical']}", f"- H1: {' | '.join(e['h1'])}", f"- Words: {e['words']}",
           f"- Schema: {', '.join(e['schema_types'])}", f"- FAQs ({len(e['faq_questions'])}): " + "; ".join(e['faq_questions']),
           f"- Calls to action: {', '.join(e['cta_links'])}",
