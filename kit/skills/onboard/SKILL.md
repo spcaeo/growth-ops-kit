@@ -41,6 +41,7 @@ Run `growth doctor`. Read the project's `growth.json`, `SETUP.md`, `BRAND.md`, `
 | A9 Owner journal | `growth owner_journal --no-open` rebuilds `journal/owner-journal.html`. BUSY right after a log line is normal: the Stop hook rebuilds it. | nothing |
 | A10 Agent guards | `growth new-project <this folder> --site <url> --force` adds the missing `.claude` files (the Stop hook); never overwrites. | nothing |
 | A11 Preview address | Set `preview_url` in `growth.json` to the one address every review happens on. | the preview address, if you cannot find it |
+| A12 Hook commands find the kit | `growth new-project <this folder> --site <url> --force` rewrites old absolute-path hook commands to `growth hook stop` / `growth statusline`. | nothing |
 
 ## Step 3. Drift check (on a re-run)
 
