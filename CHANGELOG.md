@@ -4,6 +4,13 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.2.4 - 2026-11-19
+
+- `post.takeaways`: the box is the INNERMOST element that says "Key takeaways" and holds list items (or the one whose aria-label says it), not the page wrapper, so a guide with 130 list items elsewhere no longer counts them all.
+- `post.ask-card`: only a class that is exactly `ask-card` or `next-step` (or ends `-ask-card` / `-next-step`) is an ask card; an `<a class="ask">` card-foot link no longer counts.
+- `form.bot-guard`: a GET form whose action is an in-page `#anchor` or the conversion path only prefills the real lead form and is skipped; POST forms and every other form keep the rule.
+- `claims.box-numbers`: a box number is looked for in the page text WITHOUT that one box (before, every copy of the box text was removed, so a number could never be found in the prose); a trailing full stop or comma ("2026.", "99.") is dropped from the number. `box_ignore` selectors like `aside.author` and `aside.howwe` are tested to apply.
+
 ## 2.2.3 - 2026-11-19
 
 - Evidence freshness by what the page renders: evidence (a click-test or share-preview or speed journal entry, and screenshots) is stored with a fingerprint of the page as served (new `kit/tools/fingerprint.py`, `growth fingerprint show|record`; `growth journal add|run --url` for a preview address): the sha256 of its built HTML (build ids, build times, nonces, comments and timestamps stripped) plus the sha256 of the CSS and JS files it links, read from `build_dir` (or fetched from the preview URL); nothing is rebuilt. When the fingerprint still equals the page now, the evidence is fresh whatever commits touched `src/components` or `src/data`. Evidence with no fingerprint (old evidence) keeps the commit-based rule (a journal entry also still counts when it is filed after the last change). Shots take their fingerprint from `research/*-shots/fingerprint.json` (`growth fingerprint record <page> --key <key>`).

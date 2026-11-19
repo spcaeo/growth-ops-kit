@@ -74,15 +74,17 @@ def read_next(ctx):
 @check("post.ask-card", "136", ("post",), "exactly one shared ask card in the post", needs="live")
 def ask(ctx):
     m = domx.main(ctx.root())
-    cards = [n for n in m.iter() if domx.has_cls(n, r".*ask(-card)?|.*next-step")]
+    cards = [n for n in m.iter() if domx.has_cls(n, r"(?:.*-)?ask-card|next-step")]
     ctx.verdict([] if len(cards) == 1 else [f"{len(cards)} ask cards"], "one ask card", "place one shared ask card where the reader wants help (rule 136)")
 
 
 @check("post.takeaways", "137", ("post",), "a Key takeaways box holds 3 to 5 points", needs="live")
 def takeaways(ctx):
     m = domx.main(ctx.root())
-    box = next((n for n in m.iter() if re.search(r"(?i)key takeaways", domx.text(n)) and n.tag in ("section", "aside", "div")
-                and len(find_all(n, "li")) > 0), None)
+    cands = [n for n in m.iter() if n.tag in ("section", "aside", "div") and re.search(r"(?i)key takeaways", domx.text(n))
+             and len(find_all(n, "li")) > 0]
+    inner = [n for n in cands if not any(c is not n and n in c.ancestors() for c in cands)]     # the page wrapper holds the box: take the innermost
+    box = next((n for n in inner if re.search(r"(?i)key takeaways", n.get("aria-label") or "")), inner[0] if inner else None)
     if box is None:
         ctx.ok("no takeaways box (only drawn when the frontmatter has takeaways)")
         return
