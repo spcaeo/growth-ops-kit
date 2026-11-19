@@ -70,3 +70,15 @@ def test_a_trailing_slash_site_is_crawled_without_301s(demo_project, site):
     out = crawl(demo_project, site)
     assert "non-200 pages 0" in out, out
     assert "pages 5," in out
+
+
+def test_language_copies_and_pagers_are_not_anchor_collisions(demo_project, site):
+    crawl(demo_project, site)
+    run(demo_project, "report", "--out", str(demo_project / "r.md"))
+    report = (demo_project / "r.md").read_text()
+    # "the tool" goes to /tools/a/ (and its /en-us/ copy: one page) and to /tools/b/: one real collision
+    assert "`the tool`" in report and "`/tools/a`" in report and "`/tools/b`" in report
+    assert "`/en-us/tools/a`" not in report.split("Same anchor words")[1]
+    # the pager words "2" and "3" collide nowhere
+    assert "`2`" not in report and "`3`" not in report
+    assert "pager links" in report
