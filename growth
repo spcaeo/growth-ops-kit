@@ -56,6 +56,8 @@ TOOLS = {
     "link_graph": ("tools/link_graph.py", "crawl the site's internal links into a graph and report orphans, weak pages and clusters"),
     "link_map": ("adapters/nextjs/link_map.py", "(Next.js adapter) internal link map and link planner read from the site's code"),
     "page_archive": ("tools/page_archive.py", "before-and-after full-page screenshots and HTML of a page (rule 36i)"),
+    "research": ("tools/research.py", "the page's structured research record (search window, AI answers, People also ask, vendor facts); the gate reads it, the brief is written from it"),
+    "vendor_page": ("tools/vendor_page.py", "read a vendor page's raw text (no summariser), quote the plan's exact line, list its monthly/yearly and other toggles, file the fact"),
     "market": ("tools/market.py", "(library) a page's target-market figures measured from the country rows, next to the estimate and its assumption"),
     "aliases": ("tools/aliases.py", "show each page's old addresses (growth.json page_aliases, redirects_file) that the tracker adds together"),
     "paths": ("tools/paths.py", "show how a page path is matched (with or without its slash) and where its snapshots live"),

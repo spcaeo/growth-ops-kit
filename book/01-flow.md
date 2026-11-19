@@ -104,6 +104,7 @@ asks Google to re-read the page ("Request indexing") the same day. Then take the
 
 `growth journal due --days 7` lists the re-checks coming up; each is re-run with the same query and market as the
 stored baseline and logged as a new run against the page (`growth journal`, 02-owner-rules "Keep a page journal").
+The research record's baseline (`growth research baseline`) is the number every re-check is compared with.
 
 At day 28 and 56 also re-run the page's AI answers check (money-page playbook question 35): the same ChatGPT and
 Google prompts, recorded next to the baseline, to see whether the page is now named or cited.

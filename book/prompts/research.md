@@ -16,7 +16,10 @@ __QUESTIONS__
   standards pages the topic needs (read the official page, never a summary site), and the top readable results. One
   request at a time. A page behind a bot check: write "not readable".
 - Forums and communities where readable: real pain points in the readers' own words. Quote short phrases and link them.
-- Every fact gets: the claim, the exact source URL, the date read (`__DATE__`), and confidence. Never invent a number.
+- Every fact gets: the claim, the exact source URL, the date read (`__DATE__`), and confidence. Never invent a number. Read a number in the page's raw text or a real browser
+  (`growth vendor_page`), never from a summary tool alone, in every view the page offers (monthly and yearly, regions,
+  cloud and self-hosted), and name the view each number came from. The facts also go into the page's record
+  (`growth research fact`), which the gate reads.
   "Not published" is an answer.
 - Note what changed in the last year (rules, prices, products) where it matters.
 
