@@ -84,3 +84,22 @@ def test_manual_checks_count_shows_for_the_open_page_job(tmp_path):
     assert "· manual checks 2/3" in r.stdout
     (tmp_path / "research" / "pricing-checkpoints.md").write_text("## 1. Before the build (0)\n")
     assert statusline.manual_checks(tmp_path, data) == ""                          # no manual items: nothing shown
+
+
+def test_a_blocked_big_task_never_takes_the_bar_from_live_work():
+    # friction 47: T3 (60 steps, blocked until day 7) kept the bar while T13 was the job being done
+    big = [{"n": i, "what": f"s{i}", "status": "done" if i <= 58 else "todo"} for i in range(1, 61)]
+    data = {"tasks": [
+        {"id": "T3", "status": "blocked", "steps": big},
+        {"id": "T6", "status": "waiting-owner", "steps": [{"n": 1, "what": "a", "status": "waiting-owner"}]},
+        {"id": "T11", "status": "todo", "steps": [{"n": 1, "what": "b", "status": "todo"}] * 6},
+        {"id": "T13", "status": "doing", "steps": [{"n": 1, "what": "Fix it", "status": "todo"}]}]}
+    out = statusline.line(data)
+    assert out.startswith("T13 ")
+    assert out.endswith("+3 other open (2 waiting)")
+    # nothing doing: a task still to start beats a waiting one
+    data["tasks"].pop()
+    assert statusline.line(data).startswith("T11 ")
+    # only waiting tasks left: the biggest shows, marked as waiting
+    data["tasks"].pop()
+    assert statusline.line(data).startswith("T3 (waiting) ")
