@@ -55,6 +55,7 @@ Run `growth doctor`. Read the project's `growth.json`, `SETUP.md`, `BRAND.md`, `
 | A12 Hook commands find the kit | `growth new-project <this folder> --site <url> --force` rewrites old absolute-path hook commands to `growth hook stop` / `growth statusline`. | nothing |
 | A13 Agent harness complete | `growth wizard --repair` installs what is missing (Stop hook with its status message, status bar, permissions block, skills, CLAUDE.md lines, git hooks the owner said yes to); never overwrites the owner's own settings. | nothing, unless git hooks were never answered |
 | A14 Research browser connected, market region set | The wizard's two guided steps. Browser: the owner types `/chrome` in Claude Code, picks the browser, checks "By default: on"; you confirm with `growth wizard confirm browser --name "<name>"`. Region: open Google's Search settings in that browser, read the Results region it reports (never trust a note that it is set; "Current Region" is a failure), then `growth wizard confirm region --seen "<what Google says>" --owner-confirmed` only after the owner says yes. Re-check at the start of each research step with `growth wizard research-check --connected "<names from list_connected_browsers>"`. | the browser to use; yes that the region is right |
+| A15 Work is tracked in a task | Open a task for the work (`growth tasks add ...`, steps copied from the playbook, each ticked with proof). A chat that is not page work: `growth tasks add "Chat: <topic>" "" --type chat`. | nothing |
 
 ## Step 3. Drift check (on a re-run)
 

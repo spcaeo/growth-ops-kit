@@ -32,6 +32,7 @@ Before you act (written by `growth wizard`; edit outside these markers):
 - No research step starts until the research browser is connected and Google is set to the target country (`growth doctor` A14).
 {CLAUDE_END}
 """
+STAGE_MESSAGE = "Re-reading the page checkpoints"
 STOP_MESSAGE = "Checking every owner message is logged and every rule has its check"
 READ_ONLY_GIT = ["status", "log", "diff", "show", "branch", "worktree list", "rev-parse", "remote -v"]
 DENY_ALWAYS = ["Bash(git push*)", "Bash(git merge* main*)", "Bash(git merge main*)", "Bash(rm -rf /*)", "Bash(rm -rf ~*)",
@@ -96,6 +97,12 @@ def install(folder: Path, name: str, site: str, kit_root: Path = KIT_ROOT, permi
                 h["command"] = command
             if ("hook stop" in h.get("command", "") or "stop_hook.sh" in h.get("command", "")) and not h.get("statusMessage"):
                 h["statusMessage"] = STOP_MESSAGE
+    post = cfg_s["hooks"].setdefault("PostToolUse", [])       # the workflow guard: re-read the checkpoints at each stage (once)
+    if "hook stage" not in json.dumps(post):
+        post.append({"matcher": "Bash", "hooks": [{"type": "command", "command": f"{run_growth()} hook stage".replace(str(KIT_ROOT), str(kit_root)),
+                                                    "statusMessage": STAGE_MESSAGE}]})
+    if not post:
+        del cfg_s["hooks"]["PostToolUse"]
     if "statusLine" not in cfg_s:       # the owner watches the open task tick off at the bottom of the window (never replaced)
         cfg_s["statusLine"] = {"type": "command", "padding": 0, "command": status_command}
     elif "${GROWTH_KIT:-" in str(cfg_s["statusLine"].get("command", "")) and "statusline.py" in cfg_s["statusLine"]["command"]:
@@ -146,8 +153,10 @@ def install_git_hooks(project: Path, cfg: dict) -> list[str]:
         subprocess.run(["git", "init", "-q", str(project)], check=False)
     inst = KIT_DIR / "hooks" / "install_hooks.py"
     env = {**os.environ, "GROWTH_PROJECT": str(project)}
-    for args in (["project"],) + ([["site", str(Path(project, cfg["site_repo"]).expanduser())]]
-                                  if cfg.get("site_repo") and (cfg.get("stack") or "") == "nextjs" else []):
+    jobs = [["project"]]
+    if cfg.get("site_repo") and (cfg.get("stack") or "") == "nextjs":
+        jobs.append(["site", str(Path(project, cfg["site_repo"]).expanduser())])
+    for args in jobs:
         r = subprocess.run([sys.executable, str(inst), *args], capture_output=True, text=True, env=env, cwd=project)
         out.append((r.stdout + r.stderr).strip().splitlines()[-1] if (r.stdout + r.stderr).strip() else f"hooks {args[0]}: no output")
     return out
@@ -168,7 +177,10 @@ def check(project: Path, cfg: dict) -> list[tuple[str, str, str, str]]:
     out.append(("Stop hook with status message", "ok" if ours and all(h.get("statusMessage") for h in ours) else "todo",
                 "Stop hook runs and says what it is doing" if ours and all(h.get("statusMessage") for h in ours)
                 else "no Stop hook, or it has no statusMessage (a silent hook looks like a stall)", fix))
-    out.append(("Workflow guard", "na", "this kit version has no workflow guard yet (issue #24); nothing to install", ""))
+    stage = [h for e in settings.get("hooks", {}).get("PostToolUse", []) for h in e.get("hooks", []) if "hook stage" in h.get("command", "")]
+    out.append(("Workflow guard (hook stage)", "ok" if stage and all(h.get("statusMessage") for h in stage) else "todo",
+                "the stage hook re-reads the page checkpoints after each task step" if stage and all(h.get("statusMessage") for h in stage)
+                else "no `hook stage` PostToolUse hook (or no statusMessage), so checkpoints are not re-read at each stage", fix))
     sl = settings.get("statusLine") or {}
     out.append(("Status line", "ok" if "statusline" in str(sl.get("command", "")) else "todo",
                 "status line shows the open task as a bar" if "statusline" in str(sl.get("command", "")) else "no growth status line in .claude/settings.json", fix))
@@ -178,7 +190,7 @@ def check(project: Path, cfg: dict) -> list[tuple[str, str, str, str]]:
         out.append(("Permissions block", "na", "the owner declined it (setup-state.json)", ""))
     else:
         allow, deny = permissions_wanted(cfg)
-        missing = [x for x in allow + deny if x not in (perm.get("allow") or []) + (perm.get("deny") or [])]
+        missing = [x for x in allow + deny if x != f"Bash({venv_python()} *)" and x not in (perm.get("allow") or []) + (perm.get("deny") or [])]
         out.append(("Permissions block", "ok" if not missing else "todo",
                     "allow and deny lists are in .claude/settings.json (see /permissions)" if not missing
                     else f"{len(missing)} allow/deny entries missing, for example {missing[0]}", fix))

@@ -18,7 +18,10 @@ DOCTOR = Path(__file__).resolve().parent / "doctor.py"
 
 def doctor_steps() -> list[tuple[str, str]]:
     """[("A1", "Understand the business and site"), ...] in doctor's order."""
-    return re.findall(r'^\s*row\("(A\d+b?) ([^"]+)"', DOCTOR.read_text(), re.M)
+    seen: dict[str, str] = {}
+    for sid, title in re.findall(r'^\s*row\("(A\d+b?) ([^"]+)"', DOCTOR.read_text(), re.M):     # a step may report from several branches
+        seen.setdefault(sid, title)
+    return list(seen.items())
 
 
 def _file(project: Path, cfg: dict) -> Path:
