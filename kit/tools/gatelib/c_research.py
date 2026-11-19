@@ -37,7 +37,7 @@ def research_record(ctx):
     if rec is None:
         ctx.fail("no research record", f"growth research init {ctx.need_path()} --key {ctx.key}, then fill it (growth research search/paa/ai/fact; book/playbooks/update-post.md)")
         return
-    ctx.verdict(research.problems(rec, ctx.today, ctx.cfg),
+    ctx.verdict(research.problems(rec, ctx.today, ctx.cfg, project=ctx.project),
                 f"record {ctx.key}-record.json: {len(rec.get('vendor_facts') or [])} vendor facts, {len(rec.get('paa') or [])} PAA questions, search to {(rec.get('search') or {}).get('window', {}).get('to')}",
                 "fix the record (growth research check <path> --key K lists each gap); a number read only from a summary tool does not count (rule 5)")
 
