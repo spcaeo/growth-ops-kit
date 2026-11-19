@@ -84,17 +84,37 @@ URL = re.compile(r"(?<![\w@./:-])(?:(?P<scheme>https?)://)?(?P<host>" + HOST + r
                  re.I)
 
 
-def last_exchange(transcript):
-    """Claude's reply text since the owner's last message, and that message."""
-    text, asked = "", ""
-    for e in transcripts.entries(transcript):
+
+
+def _state_file():
+    from config import PROJECT
+    return PROJECT / "journal" / ".url-guard.json"
+
+
+def last_exchange(transcript, start=0):
+    """Claude's reply text since the owner's last message, and that message. Only entries from index `start` on are read
+    for Claude's text: a reply the guard already checked (and blocked) is not checked again, so a withdrawn link stops
+    blocking once withdrawn; a NEW mention of it still blocks (kit friction 42). Returns (text, asked, n_entries)."""
+    text, asked, n = "", "", 0
+    for i, e in enumerate(transcripts.entries(transcript)):
+        n = i + 1
         t = transcripts.owner_text(e)
         if t is not None:
             text, asked = "", t                      # a new owner message starts a new reply
+        if i < start:
+            continue
         for b in transcripts.assistant_blocks(e):
             if b.get("type") == "text":
                 text += "\n" + (b.get("text") or "")
-    return text, asked
+    return text, asked, n
+
+
+# A line that withdraws a link ("withdrawn", "not ready", "do not open") may name it: that is the correction itself.
+WITHDRAW = re.compile(r"\b(withdraw\w*|not (yet )?ready|not approved|do not open|don'?t open|ignore (that|the) link)\b", re.I)
+
+
+def _without_withdrawals(text):
+    return "\n".join(line for line in text.splitlines() if not WITHDRAW.search(line))
 
 
 # When the owner's own message explicitly asks for a link that is not approved, unready local links may be given, but only
@@ -128,12 +148,32 @@ def main():
         return 0                                  # the golden rule is off for projects that keep no preview address
     try:
         data = json.load(sys.stdin)
-        text, asked = last_exchange(data["transcript_path"])
+        tp = data["transcript_path"]
     except Exception:  # noqa: BLE001  no transcript: nothing to check
         return 0
-    bad = offenders(text)
-    if bad and OWNER_ASKED.search(asked) and MARK in text.lower():
+    sf = _state_file()
+    try:
+        state = json.loads(sf.read_text())
+    except (OSError, ValueError):
+        state = {}
+    seen = state.get(tp) if isinstance(state.get(tp), dict) else {"pos": state.get(tp, 0), "pending": []}
+    try:
+        text, asked, n = last_exchange(tp, seen.get("pos", 0))
+    except Exception:  # noqa: BLE001
         return 0
+    pending = list(seen.get("pending") or [])
+    if pending and any(WITHDRAW.search(line) for line in text.splitlines()):
+        pending = []                              # a correction after the block withdraws the earlier links
+    bad = offenders(_without_withdrawals(text))
+    if bad and OWNER_ASKED.search(asked) and MARK in text.lower():
+        bad = []
+    bad = sorted(set(bad) | set(pending))         # a blocked link keeps blocking until a correction withdraws it
+    try:
+        sf.parent.mkdir(parents=True, exist_ok=True)
+        state[tp] = {"pos": n, "pending": bad}
+        sf.write_text(json.dumps(state))
+    except OSError:
+        pass
     if bad:
         print("GOLDEN RULE: page URL(s) shown to the owner that are not READY (growth ready, 0 FAIL at the current "
               "commit):\n  " + "\n  ".join(bad) + "\nWithdraw them in a short correction; share a URL only after "

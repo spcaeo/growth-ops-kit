@@ -18,12 +18,15 @@ What it looks for (exit 1 on any hit):
     CI has none and still runs the rest.
   - with --history, the author and committer name and email of every commit: a private word there is a WARN (the
     history is replaced by a fresh one at publish time), while the same word in a file or a message is a FAIL.
-A line that holds the marker `leak-check: allow` is skipped (for test fixtures that must show a fake value).
+A line that holds the marker `leak-check: allow` is skipped, but only in files under tests/fixtures/ (anywhere else
+the marker is ignored, so it cannot hide a real key). Files of any size are read in chunks, never skipped. Binary files
+cannot be read: they are listed as a WARN; .sqlite and .db files fail by name.
 A hit never prints the secret itself: a key shows its first four characters.
 """
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import re
 import subprocess
@@ -31,25 +34,41 @@ import sys
 from pathlib import Path
 
 ALLOW = "leak-check: allow"
-MAX_BYTES = 2_000_000
+CHUNK = 1_000_000          # bytes read at a time; a bigger file is scanned chunk by chunk, never skipped
+OVERLAP = 512              # bytes carried over when one line is longer than a chunk, so a key on the seam is still seen
+ALLOW_DIR = "tests/fixtures/"
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".pytest_cache", ".venv", "venv"}
-ENV_NAME = re.compile(r"(^|/)(\.env(\.[\w.-]+)?|id_rsa|id_ed25519|[\w.-]+\.(pem|p12|pfx|key))$")
+ENV_NAME = re.compile(r"(^|/)(\.env(\.[\w.-]+)?|id_rsa|id_ed25519|[\w.-]+\.(pem|p12|pfx|key|sqlite3?|db))$")
 ENV_OK = re.compile(r"(^|/)\.env\.(example|sample|template)$")
 
 KEYS = [
     ("AWS access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("API key (sk-)", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}")),
     ("GitHub token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})")),
+    ("Stripe-style key", re.compile(r"\b[spr]k_(?:live|test)_[0-9A-Za-z]{16,}")),
+    ("Slack webhook", re.compile(r"hooks\.slack\.com/services/")),
+    ("Discord webhook", re.compile(r"discord(?:app)?\.com/api/webhooks/")),
+    ("GitLab token", re.compile(r"\bglpat-[A-Za-z0-9_-]{16,}")),
+    ("Hugging Face token", re.compile(r"\bhf_[A-Za-z0-9]{30,}")),
+    ("npm token", re.compile(r"\bnpm_[A-Za-z0-9]{30,}")),
+    ("Google OAuth secret", re.compile(r"\bGOCSPX-[A-Za-z0-9_-]{16,}")),
+    ("SendGrid key", re.compile(r"\bSG\.[\w-]{16,}\.[\w-]{16,}")),
     ("Slack token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
     ("private key block", re.compile(r"-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----")),
     ("bearer token", re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{24,}")),
     ("JWT", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
 ]
-SECRET_ASSIGN = re.compile(r"""(?ix)\b([A-Z0-9_]*(?:TOKEN|SECRET|API_?KEY|PASSWORD|PASSWD|PRIVATE_KEY)[A-Z0-9_]*)\s*[:=]\s*["']?([A-Za-z0-9/+_=.~-]{16,})""")
+SECRET_ASSIGN = re.compile(r"""(?ix)\b([A-Z0-9_-]*(?:TOKEN|SECRET|(?:API|ACCESS|AUTH|PRIVATE)[_-]?KEY|AUTH|CREDENTIAL|PASSWORD|PASSWD)[A-Z0-9_-]*)\s*[:=]\s*["']?([A-Za-z0-9/+_=.~-]{16,})""")
 PLACEHOLDER = re.compile(r"(?i)^(x{4,}|\*{4,}|<.*>|\$\{?\w+|your[_-]|example|changeme|placeholder|dummy|fake|redacted|\.{3})|^[a-z_]+\(")
+URL_CREDS = re.compile(r"\b[a-z][a-z0-9+.-]*://([^\s/:@]+):([^\s/@]{3,})@([\w.-]+)")
+CRED_PLACEHOLDER = {"pass", "password", "secret", "user", "username", "xxxx", "changeme", "passwd"}
+OBFUSCATED_EMAIL = re.compile(r"(?i)\b[A-Za-z0-9._+-]+\s*(?:\[at\]|\(at\)|%40)\s*([A-Za-z0-9-]+(?:(?:\.|\s*\[dot\]\s*|\s*\(dot\)\s*)[A-Za-z0-9-]+)*(?:\.|\s*\[dot\]\s*|\s*\(dot\)\s*)[A-Za-z]{2,})\b")
+TEL_WORD = re.compile(r"(?i)\b(?:tel|telephone|phone|call|mobile|cell|whatsapp|fax|sms|text us|contact)\b")
+BARE_PHONE = re.compile(r"(?<![\w.+-])(?:\+?1)?[2-9]\d{9}(?![\w-])")
+INTL_PHONE = re.compile(r"(?<![\w.])\+\d{1,3}[ .-]?\d{4,5}[ .-]\d{4,6}(?![\w-])|(?<![\w.])\+\d{10,14}(?![\w-])")
 EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")
-EMAIL_OK_DOMAIN = re.compile(r"(?i)(^|\.)example(\.[a-z]+)?$|^anthropic\.com$|(^|\.)invalid$|(^|\.)localhost$|(^|\.)test$")
+EMAIL_OK_DOMAIN = re.compile(r"(?i)(^|\.)example(\.[a-z]+)?$|(^|\.)noreply(\.github\.com)?$|^anthropic\.com$|(^|\.)invalid$|(^|\.)localhost$|(^|\.)test$")
 EMAIL_OK_FULL = {"noreply@anthropic.com"}
 PHONE = re.compile(r"(?<![\w.])(?:\+?1[ .-])?\(?\b[2-9]\d{2}\)?[ .-]\d{3}[ .-]\d{4}\b(?![\w-])|(?<![\w.])\+\d{1,3}[ .-]\d{2,4}[ .-]\d{3,4}(?:[ .-]\d{2,4})?\b")
 PHONE_OK = re.compile(r"555[ .-]?01\d\d")
@@ -78,11 +97,17 @@ def mask(s: str) -> str:
     return s[:4] + "…" if len(s) > 4 else "…"
 
 
-def scan_text(text: str, words: list[str]):
-    """[(line number, kind, shown)] for the text. Lines holding the allow marker are skipped."""
+def allow_marker_ok(path: str) -> bool:
+    """The allow marker counts only for files under tests/fixtures/."""
+    return ("/" + path.replace("\\", "/")).find("/" + ALLOW_DIR) == 0 or ("/" + ALLOW_DIR) in "/" + path.replace("\\", "/")
+
+
+def scan_text(text: str, words: list[str], allow: bool = False, first_line: int = 1):
+    """[(line number, kind, shown)] for the text. Lines holding the allow marker are skipped only when `allow` is true
+    (the caller passes it for files under tests/fixtures/)."""
     hits = []
-    for n, line in enumerate(text.splitlines(), 1):
-        if ALLOW in line:
+    for n, line in enumerate(text.splitlines(), first_line):
+        if allow and ALLOW in line:
             continue
         for kind, rx in KEYS:
             m = rx.search(line)
@@ -92,6 +117,15 @@ def scan_text(text: str, words: list[str]):
             val = m.group(2)
             if not PLACEHOLDER.search(val) and re.search(r"\d", val) and re.search(r"[A-Za-z]", val):
                 hits.append((n, f"secret value for {m.group(1)}", mask(val)))
+        for m in URL_CREDS.finditer(line):
+            user, pw, host = m.groups()
+            if PLACEHOLDER.search(pw) or pw.lower() in CRED_PLACEHOLDER or EMAIL_OK_DOMAIN.search(host):
+                continue
+            hits.append((n, "password inside a web address", mask(pw)))
+        for m in OBFUSCATED_EMAIL.finditer(line):
+            dom = re.sub(r"(?i)\s*[\[(]dot[\])]\s*", ".", m.group(1))
+            if not EMAIL_OK_DOMAIN.search(dom):
+                hits.append((n, "email address (written out)", mask(m.group(0))))
         for m in EMAIL.finditer(line):
             if m.group(0).lower() in EMAIL_OK_FULL or EMAIL_OK_DOMAIN.search(m.group(1)):
                 continue
@@ -100,6 +134,13 @@ def scan_text(text: str, words: list[str]):
             if PHONE_OK.search(m.group(0)):
                 continue
             hits.append((n, "phone number", mask(re.sub(r"\D", "", m.group(0)))))
+        for m in INTL_PHONE.finditer(line):
+            if not PHONE_OK.search(m.group(0)) and not any(h[0] == n and h[1] == "phone number" for h in hits):
+                hits.append((n, "phone number", mask(re.sub(r"\D", "", m.group(0)))))
+        if TEL_WORD.search(line):
+            for m in BARE_PHONE.finditer(line):
+                if not PHONE_OK.search(m.group(0)) and not any(h[0] == n and h[1] == "phone number" for h in hits):
+                    hits.append((n, "phone number", mask(m.group(0))))
         for w in words:
             if word_rx(w).search(line):
                 hits.append((n, "private word", w))
@@ -137,20 +178,58 @@ def work_files(root: Path) -> list[str]:
     return sorted(found)
 
 
-def scan_files(root: Path, files: list[str], words: list[str], staged=False):
+def chunks(fh):
+    """(first line number, text) pieces of an open binary file, each cut at a line end where possible. A line longer
+    than CHUNK is cut anyway, and the last OVERLAP bytes are repeated in the next piece so nothing on the seam is missed."""
+    line_no, carry = 1, b""
+    while True:
+        block = fh.read(CHUNK)
+        data = carry + block
+        if not block:
+            if data:
+                yield line_no, data.decode("utf-8", "replace")
+            return
+        cut = data.rfind(b"\n")
+        if cut < 0:
+            yield line_no, data.decode("utf-8", "replace")
+            carry = data[-OVERLAP:]
+            continue
+        piece = data[:cut + 1]
+        yield line_no, piece.decode("utf-8", "replace")
+        line_no += piece.count(b"\n")
+        carry = data[cut + 1:]
+
+
+def scan_files(root: Path, files: list[str], words: list[str], staged=False, warns=None):
+    """Hits for the files. A file that cannot be read in full is a hit (never skipped quietly); a binary file is
+    appended to `warns` (when given) because its content cannot be checked."""
     report = []
     for f in files:
         for n, kind, shown in scan_name(f, words):
             report.append((f, n, kind, shown))
-        if staged:
-            b = git(root, "show", f":{f}").stdout
-        else:
-            p = root / f
-            b = p.read_bytes() if p.stat().st_size <= MAX_BYTES else b""
-        if not b or not is_text(b):
-            continue
-        for n, kind, shown in scan_text(b.decode("utf-8", "replace"), words):
-            report.append((f, n, kind, shown))
+        allow = allow_marker_ok(f)
+        try:
+            if staged:
+                fh = io.BytesIO(git(root, "show", f":{f}").stdout)
+            else:
+                fh = open(root / f, "rb")
+            with fh:
+                head = fh.read(4096)
+                if not head:
+                    continue
+                if not is_text(head):
+                    if warns is not None:
+                        warns.append((f, 0, "binary file not checked", f))
+                    continue
+                fh.seek(0)
+                seen = set()
+                for first, text in chunks(fh):
+                    for n, kind, shown in scan_text(text, words, allow=allow, first_line=first):
+                        if (n, kind, shown) not in seen:
+                            seen.add((n, kind, shown))
+                            report.append((f, n, kind, shown))
+        except OSError as e:
+            report.append((f, 0, "file could not be read, so it was not checked", str(e)[:60]))
     return report
 
 
@@ -202,7 +281,7 @@ def scan_history(root: Path, words: list[str]):
             continue
         if line.startswith("+") and not line.startswith("+++"):
             ln += 1
-            for _n, kind, shown in scan_text(line[1:], words):
+            for _n, kind, shown in scan_text(line[1:], words, allow=allow_marker_ok(cur)):
                 report.append((f"commit {commit}: {cur}", ln, kind, shown))
     # one line per kind of identity warning, not one per commit
     uniq, counts = [], {}
@@ -249,14 +328,17 @@ def main(argv=None):
         report, warns = scan_history(root, words)
         what = "every commit"
     elif a.staged:
-        report = scan_files(root, staged_files(root), words, staged=True)
+        report = scan_files(root, staged_files(root), words, staged=True, warns=warns)
         what = "the staged files"
     else:
-        report = scan_files(root, [f for f in work_files(root) if f != ".private-words"], words)
+        report = scan_files(root, [f for f in work_files(root) if f != ".private-words"], words, warns=warns)
         what = "the files"
     for f, n, kind, shown in report:
         print(f"FAIL {f}{':' + str(n) if n else ''} {kind}: {shown}")
     for f, n, kind, shown in warns:
+        if kind == "binary file not checked":
+            print(f"WARN {kind}: {shown}. Its content cannot be read as text; make sure it holds nothing private.")
+            continue
         print(f"WARN {kind}: {shown}. History is replaced by a fresh one at publish time; set a neutral git identity for the new history.")
     note = f"{len(words)} private word(s) checked" if words else "no .private-words file: key, email and phone checks only"
     extra = f", {len(warns)} warning(s)" if warns else ""

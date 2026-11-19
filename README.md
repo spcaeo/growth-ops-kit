@@ -135,11 +135,25 @@ kit, so one checkout serves many sites.
 playbook) then **release** (the owner's yes, one page at a time) then **measure** (day 7 to 56) then **learn** (every
 instruction logged and written into its one home). Details: [book/01-flow.md](book/01-flow.md).
 
-## Three rules that never bend
+## Three rules the kit works toward
 
-1. **No shortcuts.** Every step of the job's playbook, in order, with every owner check-in.
-2. **Nothing goes live without the owner's yes.** Agents never push, merge or deploy.
-3. **No page URL goes to the owner before the gate says READY.**
+1. **No shortcuts.** Every step of the job's playbook, in order, with every owner check-in. The task list and the Stop hook
+   check that steps are ticked and carry proof; they cannot judge whether the work behind a proof is good.
+2. **Nothing goes live without the owner's yes.** The agent's permissions deny `git push`, merges to the main branch and the
+   project's `deploy_commands`, and the rule is in every agent's instructions. The permissions are a list of command
+   patterns: a determined agent can run other code, so the owner's review of what ships stays the real control.
+3. **No page URL goes to the owner before the gate says READY.** The URL guard stops a reply that names a page the gate has
+   not marked READY. It is a safety net for honest mistakes, not a lock.
+
+A check that cannot run (no adapter, no browser, no key) prints SKIP with the reason instead of a fake OK. Read the SKIP
+lines before you trust a READY: a skipped check has not looked at the page.
+
+Supported systems: macOS and Linux (the hooks are shell scripts; Windows is not supported, use WSL).
+
+Network calls: setup downloads the pinned add-ons from PyPI. After that the kit reads only the addresses you point it at (your
+preview, and your live site unless `live_site_rule` is `no-crawl`), the connectors you switch on, and, while
+`connectors.google_updates.on` is true (the template default), Google's public status page on each tracker sync. Set it to
+false to stop that call.
 
 ## What the kit can and cannot guarantee
 
