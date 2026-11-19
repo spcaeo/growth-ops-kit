@@ -52,8 +52,15 @@ Nothing enters either route unless the page passed pre-flight before its build (
    FAQ (view source); the CTA opens the booking path; a new page is listed in the sitemap; the cluster page lists a
    new post; for a redirect, `curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' <old>` gives `301` and the new
    address (or `410`).
-9. **Same day:** the owner asks Google to re-read each new or rebuilt money page (Search Console, request indexing).
-   That is the owner's own account.
+9. **Same day, get it indexed:** after the live check passes, run `growth index <the changed full addresses>`; add
+   `--refresh` for pages that were updated, not new (it re-sends them, 1 credit each, no credit back; the cost is printed
+   first, so say it in the report). Smart mode asks Google first and sends only pages Google does not show. The provider is
+   the project's choice in `growth.json` `indexing`: `freshlycited` (FreshlyCited, the built-in option; paid credits),
+   `indexnow` (free, Bing and the other IndexNow engines, not Google) or `manual` (the tool prints the Search Console
+   "Request indexing" steps for the owner's own account). Nothing is sent while `indexing` is off. A daily cap
+   (`indexing.max_pages_per_day`, default 50) stops a runaway. The send is journalled (tag `indexing`). Later,
+   `growth index status` finds out whether Google shows the page; `growth measure` prints "Google sees the page: yes/no
+   since <date>" before it judges traffic.
 10. **Clean up:** remove the worktree (`git worktree remove`), delete the local branch, stop dev servers and browsers.
     Leave the remote branch. Mark the task step done and book the day-7 look (below). Take the "after" archive
     (`growth page_archive capture <path> --stage after`, rule 36i).

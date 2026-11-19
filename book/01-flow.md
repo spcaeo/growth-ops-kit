@@ -106,7 +106,8 @@ What every build carries:
 
 Follow [playbooks/release.md](playbooks/release.md): each page alone, branch, pull request, the owner's yes, merge,
 the host deploys, check the live title, structured data, canonical and the main call-to-action button. The owner
-asks Google to re-read the page ("Request indexing") the same day. Then take the "after" snapshot
+gets it indexed the same day: `growth index <changed full addresses>` (`--refresh` for updated pages; provider and
+cost rules in the release playbook, step 9). Then take the "after" snapshot
 (`growth page_snapshot ... --action "released"`).
 
 ## E. Measure and act
@@ -114,6 +115,8 @@ asks Google to re-read the page ("Request indexing") the same day. Then take the
 `growth journal due --days 7` lists the re-checks coming up; each is re-run with the same query and market as the
 stored baseline and logged as a new run against the page (`growth journal`, 02-owner-rules "Keep a page journal").
 The research record's baseline (`growth research baseline`) is the number every re-check is compared with.
+Before any traffic is judged, check the page is in Google: `growth index status` updates it and `growth measure` prints
+"Google sees the page: yes since <date>" or "no". A page Google does not show yet has no traffic to judge.
 
 At day 28 and 56 also re-run the page's AI answers check (money-page playbook question 35): the same ChatGPT and
 Google prompts, recorded next to the baseline, to see whether the page is now named or cited.

@@ -76,7 +76,7 @@ checks it; `[judgment]` means a person or reviewer decides it.
 | Rule | What it means |
 | --- | --- |
 | **The owner's yes before anything goes live** | A push to the production branch is often a live deploy. The agent never pushes to it or merges without the owner's explicit yes **in that conversation**; a yes that names pages covers those pages only. Agents and workflows never push or merge. [code: proc.no-push-main, repo.branch] |
-| **Release one page at a time** | Each page alone when it is ready and approved, then the live check ([release](playbooks/release.md)). The owner requests indexing the same day. [code: proc.one-page-branch] |
+| **Release one page at a time** | Each page alone when it is ready and approved, then the live check ([release](playbooks/release.md)). The page is sent for indexing the same day (`growth index`). [code: proc.one-page-branch] |
 | **The site stays as it is** | The kit adds no CMS, no editor and no content database. Content stays where the site keeps it; follow the site repo's own agent rules and lanes. [code: site.no-cms, repo.content-reader] |
 | **Nothing starts with the computer** | No launchd, cron or systemd jobs by default: projects move between computers. Tools start by hand. A project may allow one in its own `OWNER-RULES.md`. [code: proc.doctor] |
 | **Secrets** | Keys only in a file outside git (`~/.config/<tool>/<site>.env`, mode 600); never printed, copied, committed or written in docs or logs. [code: repo.no-secrets] |

@@ -151,9 +151,21 @@ lines before you trust a READY: a skipped check has not looked at the page.
 Supported systems: macOS and Linux (the hooks are shell scripts; Windows is not supported, use WSL).
 
 Network calls: setup downloads the pinned add-ons from PyPI. After that the kit reads only the addresses you point it at (your
-preview, and your live site unless `live_site_rule` is `no-crawl`), the connectors you switch on, and, while
+preview, and your live site unless `live_site_rule` is `no-crawl`), the connectors you switch on, the indexing service you pick in `indexing` (only when you run `growth index`), and, while
 `connectors.google_updates.on` is true (the template default), Google's public status page on each tracker sync. Set it to
 false to stop that call.
+
+## Get the page indexed after it is live
+
+A page earns nothing until Google has it. After the live check, `growth index <full addresses>` sends the page to the indexing
+service you picked in `growth.json` `indexing` (off until you set it; `growth wizard indexing` asks, and you can skip it).
+The built-in option is [FreshlyCited](https://freshlycited.com): its smart mode asks Google first and sends only the pages
+Google does not show, and a credit is used only when Google indexes the page. `--refresh` re-sends updated pages (1 credit
+each, no credit back). The kit prints the estimated spend before every paid call and stops at a daily cap
+(`indexing.max_pages_per_day`, default 50). Free fallbacks: `indexnow` (Bing and other IndexNow engines, not Google) and
+`manual` (prints the Search Console "Request indexing" steps). `growth index status` and `growth index report` show what
+was sent, and `growth measure` shows "Google sees the page: yes/no since <date>" before it judges traffic. The API key stays
+in your keys file and is never printed. FreshlyCited is a separate paid service; the kit works fully without it.
 
 ## What the kit can and cannot guarantee
 

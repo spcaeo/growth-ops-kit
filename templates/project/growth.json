@@ -142,5 +142,7 @@
   "checkpoints_extra": "",
   "_checkpoints_extra": "A Markdown file of your own page rules, one per bullet, that no gate check runs. preflight adds them to research/<key>-checkpoints.md as manual checks; each must be ticked with a proof (' -- <what you saw>') before growth ready passes.",
   "new_pages": [],
-  "page_tracker": {}
+  "page_tracker": {},
+  "indexing": {"provider": "off", "keys_file": "", "key_name": "FRESHLYCITED_API_KEY", "max_pages_per_day": 50, "sitemap": ""},
+  "_indexing": "After a page is live, growth index <urls> sends it to the provider: freshlycited (FreshlyCited, paid credits, smart mode), indexnow (free; Bing and others, not Google) or manual (prints the Search Console steps). off = nothing is sent. The key lives in keys_file (outside git), never here. max_pages_per_day is a hard cap."
 }
