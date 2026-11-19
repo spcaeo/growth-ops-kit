@@ -309,11 +309,11 @@ def branch(ctx):
     ctx.verdict(probs, f"on branch {b}, not merged", "work on a page/... branch; merge only on the owner's yes (rule 114)")
 
 
-@check("repo.content-reader", "104", what="only the one named module reads the content files (growth.json nextjs.content_reader)", needs="nextjs")
+@check("repo.content-reader", "104", what="only the one named module reads the content files (growth.json content_reader)", needs="nextjs")
 def content_reader(ctx):
     reader = ctx.nx("content_reader")
     if not reader:
-        raise Skip("growth.json nextjs.content_reader is not set: name the one module that reads the content files to switch this check on")
+        raise Skip("growth.json content_reader is not set: name the one module that reads the content files to switch this check on")
     folders = "|".join(re.escape(d.strip("/")) for d in (ctx.nx("posts_dir", "content/posts"), ctx.nx("pages_dir", "content/pages")))
     probs = []
     for f in ctx.repo_files(("app/**/*.ts", "app/**/*.tsx", "components/**/*.tsx", "lib/**/*.ts")):
@@ -402,11 +402,11 @@ def redirects(ctx):
                 "ask first; file the owner's yes with growth journal add --kind decision --tag redirect (rule 75)")
 
 
-@check("repo.retired-410", "76", what="retired page groups still answer 410 (growth.json nextjs.retired_paths)", needs="nextjs")
+@check("repo.retired-410", "76", what="retired page groups still answer 410 (growth.json retired_paths)", needs="nextjs")
 def retired_410(ctx):
     paths = ctx.nx("retired_paths", [])
     if not paths:
-        raise Skip("this site has no retired page groups listed (growth.json nextjs.retired_paths)")
+        raise Skip("this site has no retired page groups listed (growth.json retired_paths)")
     repo = ctx.need_repo()
     code = "\n".join(f.read_text(errors="replace") for n in ("middleware.ts", "middleware.js", "next.config.ts", "next.config.js", "next.config.mjs", "vercel.json", "netlify.toml")
                      for f in [repo / n] if f.is_file())

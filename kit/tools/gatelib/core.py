@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import KIT_DIR  # noqa: E402
+from config import KIT_DIR, SITE_KEYS, site_setting  # noqa: E402
 
 PAGE_TYPES = ("money", "hub", "post", "core")
 ALL = PAGE_TYPES                    # a check for every page type ("site" scope)
@@ -288,6 +288,8 @@ class Ctx:
 
     def nx(self, key, default=None):
         """A setting of growth.json "nextjs" (how this site's code is laid out); `default` when it is not set."""
+        if key in SITE_KEYS:           # stack-neutral keys: top level first, the older nextjs block as a fallback
+            return site_setting(self.cfg, key, default)
         v = (self.cfg.get("nextjs") or {}).get(key)
         return default if v in (None, "", [], {}) else v
 

@@ -255,11 +255,11 @@ def cmd_status():
 # ---- the site hook's work ----------------------------------------------------------------------------------------------
 def route_of(f: str, repo: Path, cfg: dict | None = None) -> str | None:
     """The page a changed file belongs to, or None when it is shared (components/, lib/, app/*.css, layout).
-    Next.js layout: posts in growth.json nextjs.posts_dir (default content/posts, served under blog_path, default /blog),
-    pages in nextjs.pages_dir (default content/pages), routes in app/**/page.tsx."""
-    nx = (cfg or {}).get("nextjs") or {}
+    Next.js layout: posts in growth.json posts_dir (default content/posts, served under blog_path, default /blog),
+    pages in pages_dir (default content/pages), routes in app/**/page.tsx."""
+    from config import site_setting
     blog = (cfg or {}).get("blog_path", "/blog").rstrip("/")
-    posts, pages = (nx.get("posts_dir") or "content/posts").strip("/"), (nx.get("pages_dir") or "content/pages").strip("/")
+    posts, pages = site_setting(cfg or {}, "posts_dir", "content/posts").strip("/"), site_setting(cfg or {}, "pages_dir", "content/pages").strip("/")
     m = re.match(re.escape(posts) + r"/(.+)\.mdx?$", f)
     if m:
         return blog + "/" + m.group(1)
