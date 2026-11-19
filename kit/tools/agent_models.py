@@ -98,8 +98,9 @@ def problems(calls, lead=None, roles=None, builders=None, exempt=None):
             continue
         ok = set(pat[1])
         if pat[0] == REVIEWER:            # an independent reviewer differs from the model its builder ran on
-            if builders is not None:
-                if model in builders:      # the strongest model reviews, so a builder on it leaves no different model to review with
+            builders_of = builders(who) if callable(builders) else builders   # its own job's builders (friction 48)
+            if builders_of is not None:
+                if model in builders_of:      # the strongest model reviews, so a builder on it leaves no different model to review with
                     out.append(f"helper '{who}' reviews on {model}, the same model a builder ran on. Builders run on sonnet "
                                "(restart them there), so the independent reviewer can be opus, a different model.")
                     continue
@@ -114,6 +115,21 @@ def problems(calls, lead=None, roles=None, builders=None, exempt=None):
     return out
 
 
+JOB = re.compile(r"\bT\d+\b|/[\w./-]{2,}|\bpage\s*\d+\b", re.I)
+
+
+def builders_for(who, built):
+    """The models the builders of THIS reviewer's job ran on (friction 48: every builder of the whole session was counted,
+    so one old opus builder flagged every later opus reviewer). A job is named by a task id (T21), a path (/pricing/) or
+    'page 1' in both descriptions; with no shared name, the most recent builder before the review stands for its job.
+    `built`: [(name + description, model)] in transcript order. None when no builder is known."""
+    jobs = {j.lower().rstrip("/") for j in JOB.findall(who)}
+    mine = [m for w, m in built if jobs & {j.lower().rstrip("/") for j in JOB.findall(w)}]
+    if mine:
+        return set(mine) - {""}
+    return ({built[-1][1]} - {""}) if built else None
+
+
 def main():
     if "--transcript" in sys.argv:
         tp = sys.argv[sys.argv.index("--transcript") + 1]
@@ -124,9 +140,9 @@ def main():
             return 0
     if not tp or not Path(tp).exists():
         return 0
-    builders = {family(c.get("model")) or lead for c, lead in agent_calls(tp, all_turns=True)
-                if re.search(BUILDER, f"{c.get('name', '')} {c.get('description', '')}")} - {""}
-    probs = problems(agent_calls(tp), lead=transcripts.lead_model(tp), builders=builders)
+    built = [(f"{c.get('name', '')} {c.get('description', '')}", family(c.get("model")) or lead)
+             for c, lead in agent_calls(tp, all_turns=True) if re.search(BUILDER, f"{c.get('name', '')} {c.get('description', '')}")]
+    probs = problems(agent_calls(tp), lead=transcripts.lead_model(tp), builders=lambda who: builders_for(who, built))
     for p in probs:
         print(p)
     return 1 if probs else 0
