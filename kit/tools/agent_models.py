@@ -64,6 +64,7 @@ def agent_calls(transcript, all_turns=False):
     """Agent tool calls made after the owner's last message (all of them with all_turns), each with the model of the
     session that made it: [(input, lead_model_at_that_time)]."""
     calls, lead = [], ""
+    use_to_agent, stopped = {}, set()       # Agent tool_use id -> launched agent id; agent ids stopped with TaskStop
     for e in transcripts.entries(transcript):
         if transcripts.owner_text(e) is not None and not all_turns:
             calls = []
@@ -73,8 +74,17 @@ def agent_calls(transcript, all_turns=False):
                 lead = family(m)
         for b in transcripts.assistant_blocks(e):
             if b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task"):
-                calls.append((b.get("input") or {}, lead))
-    return calls
+                calls.append((b.get("input") or {}, lead, b.get("id")))
+            elif b.get("type") == "tool_use" and b.get("name") == "TaskStop":
+                stopped.add(str((b.get("input") or {}).get("task_id") or ""))
+        content = (e.get("message") or {}).get("content") if e.get("type") == "user" else None
+        for b in content if isinstance(content, list) else []:
+            if isinstance(b, dict) and b.get("type") == "tool_result":
+                m = re.search(r"agentId:\s*([\w-]+)", json.dumps(b.get("content")))
+                if m:
+                    use_to_agent[b.get("tool_use_id")] = m.group(1)
+    # a helper the session stopped (TaskStop) is gone: it is not judged (friction 51)
+    return [(c, ld) for c, ld, uid in calls if use_to_agent.get(uid) not in stopped or not use_to_agent.get(uid)]
 
 
 def problems(calls, lead=None, roles=None, builders=None, exempt=None):
@@ -98,8 +108,9 @@ def problems(calls, lead=None, roles=None, builders=None, exempt=None):
             continue
         ok = set(pat[1])
         if pat[0] == REVIEWER:            # an independent reviewer differs from the model its builder ran on
-            if builders is not None:
-                if model in builders:      # the strongest model reviews, so a builder on it leaves no different model to review with
+            builders_of = builders(who) if callable(builders) else builders   # its own job's builders (friction 48)
+            if builders_of is not None:
+                if model in builders_of:      # the strongest model reviews, so a builder on it leaves no different model to review with
                     out.append(f"helper '{who}' reviews on {model}, the same model a builder ran on. Builders run on sonnet "
                                "(restart them there), so the independent reviewer can be opus, a different model.")
                     continue
@@ -114,6 +125,21 @@ def problems(calls, lead=None, roles=None, builders=None, exempt=None):
     return out
 
 
+JOB = re.compile(r"\bT\d+\b|/[\w./-]{2,}|\bpage\s*\d+\b", re.I)
+
+
+def builders_for(who, built):
+    """The models the builders of THIS reviewer's job ran on (friction 48: every builder of the whole session was counted,
+    so one old opus builder flagged every later opus reviewer). A job is named by a task id (T21), a path (/pricing/) or
+    'page 1' in both descriptions; with no shared name, the most recent builder before the review stands for its job.
+    `built`: [(name + description, model)] in transcript order. None when no builder is known."""
+    jobs = {j.lower().rstrip("/") for j in JOB.findall(who)}
+    mine = [m for w, m in built if jobs & {j.lower().rstrip("/") for j in JOB.findall(w)}]
+    if mine:
+        return set(mine) - {""}
+    return ({built[-1][1]} - {""}) if built else None
+
+
 def main():
     if "--transcript" in sys.argv:
         tp = sys.argv[sys.argv.index("--transcript") + 1]
@@ -124,9 +150,9 @@ def main():
             return 0
     if not tp or not Path(tp).exists():
         return 0
-    builders = {family(c.get("model")) or lead for c, lead in agent_calls(tp, all_turns=True)
-                if re.search(BUILDER, f"{c.get('name', '')} {c.get('description', '')}")} - {""}
-    probs = problems(agent_calls(tp), lead=transcripts.lead_model(tp), builders=builders)
+    built = [(f"{c.get('name', '')} {c.get('description', '')}", family(c.get("model")) or lead)
+             for c, lead in agent_calls(tp, all_turns=True) if re.search(BUILDER, f"{c.get('name', '')} {c.get('description', '')}")]
+    probs = problems(agent_calls(tp), lead=transcripts.lead_model(tp), builders=lambda who: builders_for(who, built))
     for p in probs:
         print(p)
     return 1 if probs else 0

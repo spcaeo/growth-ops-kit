@@ -341,6 +341,12 @@ def gsc_top(ctx, n=2):
 
 @check("seo.title-query", "81", types=("money", "hub", "post"), what="the title holds one of the page's top-2 Search Console queries and fits 60 characters", needs="live")
 def title_query(ctx):
+    hold = (ctx.cfg.get("holds") or {}).get("title")
+    if isinstance(hold, dict) and hold.get("why"):
+        # the owner has frozen titles (e.g. while a Google core update rolls out): report, never block on it
+        ctx.warn(f"titles are held ({hold['why']}; until {hold.get('until', 'lifted')}): title query not judged now",
+                 "queue the new title in the research file; it ships as its own change when the hold lifts")
+        return
     root = ctx.root()
     t = domx.text(domx.page_title(root)) if domx.page_title(root) is not None else ""
     top = gsc_top(ctx)
@@ -446,11 +452,16 @@ def reveal(ctx):
         return
     bad = []
     hero = domx.first_section(ctx.root())
+    # growth.json features.reveal_from: the first fold number that reveals (a site whose design keeps the first two
+    # folds still, for a calm first screen, sets 3); default: every fold after the first screen
+    rf = (ctx.cfg.get("features") or {}).get("reveal_from")
+    start = int(rf) if isinstance(rf, int) and rf > 1 else 0
     for i, s in enumerate(secs, 1):
-        if s is hero:
+        if s is hero or i < start:
             continue                                  # the first screen is on view at load: nothing to reveal
         marks = list(s.iter())                       # the fold itself or a block inside it reveals
-        if not any(domx.has_cls(n, r".*(reveal|fold-in|fade|motion|animate).*") or n.get("data-reveal") for n in marks):
+        # an empty attribute (<div data-reveal>) counts: its presence is the marker, not its value
+        if not any(domx.has_cls(n, r".*(reveal|fold-in|fade|motion|animate).*") or "data-reveal" in n.attrs for n in marks):
             bad.append(f"fold {i} ({s.get('data-fold') or ' '.join(domx.classes(s)[:2])})")
     ctx.verdict(bad, f"all {len(secs) - 1} folds below the first screen carry a reveal marker", "wrap the fold in the shared Reveal (rule 141; rule 58 for how)")
 
@@ -575,7 +586,12 @@ def tags_local(ctx):
 
 @check("form.bot-guard", "37", what="every lead form has a honeypot or bot check", needs="live")
 def bot_guard(ctx):
-    forms = find_all(domx.main(ctx.root()), "form")
+    # a lead form sends something: an action, a POST, or a field for an email, phone or message. A calculator or a
+    # filter form that posts nowhere is not a lead form and needs no bot check.
+    def sends(f):
+        return bool(f.get("action")) or f.get("method").lower() == "post" or any(
+            n.tag == "textarea" or (n.tag == "input" and n.get("type").lower() in ("email", "tel")) for n in f.iter())
+    forms = [f for f in find_all(domx.main(ctx.root()), "form") if sends(f)]
     probs = []
     for f in forms:
         hidden = [i for i in find_all(f, "input") if i.get("tabindex") == "-1" or i.get("aria-hidden") == "true"

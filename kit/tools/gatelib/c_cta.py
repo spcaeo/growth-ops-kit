@@ -25,10 +25,16 @@ def reason_words(ctx):
     return r"(?i)\b(" + cta(ctx)["reason_words"] + r")\b" if cta(ctx).get("reason_words") else REASON_WORDS
 
 
+def dialog_class(ctx):
+    """The call dialog's class: growth.json features.call_dialog.class, else the kit's 'call-dialog'."""
+    f = (ctx.cfg.get("features") or {}).get("call_dialog")
+    return (f.get("class") if isinstance(f, dict) else None) or "call-dialog"
+
+
 def primaries(ctx, root, include_header=True):
     out = []
     for a in domx.booking_links(ctx, root):
-        if not domx.is_primary(a) or domx.in_call_dialog(a):
+        if not domx.is_primary(a) or domx.in_call_dialog(a, dialog_class(ctx)):
             continue
         if not include_header and any(x.tag in ("header", "nav") or domx.has_cls(x, r"site-header") for x in a.ancestors()):
             continue
@@ -106,7 +112,14 @@ def one_path(ctx):
 def label_same(ctx):
     root = ctx.root()
     labels = {}
+    # growth.json cta.header_label {label, why}: the site header's own short label, an owner-approved exception (it fits
+    # beside the logo and menu); only header buttons with exactly that label are left out
+    hl = cta(ctx).get("header_label") or {}
+    hl_ok = isinstance(hl, dict) and hl.get("label") and len(str(hl.get("why") or "")) >= 10
     for a in primaries(ctx, root):
+        in_head = any(x.tag in ("header", "nav") or domx.has_cls(x, r"site-header") for x in a.ancestors())
+        if hl_ok and in_head and domx.label(a).strip().rstrip("→↗ ").strip().lower() == str(hl["label"]).strip().lower():
+            continue
         labels.setdefault(domx.label(a), []).append(a.get("href").split("cta=")[-1][:40])
     want = cta(ctx).get("label")
     if not labels:

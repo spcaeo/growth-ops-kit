@@ -33,6 +33,8 @@ def main():
     ap.add_argument("path")
     ap.add_argument("--key", required=True)
     ap.add_argument("--url")
+    # accepted like every page command, so one --repo flag works across a lane; the plan lives in the project, not the site
+    ap.add_argument("--repo", default="", help="the site checkout (accepted for a uniform command line; not needed here)")
     a = ap.parse_args()
     f = PROJECT / "research" / "plans" / f"{a.key}.json"
     folds = page_folds(fetch(a.url)) if a.url else []

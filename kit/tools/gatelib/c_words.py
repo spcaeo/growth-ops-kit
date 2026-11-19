@@ -345,6 +345,8 @@ def named_author(ctx):
     a = ctx.cfg.get("default_author") or {}
     if not a.get("path"):
         raise Skip("no default author in growth.json (default_author)")
+    if a.get("types") and ctx.ptype not in a["types"]:     # e.g. ["post"]: service pages carry the Organization instead
+        raise Skip(f"named author is required on {', '.join(a['types'])} pages only (growth.json default_author.types)")
     if paths.key(ctx.need_path()) == paths.key(a["path"]):
         ctx.ok("this is the author page itself")
         return

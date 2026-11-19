@@ -99,12 +99,16 @@ def booking_links(ctx, root):
 def is_primary(a):
     """A booking link drawn as a solid button (not an outline, not a text link)."""
     cl = classes(a)
-    looks_button = any(c == "button" or c.endswith("-button") or c.endswith("-cta") or c.startswith("button-") for c in cl)
-    return looks_button and not any(c in SECONDARY for c in cl)
+    looks_button = any(c in ("button", "btn") or c.endswith("-button") or c.endswith("-cta") or c.startswith(("button-", "btn-"))
+                       for c in cl)
+    # a secondary variant in any naming: "button-outline", "btn--ghost", "btn-secondary", "btn--link" ...
+    second = any(c in SECONDARY or re.search(r"(?:^|-)(secondary|ghost|outline|light|link|text|tertiary|quiet)$", c) for c in cl)
+    return looks_button and not second
 
 
-def in_call_dialog(n):
-    return any(has_cls(a, r"call-dialog") for a in n.ancestors())
+def in_call_dialog(n, cls="call-dialog"):
+    """Inside the site's call dialog: the kit's class, or the project's own (growth.json features.call_dialog.class)."""
+    return any(has_cls(a, re.escape(cls)) for a in n.ancestors())
 
 
 def first_section(root):
