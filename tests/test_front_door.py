@@ -129,3 +129,15 @@ def test_doctor_shows_four_stages_to_a_person_and_every_step_with_verbose(tmp_pa
     full = growth(tmp_path, "doctor", "--verbose", cwd=proj).stdout
     assert "A13 Agent harness complete" in full
     assert growth(tmp_path, "doctor", cwd=proj).stdout == full                      # no terminal (a pipe, an agent): every step, as before
+
+
+def test_the_readme_start_is_the_handful_of_commands():
+    readme = (ROOT / "README.md").read_text().split("## Start in 10 minutes", 1)[1].split("\n## ", 1)[0]
+    for cmd in ("./setup.sh", "growth setup", "growth page", "growth check", "growth ready", "growth measure"):
+        assert cmd in readme
+    assert "growth wizard confirm" not in readme.split("For an agent or a script")[0]
+
+
+def test_the_onboard_skill_starts_with_growth_setup():
+    skill = (ROOT / "kit" / "skills" / "onboard" / "SKILL.md").read_text()
+    assert "## Step 0. Run the setup" in skill and "`growth setup`" in skill

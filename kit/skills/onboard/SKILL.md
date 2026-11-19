@@ -20,12 +20,14 @@ starts from zero: it reads what is recorded, skips what is done, and asks only w
 - Never ask for a secret in chat. Keys come only through the analytics tool's one-time code into
   the file named in `growth.json` `keys_file` (outside git, mode 600) and are never printed.
 
-## Step 0. Run the wizard
+## Step 0. Run the setup
 
-Run `growth wizard` in the project folder (or `growth wizard <folder> --site <url>` for a new one). It does the setup in
+Run `growth setup` in the project folder (or `growth setup <folder> --site <url>` for a new one). With a person at a terminal it asks
+plain questions; as an agent you have no terminal, so it runs the wizard's question-and-answer protocol described next (`growth wizard`
+is the same thing, called directly). It does the setup in
 order and remembers where it is in `setup-state.json` (each answer with its date, source and test), so a stopped run
 resumes at the first open step. When it prints `QUESTION <step>: ...` and stops (exit code 3), ask the owner that one
-question (see "How to ask"), record the answer with `growth wizard answer <step> '<json>'`, and run it again. When it
+question (see "How to ask"), record the answer with `growth wizard answer <step> '<json>'`, and run `growth setup` again. When it
 prints `WAITING browser` or `WAITING region`, walk the owner through the guided step (A14 below). The wizard opens the
 setup task ("Project setup": one step per doctor step) and doctor ticks it, so the status bar shows setup progress from
 the first question. Setup is **not done** until the research browser is connected and the target country's Google region
