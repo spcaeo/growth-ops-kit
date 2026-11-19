@@ -57,6 +57,19 @@ def bar(done: int, total: int, style: str = "bars") -> str:
     return on * filled + off * (WIDTH - filled)
 
 
+def label(step: dict) -> str:
+    """A short name for a step: no leading "Step 7." and no command after the first ":" or "(" (fits one line)."""
+    import re
+    what = " ".join((step.get("what") or "").split())
+    what = re.sub(r"^(step\s*)?\d+[.):]?\s*", "", what, flags=re.I)
+    what = re.split(r"[:(]", what, maxsplit=1)[0].strip(" .-")
+    return what[:42] + ("…" if len(what) > 42 else "")
+
+
+ACTIVE = ("doing", "in_progress", "in progress", "active")
+STUCK = ("blocked", "waiting-owner", "waiting")
+
+
 def line(data: dict, style: str = "bars") -> str:
     tasks = data.get("tasks") or []
     open_t = [t for t in tasks if t.get("status") != "done" and any(s.get("status") != "done" for s in t.get("steps") or [])]
@@ -65,11 +78,19 @@ def line(data: dict, style: str = "bars") -> str:
     main = max(open_t, key=lambda t: len(t.get("steps") or []))   # the main job: the open task with most steps
     steps = main.get("steps") or []
     done = sum(1 for s in steps if s.get("status") == "done")
-    now = next((s for s in steps if s.get("status") != "done"), {})
-    what = " ".join((now.get("what") or "").split())[:60]
-    flag = f" ({now['status']})" if now.get("status") in ("blocked", "waiting-owner") else ""
-    more = f" · +{len(open_t) - 1} other open" if len(open_t) > 1 else ""
-    return f"{main.get('id', '?')} {bar(done, len(steps), style)} {done}/{len(steps)} · now: step {now.get('n', '?')} {what}{flag}{more}"
+    # "now" is the step being worked on (status doing), else the first step still to do; stuck steps are listed apart,
+    # so a blocked early step never hides that later steps are moving.
+    now = next((s for s in steps if (s.get("status") or "").lower() in ACTIVE), None) or \
+        next((s for s in steps if (s.get("status") or "todo").lower() not in ("done", *STUCK)), None)
+    stuck = [s for s in steps if (s.get("status") or "").lower() in STUCK]
+    parts = [f"{main.get('id', '?')} {bar(done, len(steps), style)} {done}/{len(steps)}"]
+    if now:
+        parts.append(f"now: {now.get('n', '?')} {label(now)}")
+    if stuck:
+        parts.append("blocked: " + ", ".join(str(s.get("n", "?")) for s in stuck))
+    if len(open_t) > 1:
+        parts.append(f"+{len(open_t) - 1} other open")
+    return " · ".join(parts)
 
 
 def main() -> None:

@@ -15,9 +15,9 @@ TASKS = {"tasks": [
 ]}
 
 
-def test_main_job_progress_in_squares():
+def test_main_job_progress_in_bars():
     out = statusline.line(TASKS)
-    assert out.startswith("T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 step 10")
+    assert out.startswith("T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: 10")
     assert out.endswith("+1 other open")
 
 
@@ -29,7 +29,13 @@ def test_styles_and_unknown_style_falls_back():
 
 def test_blocked_step_is_named():
     t = {"tasks": [{"id": "T2", "status": "doing", "steps": [{"n": 1, "what": "snapshot", "status": "blocked"}]}]}
-    assert statusline.line(t).endswith("now: step 1 snapshot (blocked)")
+    assert statusline.line(t) == "T2 ▱▱▱▱▱▱▱▱▱▱ 0/1 · blocked: 1"
+    # a blocked early step does not hide the step being worked on; labels drop "Step N." and the command
+    t = {"tasks": [{"id": "T3", "status": "doing", "steps": [
+        {"n": 1, "what": "Step 1. Read", "status": "done"},
+        {"n": 7, "what": "Step 7. Pre-flight first run: growth preflight --type post", "status": "blocked"},
+        {"n": 8, "what": "Step 8. Research file: research/x.md", "status": "todo"}]}]}
+    assert statusline.line(t) == "T3 ▰▰▰▱▱▱▱▱▱▱ 1/3 · now: 8 Research file · blocked: 7"
 
 
 def test_no_tasks_and_broken_file_never_fail(tmp_path):
