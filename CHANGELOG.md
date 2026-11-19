@@ -2,6 +2,13 @@
 
 The kit and the book share one version number. Dates are written year-month-day.
 
+## Unreleased
+
+- Doctor A8: an auto-start job counts only when it is THIS project's: a launchd plist or crontab line that runs
+  something inside the project folder or names it (`GROWTH_PROJECT=<folder>`). Before, any launchd job with the
+  business name in it failed A8, so another tool for the same business (its own folder) blocked setup. The jobs found
+  are named in the line, and they show even before the tracker exists.
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.

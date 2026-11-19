@@ -25,6 +25,40 @@ def row(step, ok, what, fix=""):
     rows.append((step, "OK  " if ok is True else ("TODO" if ok is None else "FAIL"), what, "" if ok is True else fix))
 
 
+LAUNCHD_DIRS = ["~/Library/LaunchAgents", "/Library/LaunchAgents", "/Library/LaunchDaemons"]
+
+
+def auto_start_jobs(project):
+    """The jobs that start THIS project's work with the computer: a launchd plist or a crontab line that runs something
+    inside the project folder, or names it (GROWTH_PROJECT=<folder>). Matched on the folder's path, never on the
+    business name, so another tool for the same business (its own folder) is not counted.
+    GROWTH_LAUNCHD_DIRS (os.pathsep list) and GROWTH_CRONTAB (the crontab text) replace the real ones in tests."""
+    import os
+    import plistlib
+    folder = re.escape(str(Path(project).resolve()).rstrip("/"))
+    mine = re.compile(folder + r"(?=$|[/\\\s\"';:])")
+    found = []
+    dirs = os.environ["GROWTH_LAUNCHD_DIRS"].split(os.pathsep) if "GROWTH_LAUNCHD_DIRS" in os.environ else LAUNCHD_DIRS
+    for d in dirs:
+        for f in sorted(Path(d).expanduser().glob("*.plist")):
+            try:
+                pl = plistlib.loads(f.read_bytes())
+            except Exception:  # noqa: BLE001  (unreadable or not a plist)
+                continue
+            vals = [pl.get("Program", ""), pl.get("WorkingDirectory", ""), *(pl.get("ProgramArguments") or []),
+                    *(pl.get("EnvironmentVariables") or {}).values()]
+            if any(isinstance(v, str) and mine.search(v) for v in vals):
+                found.append(f"launchd {pl.get('Label') or f.stem}")
+    cron = os.environ.get("GROWTH_CRONTAB")
+    if cron is None:
+        try:
+            cron = subprocess.run(["crontab", "-l"], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            cron = ""
+    found += [f"cron: {l.strip()[:80]}" for l in cron.splitlines() if l.strip() and not l.lstrip().startswith("#") and mine.search(l)]
+    return found
+
+
 # A1 understand
 row("A1 Understand the business and site", any(DOCS.glob("01-*.md")) or None,
     f"{DOCS.name}/01-*.md", "write docs/01-project-understanding.md (book/01-flow.md A1)")
@@ -106,8 +140,8 @@ else:
     row("A7b Site link graph", False, "inventory/link-graph.db missing", "growth link_graph crawl; then report (book/01-flow.md A7b)")
 # A8 tracker running + backfilled, no auto-start
 db = PROJECT / "page-tracker" / "tracker.db"
-auto = subprocess.run(["launchctl", "list"], capture_output=True, text=True).stdout if sys.platform == "darwin" else ""
-auto_jobs = [l for l in auto.splitlines() if CFG.get("name", "\0").lower() in l.lower() or CFG.get("product", "\0").lower() in l.lower()]
+auto_jobs = auto_start_jobs(PROJECT)
+jobs_note = f"auto-start jobs: {len(auto_jobs)}" + (f" ({', '.join(auto_jobs)})" if auto_jobs else "")
 if db.exists():
     c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     try:
@@ -117,10 +151,11 @@ if db.exists():
     start = CFG.get("search_console_history_start")
     ok8 = (lo == start or not start) and hi and hi >= (date.today() - timedelta(days=3)).isoformat() and not auto_jobs
     row("A8 Page tracker running, history backfilled", ok8 or None,
-        f"Search Console {lo} to {hi} (history starts {start}); auto-start jobs: {len(auto_jobs)}",
+        f"Search Console {lo} to {hi} (history starts {start}); {jobs_note}",
         "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job")
 else:
-    row("A8 Page tracker running, history backfilled", False, "page-tracker/tracker.db missing", "growth page-tracker sync (book/01-flow.md A8)")
+    row("A8 Page tracker running, history backfilled", False, f"page-tracker/tracker.db missing; {jobs_note}",
+        "growth page-tracker sync (book/01-flow.md A8)" + (" | remove any auto-start job" if auto_jobs else ""))
 
 # A9 the owner's journal page is current
 _oj = PROJECT / "journal" / "owner-journal.html"
