@@ -258,7 +258,12 @@ if db.exists():
     except sqlite3.Error as e:
         n_files = n_changes = None
         locked = locked or "locked" in str(e).lower() or "busy" in str(e).lower()
-    measured = not CFG.get("site_repo") or bool(n_changes)
+    # Before the new site goes live, page_tracker.changes_since is set to a future day (the go-live date, or 9999-12-31 until
+    # it is known) so local rebuild commits are not read as live changes. Then 0 changes is right: the pages only need to be
+    # mapped to their files, and the line says the tracker is waiting for go-live.
+    _since = str(((CFG.get("page_tracker") or {}).get("changes_since")) or "")
+    waiting_live = bool(_since) and _since[:10] > date.today().isoformat()
+    measured = not CFG.get("site_repo") or bool(n_changes) or (waiting_live and bool(n_files))
     ok8 = (lo == start or not start) and hi and hi >= (date.today() - timedelta(days=3)).isoformat() and not auto_jobs and measured
     _port = int(CFG.get("tracker_port", 18700))
     _foreign = port_in_use(_port) and not port_is_our_tracker(_port)
@@ -270,7 +275,8 @@ if db.exists():
         st8 = None
     row("A8 Page tracker running, history backfilled", st8,
         f"Search Console {lo} to {hi} (history starts {start}); {jobs_note}"
-        + (f"; pages with a content file: {n_files}, changes tracked: {n_changes}" if CFG.get("site_repo") else ""),
+        + (f"; pages with a content file: {n_files}, changes tracked: {n_changes}" if CFG.get("site_repo") else "")
+        + (f"; waiting for go-live: changes count from {_since[:10]} (page_tracker.changes_since)" if waiting_live else ""),
         ("set growth.json page_tracker.content_globs (or content_dirs / page_sources) so pages map to their files, then "
          "growth page-tracker sync" if not measured else
          "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job"

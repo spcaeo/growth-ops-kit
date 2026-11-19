@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.1.1 - 2026-11-19
+
+- Doctor A8 before go-live: a site rebuilt locally sets `page_tracker.changes_since` to a future day (the go-live date, or 9999-12-31 until it is known) so local commits are not read as live changes. A8 now passes with 0 changes tracked when pages are mapped to their files, and says "waiting for go-live: changes count from <day>". A past day needs changes again. Test: `tests/test_doctor_autostart.py::test_a8_before_go_live_needs_mapped_pages_not_changes`.
+- Known, not changed: `repo_meta.branch_ref` falls back to HEAD when `site_branch` does not exist yet, so `changes_since` is the way to hold off change tracking until go-live.
+
 ## 2.1.0 - 2026-11-19
 
 - Page tracker: YAML dates in front matter no longer crash `growth page-tracker sync` ("Object of type date is not JSON serializable", found on an Astro site whose MDX has `date: 2026-08-13`). `repo_meta.split_md` turns every date and time, at any depth, into its ISO text (`repo_meta.plain`), and `diffs.flat` falls back to `default=str`. Test: `tests/test_research_measure.py::test_yaml_dates_in_front_matter_become_text_and_diff`.
