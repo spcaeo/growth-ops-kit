@@ -327,7 +327,7 @@ def gsc_top(ctx, n=2):
     c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     rows = c.execute("select query, impressions from search_queries where path=? and snapshot="
                      "(select max(snapshot) from search_queries where path=?) order by impressions desc limit ?",
-                     (ctx.need_path(), ctx.path, n)).fetchall()
+                     (paths.key(ctx.need_path()), paths.key(ctx.path), n)).fetchall()   # the tracker stores paths without the slash
     c.close()
     return rows
 

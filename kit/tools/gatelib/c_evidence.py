@@ -130,6 +130,12 @@ def snapshot(ctx):
         ctx.fail("no page snapshot", f"growth page_snapshot {ctx.path} (book/02-owner-rules.md 'Snapshot every page we touch')")
 
 
+def step_order(s):
+    """(number, letter, list position) from a step's label 'Step 16a. ...'; a step with no label keeps its place."""
+    m = re.match(r"\s*(?:Playbook |Pipeline |Part )?step\s*(\d+)([a-z]?)", s.get("what", ""), re.I)
+    return (int(m.group(1)), m.group(2), s.get("n", 0)) if m else (s.get("n", 0), "", s.get("n", 0))
+
+
 @check("ev.task-steps", "0", ALL, "the page's task in docs/tasks.json lists the playbook steps; none skipped", needs="project")
 def task_steps(ctx):
     t = json.loads(ctx.need_file(ctx.need_docs() / "tasks.json", "growth tasks add ...").read_text())
@@ -152,6 +158,9 @@ def task_steps(ctx):
     # A step still "todo" while a later step is done was either skipped or done and never ticked (from a real project,
     # 30 such steps once sat on five finished pages). Steps that only happen after the release may wait.
     after = re.compile(r"(?i)release|index|re-read|measure|day 7")
+    # judge order by the step's own label ("Step 16a" comes after "Step 16"), not by where it sits in the list:
+    # steps can only be appended, so a step added later would otherwise make every earlier step look skipped
+    steps = sorted(steps, key=step_order)
     last_done = max((i for i, s in enumerate(steps) if s.get("status") == "done"), default=-1)
     stale = [s for s in steps[:max(last_done, 0)] if s.get("status") == "todo" and not after.search(s.get("what", ""))]   # none done yet: nothing is stale
     probs += [f"{task['id']} step {s.get('n')} still todo while later steps are done: {s.get('what', '')[:60]}" for s in stale]
