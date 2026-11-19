@@ -504,22 +504,73 @@ def no_emoji(ctx):
 @check("embeds.lazy", "56", what="no iframe or third-party embed loads before the reader acts", needs="live")
 def embeds(ctx):
     root = ctx.root()
-    probs = [f"iframe {i.get('src')[:60]}" for i in find_all(root, "iframe") if i.get("src") and i.get("loading") != "lazy"]
+    probs = [f"iframe {i.get('src')[:60]}" for i in find_all(root, "iframe") if i.get("src") and i.get("loading") != "lazy"
+             and not i.in_tag("noscript")]   # a <noscript> iframe never loads while JavaScript is on
     ctx.verdict(probs, "no eager embeds", "load the embed on click or with loading=lazy (rule 56)")
+
+
+ANALYTICS_HOSTS = (r"googletagmanager\.com|google-analytics\.com|analytics\.google\.com|doubleclick\.net|clarity\.ms|"
+                   r"analytics\.ahrefs\.com|facebook\.(net|com)/tr|connect\.facebook|hotjar|segment\.(io|com)|plausible\.io|"
+                   r"posthog|bat\.bing\.com|snap\.licdn|linkedin\.com/(px|li)|tiktok")
+
+
+def watched_requests(url, wait_ms=4000):
+    """Every request a page makes in a headless browser within wait_ms, one scroll and one click on the body (the
+    usual delays before a tag manager loads). The browser always closes."""
+    from playwright.sync_api import sync_playwright
+    seen = []
+    with sync_playwright() as p:
+        b = p.chromium.launch(headless=True)
+        try:
+            pg = b.new_page()
+            pg.on("request", lambda r: seen.append(r.url))
+            pg.goto(url, wait_until="load", timeout=60000)
+            pg.wait_for_timeout(wait_ms)
+            pg.mouse.wheel(0, 1200)
+            pg.mouse.click(5, 5)
+            pg.wait_for_timeout(1500)
+        finally:
+            b.close()
+    return seen
+
+
+def host_guarded(inline, site_url):
+    """True when the inline code tests location.hostname against this site's own host (e.g. a regex for example.com)."""
+    host = re.sub(r"^https?://(www\.)?", "", (site_url or "").rstrip("/")).split("/")[0]
+    if not host or "location.hostname" not in inline:
+        return False
+    return host in inline or re.escape(host) in inline or host.replace(".", "\\.") in inline
 
 
 @check("tags.not-local", "103", what="no analytics or ad tag runs on a local or preview build", needs="live")
 def tags_local(ctx):
+    root = ctx.root()                      # the page first: with no page this check is SKIP, never an OK
     host = ctx.url.split("/")[2] if ctx.url.count("/") >= 2 else ""
-    root = ctx.root()
+    if not host.startswith(("127.0.0.1", "localhost")):
+        ctx.ok("not a local build: tags allowed on the real domain")
+        return
+    fix = f"load tags only when the host is {ctx.cfg.get('site_url', 'the real domain')} (rule 103)"
+    # 1. the truth: the requests the page really makes in a browser
+    try:
+        from .c_links import browser_failed, need_browser
+        need_browser(ctx)
+        try:
+            hits = sorted({u.split("?")[0][:70] for u in watched_requests(ctx.url) if re.search(ANALYTICS_HOSTS, u)})
+        except Exception as e:  # noqa: BLE001
+            if not browser_failed(e):
+                raise
+            raise Skip("no headless browser")
+        ctx.verdict([f"request to {h}" for h in hits], "no analytics request from the local build (headless browser, 5 s, a scroll and a click)", fix)
+        return
+    except Skip:
+        pass
+    # 2. without a browser: the page's markup, where a loader behind a hostname guard for this site counts as off
     srcs = [s.get("src") for s in find_all(root, "script") if s.get("src")]
     inline = " ".join(s.own_text() for s in find_all(root, "script"))
-    if host.startswith(("127.0.0.1", "localhost")):
-        bad = [s[:60] for s in srcs if re.search(r"googletagmanager|google-analytics|clarity\.ms|ahrefs|facebook\.net|doubleclick", s)]
-        bad += ["inline GTM loader"] if re.search(r"googletagmanager\.com/gtm\.js", inline) else []
-        ctx.verdict(bad, "no analytics tags on the local build", f"load tags only when the host is {ctx.cfg.get('site_url', 'the real domain')} (rule 103)")
-    else:
-        ctx.ok("not a local build: tags allowed on the real domain")
+    bad = [s[:60] for s in srcs if re.search(ANALYTICS_HOSTS, s)]
+    if re.search(r"googletagmanager\.com/gtm\.js", inline) and not host_guarded(inline, ctx.cfg.get("site_url")):
+        bad.append("inline GTM loader")
+    ctx.verdict(bad, "no analytics tags on the local build (markup read: no browser)", fix)
 
 
 @check("form.bot-guard", "37", what="every lead form has a honeypot or bot check", needs="live")
