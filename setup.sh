@@ -76,6 +76,30 @@ else
   warn "could not link growth into $BIN. Use the full path $ROOT/growth, or: export PATH=\"$ROOT:\$PATH\""
 fi
 
+# 6b. A neutral commit identity for THIS checkout only (repo-local; your global git config is never touched), so a
+# contribution cannot publish a personal name or email. Use a GitHub no-reply address (<id>+<user>@users.noreply.github.com).
+# Set it without a prompt with GROWTH_KIT_GIT_EMAIL (and GROWTH_KIT_GIT_NAME); a terminal run asks once.
+if command -v git >/dev/null 2>&1 && [ -e "$ROOT/.git" ]; then
+  CUR=$(git -C "$ROOT" config --local user.email 2>/dev/null || true)
+  case "$CUR" in
+    *@users.noreply.github.com) ok "commit identity for this checkout: $CUR (repo-local)" ;;
+    *)
+      WANT="${GROWTH_KIT_GIT_EMAIL:-}"
+      if [ -z "$WANT" ] && [ -t 0 ] && [ -t 1 ]; then
+        printf 'GitHub no-reply email for commits in this checkout (like 12345+name@users.noreply.github.com), Enter to skip: '  # leak-check: allow
+        read -r WANT || WANT=""
+      fi
+      case "$WANT" in
+        *@users.noreply.github.com)
+          git -C "$ROOT" config --local user.email "$WANT"
+          git -C "$ROOT" config --local user.name "${GROWTH_KIT_GIT_NAME:-${WANT%%@*}}"
+          ok "commit identity set for this checkout only: $WANT" ;;
+        "") warn "no neutral commit identity set for this checkout. Before you commit: git -C \"$ROOT\" config --local user.email <id>+<user>@users.noreply.github.com" ;;
+        *) warn "not a GitHub no-reply address, so it was not used: $WANT" ;;
+      esac ;;
+  esac
+fi
+
 # 7. Tests (the demo site included), then the leak check
 if [ -x "$VENV/bin/python" ]; then
   [ "$BROWSERS" = 1 ] || export GROWTH_SKIP_BROWSER=1

@@ -129,14 +129,23 @@ def git_id(cwd, name, email, *a):
     subprocess.run(["git", "-c", f"user.name={name}", "-c", f"user.email={email}", *a], cwd=cwd, check=True, capture_output=True)
 
 
-def test_history_scan_reads_author_and_committer_as_a_warning(tmp_path):
+def test_history_scan_identity_is_a_warning_once_pushed_and_a_fail_before(tmp_path):
     git_id(tmp_path, "Jane Initech", "jane@users.noreply.example", "init", "-q")
     (tmp_path / "f.txt").write_text("clean\n")
     git_id(tmp_path, "Jane Initech", "jane@users.noreply.example", "add", "-A")
     git_id(tmp_path, "Jane Initech", "jane@users.noreply.example", "commit", "-qm", "clean message")
     (tmp_path / ".private-words").write_text("initech\n")
     h = run("--history", cwd=tmp_path)
-    assert h.returncode == 0, h.stdout                # an identity alone is a warning, not a failure
+    assert h.returncode == 1, h.stdout                # not on any remote yet: one push would publish it
+    assert "FAIL commit" in h.stdout and "private word in the author name (not pushed yet): initech" in h.stdout
+    # a remote that has the commit makes it history already published: only a warning
+    remote = tmp_path.parent / (tmp_path.name + "-remote.git")
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:refs/heads/main"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "fetch", "-q", "origin"], cwd=tmp_path, check=True, capture_output=True)
+    h = run("--history", cwd=tmp_path)
+    assert h.returncode == 0, h.stdout
     assert "WARN private word in the author name: initech" in h.stdout
     assert "WARN private word in the committer name" in h.stdout
     assert "0 hit(s)" in h.stdout and "warning(s)" in h.stdout

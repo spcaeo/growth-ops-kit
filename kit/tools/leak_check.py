@@ -155,8 +155,11 @@ def scan_files(root: Path, files: list[str], words: list[str], staged=False):
 
 def scan_history(root: Path, words: list[str]):
     """(hits, warnings). Hits: every added line of every commit, every file name that ever existed and every commit
-    message. Warnings: a private word in a commit's author or committer name or email (history is replaced at publish)."""
+    message. A private word in the author or committer name or email is a hit when the commit is not on any remote yet
+    (one push would publish it for good), else a warning (history is replaced at publish)."""
     report, warns = [], []
+    # commits no remote has yet: a private word in their identity is a FAIL (one push would publish it for good)
+    unpushed = {h[:8] for h in git(root, "rev-list", "--all", "--not", "--remotes").stdout.decode("utf-8", "replace").split()}
     log = git(root, "log", "--all", "--no-color", "-p", "-U0", "--no-ext-diff",
               "--format=@@commit %H%n@@who %an%x09%ae%x09%cn%x09%ce%n%B%n@@endmsg").stdout.decode("utf-8", "replace")
     commit, msg, cur, in_msg, ln = "", [], "", False, 0
@@ -170,10 +173,13 @@ def scan_history(root: Path, words: list[str]):
                 name, email, cname, cemail = (line[6:].split("\t") + ["", "", "", ""])[:4]
                 for role, nm, em in (("author", name, email), ("committer", cname, cemail)):
                     for w in words:
-                        if word_rx(w).search(nm):
-                            warns.append((f"commit {commit}", 0, f"private word in the {role} name", w))
-                        if word_rx(w).search(em):
-                            warns.append((f"commit {commit}", 0, f"private word in the {role} email", w))
+                        for field, val in (("name", nm), ("email", em)):
+                            if not word_rx(w).search(val):
+                                continue
+                            if commit in unpushed:
+                                report.append((f"commit {commit}", 0, f"private word in the {role} {field} (not pushed yet)", w))
+                            else:
+                                warns.append((f"commit {commit}", 0, f"private word in the {role} {field}", w))
             elif line == "@@endmsg":
                 in_msg = False
                 for _n, kind, shown in scan_text("\n".join(msg), words):

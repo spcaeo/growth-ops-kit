@@ -4,6 +4,7 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+- `growth leak_check --history` now FAILS (it was a warning) when a private word is in the author or committer name or email of a commit no remote has yet; commits already on a remote stay a warning. `setup.sh` sets a repo-local GitHub no-reply commit identity for the kit checkout only (asks once, or reads `GROWTH_KIT_GIT_EMAIL`; the global git config is never touched). README Contributing documents the git-ignored `.private-words` file (#12).
 - Progress you can watch, by default: `growth new-project` registers a Claude Code status line (`growth statusline`) that shows the open task, a progress bar and the current step at the bottom of the agent's window, e.g. `T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 ...`. Style in growth.json `statusline_style`: bars (default), squares, blocks, dots, checks, plain. The Stop hook gets a `statusMessage`. An existing status line is never replaced.
 
 - One sitemap reader (`kit/tools/sitemaps.py`, also `growth sitemaps <url-or-file>`) for the inventory, the link graph,
