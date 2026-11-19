@@ -44,6 +44,12 @@ The kit and the book share one version number. Dates are written year-month-day.
   slash, and its own address form is used for the page and for analytics (before: a trailing-slash site was "not a
   live page", and analytics answered 0).
 
+- Gate evidence on trailing-slash sites (new `kit/tools/paths.py`, also `growth paths`): ev.inventory, ev.task-steps
+  and seo.kept match a page with or without its slash (seo.kept used to call every such page "new" and pass); a task
+  title may name the page by its full address; ev.snapshot looks in the folder page_snapshot writes
+  (`inventory/pages/blog__post/`, it looked for `blog/post/`); a fresh task with no step done is no longer reported as
+  "still todo while later steps are done".
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.

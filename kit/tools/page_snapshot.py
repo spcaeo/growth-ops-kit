@@ -24,6 +24,7 @@ from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import paths  # noqa: E402
 from config import CFG, PROJECT as ROOT, SITE_URL, HOST, TZ, UA, connector_on, keys, note_missing_key  # noqa: E402
 
 # links that count as a call to action: the conversion path, the contact path and any raw booking host
@@ -121,7 +122,7 @@ def main():
         "skald_marked_changes": skald("page_changes", {"path": path}),
         **tracker_rows(key),
     }
-    slug = "home" if key == "/" else key.strip("/").replace("/", "__")
+    slug = paths.snapshot_slug(key)
     out = INV / "pages" / slug
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{today}.json").write_text(json.dumps(snap, indent=1, ensure_ascii=False) + "\n")

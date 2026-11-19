@@ -8,6 +8,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from .core import ALL, Missing, check, mtime
+import paths  # noqa: E402  kit/tools/paths.py: one form of a site path
 
 FRESH_DAYS = 30
 
@@ -118,11 +119,10 @@ def ai_baseline(ctx):
 
 @check("ev.snapshot", "OR-snapshot", ALL, "a before snapshot of the page exists (inventory/pages/<slug>/<date>.md)", needs="project")
 def snapshot(ctx):
-    if ctx.need_path() in ctx.cfg.get("new_pages", []):
+    if paths.key(ctx.need_path()) in {paths.key(p) for p in ctx.cfg.get("new_pages", [])}:
         ctx.ok("new page: no live snapshot yet (growth.json new_pages)")
         return
-    slug = ctx.need_path().strip("/") or "home"
-    d = ctx.project / "inventory" / "pages" / slug
+    d = ctx.project / "inventory" / "pages" / paths.snapshot_slug(ctx.need_path())
     snaps = sorted(d.glob("*.md")) if d.exists() else []
     if snaps:
         ctx.ok(f"snapshot {snaps[-1].name}")
@@ -135,8 +135,11 @@ def task_steps(ctx):
     t = json.loads(ctx.need_file(ctx.need_docs() / "tasks.json", "growth tasks add ...").read_text())
     # the path as a whole token: "/pricing" must not match "page/pricing" in another
     # page's task title (a real mistake: one page read another page's task, found by its path inside a longer path)
-    tok = re.compile(r"(?<![\w/-])" + re.escape(ctx.need_path()) + r"(?![\w/-])")
-    mine = [x for x in t["tasks"] if tok.search(x.get("title", ""))]
+    tok = re.compile(r"(?<![\w/-])" + re.escape(paths.key(ctx.need_path())) + r"/?(?![\w/-])")   # with or without its slash
+    # a title may name the page by its full address: drop the site's own origin first (https://www.example.com/x/ -> /x/)
+    site = re.sub(r"^https?://(www\.)?", "", (ctx.cfg.get("site_url") or "").rstrip("/"))
+    own = re.compile(r"https?://(?:www\.)?" + re.escape(site.removeprefix("www.")), re.I) if site else None
+    mine = [x for x in t["tasks"] if tok.search(own.sub("", x.get("title", "")) if own else x.get("title", ""))]
     if not mine:
         ctx.fail("no task names this page", "growth tasks add '<job>: <path>' and copy the playbook steps in (rule 0)")
         return
@@ -150,7 +153,7 @@ def task_steps(ctx):
     # 30 such steps once sat on five finished pages). Steps that only happen after the release may wait.
     after = re.compile(r"(?i)release|index|re-read|measure|day 7")
     last_done = max((i for i, s in enumerate(steps) if s.get("status") == "done"), default=-1)
-    stale = [s for s in steps[:last_done] if s.get("status") == "todo" and not after.search(s.get("what", ""))]
+    stale = [s for s in steps[:max(last_done, 0)] if s.get("status") == "todo" and not after.search(s.get("what", ""))]   # none done yet: nothing is stale
     probs += [f"{task['id']} step {s.get('n')} still todo while later steps are done: {s.get('what', '')[:60]}" for s in stale]
     probs += [f"{task['id']} step {s.get('n')} done with no proof" for s in steps
               if s.get("status") == "done" and not s.get("output") and s.get("at", "") >= "2026-11-18 13"]
@@ -208,8 +211,8 @@ def inventory(ctx):
     probs = []
     if inv["meta"]["generated"][:10] < (ctx.today - dt.timedelta(days=7)).isoformat():
         probs.append(f"inventory built {inv['meta']['generated'][:10]}")
-    page = next((p for p in inv["pages"] if p["path"] == ctx.need_path()), None)
-    if page is None and ctx.path in ctx.cfg.get("new_pages", []):
+    page = next((p for p in inv["pages"] if paths.key(p["path"]) == paths.key(ctx.need_path())), None)
+    if page is None and paths.key(ctx.path) in {paths.key(p) for p in ctx.cfg.get("new_pages", [])}:
         pass
     elif page is None:
         probs.append("page not in the inventory")
