@@ -450,7 +450,8 @@ def reveal(ctx):
         if s is hero:
             continue                                  # the first screen is on view at load: nothing to reveal
         marks = list(s.iter())                       # the fold itself or a block inside it reveals
-        if not any(domx.has_cls(n, r".*(reveal|fold-in|fade|motion|animate).*") or n.get("data-reveal") for n in marks):
+        # an empty attribute (<div data-reveal>) counts: its presence is the marker, not its value
+        if not any(domx.has_cls(n, r".*(reveal|fold-in|fade|motion|animate).*") or "data-reveal" in n.attrs for n in marks):
             bad.append(f"fold {i} ({s.get('data-fold') or ' '.join(domx.classes(s)[:2])})")
     ctx.verdict(bad, f"all {len(secs) - 1} folds below the first screen carry a reveal marker", "wrap the fold in the shared Reveal (rule 141; rule 58 for how)")
 
@@ -575,7 +576,12 @@ def tags_local(ctx):
 
 @check("form.bot-guard", "37", what="every lead form has a honeypot or bot check", needs="live")
 def bot_guard(ctx):
-    forms = find_all(domx.main(ctx.root()), "form")
+    # a lead form sends something: an action, a POST, or a field for an email, phone or message. A calculator or a
+    # filter form that posts nowhere is not a lead form and needs no bot check.
+    def sends(f):
+        return bool(f.get("action")) or f.get("method").lower() == "post" or any(
+            n.tag == "textarea" or (n.tag == "input" and n.get("type").lower() in ("email", "tel")) for n in f.iter())
+    forms = [f for f in find_all(domx.main(ctx.root()), "form") if sends(f)]
     probs = []
     for f in forms:
         hidden = [i for i in find_all(f, "input") if i.get("tabindex") == "-1" or i.get("aria-hidden") == "true"
