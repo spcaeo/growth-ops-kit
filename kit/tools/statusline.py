@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Claude Code status line: the open task's progress, always visible at the bottom of the agent's window.
 
-  T3 ■■□□□□□□□□ 9/44 · now: step 10 Search Console research · +1 other open
+  T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 Search Console research · +1 other open
 
 Read from the project's task list (docs/tasks.json, or growth.json "project_docs"), the one record `growth tasks` keeps.
 `growth new-project` registers it in .claude/settings.json ("statusLine"), so the owner sees each step tick off from
@@ -18,12 +18,12 @@ import sys
 from pathlib import Path
 
 WIDTH = 10
-# growth.json "statusline_style" picks the look (default "squares"). Each is (done, to do).
+# growth.json "statusline_style" picks the look (default "bars"). Each is (done, to do).
 STYLES = {
     "squares": ("■", "□"),     # T3 ■■■□□□□□□□ 9/44
     "blocks": ("█", "░"),      # T3 ███░░░░░░░ 9/44
     "dots": ("●", "○"),        # T3 ●●●○○○○○○○ 9/44
-    "bars": ("▰", "▱"),        # T3 ▰▰▰▱▱▱▱▱▱▱ 9/44
+    "bars": ("▰", "▱"),        # T3 ▰▰▰▱▱▱▱▱▱▱ 9/44  (default)
     "checks": ("☑", "☐"),      # T3 ☑☑☑☐☐☐☐☐☐☐ 9/44
     "plain": ("#", "-"),       # T3 ###------- 9/44  (any terminal or font)
 }
@@ -51,13 +51,13 @@ def tasks_file(project: Path) -> Path:
     return project / (settings(project).get("project_docs") or "docs") / "tasks.json"
 
 
-def bar(done: int, total: int, style: str = "squares") -> str:
-    on, off = STYLES.get(style, STYLES["squares"])
+def bar(done: int, total: int, style: str = "bars") -> str:
+    on, off = STYLES.get(style, STYLES["bars"])
     filled = round(WIDTH * done / total) if total else 0
     return on * filled + off * (WIDTH - filled)
 
 
-def line(data: dict, style: str = "squares") -> str:
+def line(data: dict, style: str = "bars") -> str:
     tasks = data.get("tasks") or []
     open_t = [t for t in tasks if t.get("status") != "done" and any(s.get("status") != "done" for s in t.get("steps") or [])]
     if not open_t:
@@ -80,7 +80,7 @@ def main() -> None:
         pass
     try:
         project = project_dir()
-        print(line(json.loads(tasks_file(project).read_text()), settings(project).get("statusline_style") or "squares"))
+        print(line(json.loads(tasks_file(project).read_text()), settings(project).get("statusline_style") or "bars"))
     except FileNotFoundError:
         print("no task list yet (docs/tasks.json)")
     except Exception as e:  # noqa: BLE001  (a status line must never break the agent's window)

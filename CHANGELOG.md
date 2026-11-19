@@ -4,7 +4,7 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
-- Progress you can watch, by default: `growth new-project` registers a Claude Code status line (`growth statusline`) that shows the open task, a progress bar and the current step at the bottom of the agent's window, e.g. `T3 ■■□□□□□□□□ 9/44 · now: step 10 ...`. Style in growth.json `statusline_style`: squares (default), blocks, dots, bars, checks, plain. The Stop hook gets a `statusMessage`. An existing status line is never replaced.
+- Progress you can watch, by default: `growth new-project` registers a Claude Code status line (`growth statusline`) that shows the open task, a progress bar and the current step at the bottom of the agent's window, e.g. `T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 ...`. Style in growth.json `statusline_style`: bars (default), squares, blocks, dots, checks, plain. The Stop hook gets a `statusMessage`. An existing status line is never replaced.
 
 - One sitemap reader (`kit/tools/sitemaps.py`, also `growth sitemaps <url-or-file>`) for the inventory, the link graph,
   the page tracker and the technical SEO check. A sitemap index is followed to its pages; before, the inventory and the

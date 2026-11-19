@@ -17,14 +17,14 @@ TASKS = {"tasks": [
 
 def test_main_job_progress_in_squares():
     out = statusline.line(TASKS)
-    assert out.startswith("T3 ■■□□□□□□□□ 9/44 · now: step 10 step 10")
+    assert out.startswith("T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 step 10")
     assert out.endswith("+1 other open")
 
 
 def test_styles_and_unknown_style_falls_back():
     assert statusline.bar(5, 10, "dots") == "●●●●●○○○○○"
     assert statusline.bar(5, 10, "plain") == "#####-----"
-    assert statusline.bar(5, 10, "nonsense") == "■■■■■□□□□□"
+    assert statusline.bar(5, 10, "nonsense") == "▰▰▰▰▰▱▱▱▱▱"
 
 
 def test_blocked_step_is_named():
