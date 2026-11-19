@@ -84,12 +84,16 @@ def checks_in_scope(ptype):
     return [c for c in CHECKS.values() if ptype in c.types]
 
 
-def write_plan(path, ptype, key, checks):
+def write_plan(path, ptype, key, checks, stack=None):
+    """The checkpoint plan. A check that reads a Next.js site's code is marked "SKIP on this stack" when growth.json stack is
+    something else, so nobody plans around a FAIL that cannot happen."""
+    stack = (stack if stack is not None else CFG.get("stack") or "static").lower()
     when = {"before": [], "fold": [], "finish": [], "release": []}
     for c in sorted(checks, key=lambda c: (c.rule, c.cid)):
         phase = ("release" if c.stage == "release" else "before" if c.cid in PLAN else
                  "finish" if c.cid in FINISH else "fold")
-        when[phase].append(f"- [ ] `{c.cid}` (rule {c.rule}): {c.what}")
+        skip = f" **SKIP on this stack** ({stack}: needs a Next.js site, so it prints SKIP, never FAIL)" if c.needs == "nextjs" and stack != "nextjs" else ""
+        when[phase].append(f"- [ ] `{c.cid}` (rule {c.rule}): {c.what}{skip}")
     head = {"before": "1. Before the build (growth preflight must PASS)",
             "fold": "2. After EVERY fold commit (gate on the preview; fix before the next fold, never at the end)",
             "finish": "3. Before READY (growth ready), after the last commit",

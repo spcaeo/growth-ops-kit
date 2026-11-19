@@ -271,13 +271,14 @@ def no_secrets(ctx):
     ctx.verdict(probs, f"{len(ctx.branch_files())} changed files, no secrets", "remove the secret, rotate the key, keep keys in ~/.config only (rule 119)")
 
 
-@check("repo.commit-identity", "118", what="every commit on the branch uses the repo's noreply identity", needs="nextjs")
+@check("repo.commit-identity", "118", what="every commit on the branch uses the repo's commit identity (growth.json commit_identity.email; else a noreply address)", needs="nextjs")
 def commit_identity(ctx):
-    want = ctx.commit_email()
     out = ctx.git("log", ctx.base_ref() + "..HEAD", "--format=%h %ae %ce")
-    bad = [l for l in out.splitlines() if l.strip() and (l.split()[1] != want or l.split()[2] != want)]
-    n = len([l for l in out.splitlines() if l.strip()])
-    ctx.verdict(bad, f"{n} branch commit(s), all by {want}", f"commit with -c user.email={want} (rule 118); fix with git rebase --exec 'git commit --amend --reset-author --no-edit'")
+    rows = [l.split() for l in out.splitlines() if l.strip()]
+    bad = [" ".join(r) for r in rows if not ctx.identity_ok(r[1], r[2])]
+    want = ctx.commit_email()
+    fix = (f"commit with -c user.email={want} (rule 118)" if want else "commit with your GitHub noreply address, or set growth.json commit_identity.email (rule 118)")
+    ctx.verdict(bad, f"{len(rows)} branch commit(s), all {ctx.identity_rule()}", fix + "; fix with git rebase --exec 'git commit --amend --reset-author --no-edit'")
 
 
 @check("repo.commit-style", "123", what="every branch commit has a one-line subject and the co-author line", needs="nextjs")
@@ -295,18 +296,19 @@ def commit_style(ctx):
     ctx.verdict(probs, "branch commits are one plain sentence with the co-author line", "commit by path with one sentence and the co-author line (rule 123)")
 
 
-@check("repo.branch", "114", what="the work is on a page/article/fix/design branch that is not merged into the production branch", needs="nextjs")
+@check("repo.branch", "114", what="the work is on a branch with an allowed prefix (growth.json branch_prefixes; default page/, article/, fix/, design/) that is not merged into the production branch", needs="nextjs")
 def branch(ctx):
     b = ctx.git("rev-parse", "--abbrev-ref", "HEAD").strip()
     base = ctx.base_ref()
     prod = base.split("/", 1)[-1]
     probs = []
-    if not re.match(r"(article|page|fix|design)/", b):
-        probs.append(f"branch '{b}' is not article/, page/, fix/ or design/")
+    prefixes = ctx.branch_prefixes()
+    if not any(b.startswith(p) for p in prefixes):
+        probs.append(f"branch '{b}' does not start with " + ", ".join(prefixes))
     code, _ = run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", "HEAD", base])
     if code == 0 and b != prod:
         probs.append(f"the branch is already in {base}")
-    ctx.verdict(probs, f"on branch {b}, not merged", "work on a page/... branch; merge only on the owner's yes (rule 114)")
+    ctx.verdict(probs, f"on branch {b}, not merged", "work on a branch with an allowed prefix (growth.json branch_prefixes); merge only on the owner's yes (rule 114)")
 
 
 @check("repo.content-reader", "104", what="only the one named module reads the content files (growth.json content_reader)", needs="nextjs")

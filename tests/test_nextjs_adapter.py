@@ -114,3 +114,63 @@ def test_the_site_hook_reads_posts_dir_from_either_place():
     import install_hooks
     for cfg in ({"posts_dir": "writing"}, {"nextjs": {"posts_dir": "writing"}}):
         assert install_hooks.route_of("writing/hello.md", Path("."), cfg) == "/blog/hello"
+
+
+def _set(project, **kw):
+    cfg = json.loads((project / "growth.json").read_text())
+    cfg.update(kw)
+    (project / "growth.json").write_text(json.dumps(cfg))
+
+
+def _verdict(lines, cid):
+    return next((l for l in lines if f"[{cid}]" in l), "")
+
+
+def _git(repo, *args, **env):
+    return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True, env={**os.environ, **env})
+
+
+def test_branch_prefixes_default_to_the_kits_four_and_can_be_set(nx_project, base):
+    project, repo = nx_project
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    assert _verdict(lines, "repo.branch").startswith("OK")                     # page/lawn-mowing, the default prefixes
+    _git(repo, "checkout", "-qb", "review-header")
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    v = _verdict(lines, "repo.branch")
+    assert v.startswith("FAIL") and "review-header" in v and "page/" in v      # not allowed by default
+    _set(project, branch_prefixes=["review-", "fix"])                          # "review-" as written, "fix" means "fix/"
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    assert _verdict(lines, "repo.branch").startswith("OK"), "\n".join(lines)
+    _git(repo, "checkout", "-qb", "page/other")                                # the kit's own prefix is now not listed
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    assert _verdict(lines, "repo.branch").startswith("FAIL")
+
+
+def test_commit_identity_is_the_configured_one_else_a_noreply_address(nx_project, base):
+    project, repo = nx_project
+    # the fixture's commit is by an example.com address: neither configured nor noreply
+    _, lines = run_gate(project, base, "--only", "repo.commit-identity")
+    assert _verdict(lines, "repo.commit-identity").startswith("FAIL")
+    _set(project, commit_identity={"name": "", "email": "test@example.com"})   # a private repo's own identity, on purpose
+    _, lines = run_gate(project, base, "--only", "repo.commit-identity")
+    assert _verdict(lines, "repo.commit-identity").startswith("OK"), "\n".join(lines)
+    _set(project, commit_identity={"name": "", "email": ""})                   # empty again: the noreply rule
+    noreply = "7+someone@users.noreply" + ".github.com"  # leak-check: allow
+    _git(repo, "commit", "-q", "--amend", "--reset-author", "--no-edit",
+         GIT_COMMITTER_NAME="T", GIT_COMMITTER_EMAIL=noreply, GIT_AUTHOR_NAME="T", GIT_AUTHOR_EMAIL=noreply)
+    _, lines = run_gate(project, base, "--only", "repo.commit-identity")
+    assert _verdict(lines, "repo.commit-identity").startswith("OK"), "\n".join(lines)
+
+
+def test_the_checkpoint_plan_marks_adapter_checks_skip_on_a_static_stack(demo_project, tmp_path):
+    code = ("import sys; sys.path.insert(0, 'kit/tools'); import preflight\\n"
+            "from pathlib import Path\\n"
+            "(preflight.PROJECT / 'research').mkdir(exist_ok=True)\\n"
+            "for stack in ('static', 'nextjs'):\\n"
+            "    p, _ = preflight.write_plan('/x', 'money', 'x-' + stack, preflight.checks_in_scope('money'), stack)\\n"
+            "    print(stack, p.read_text().count('SKIP on this stack'))\\n")
+    r = subprocess.run([sys.executable, "-c", code.replace("\\n", "\n")], cwd=ROOT, capture_output=True, text=True,
+                       env={**os.environ, "GROWTH_PROJECT": str(demo_project)})
+    assert r.returncode == 0, r.stderr
+    counts = dict(l.split() for l in r.stdout.split("\n") if l.strip())
+    assert int(counts["static"]) > 0 and counts["nextjs"] == "0"
