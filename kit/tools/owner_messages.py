@@ -13,6 +13,9 @@ docs/owner-messages-map.json names the log row that paraphrases it. Any other me
 
 Exit codes of check: 0 all logged, 1 something is missing, 3 no transcripts were found (nothing was checked).
 
+A prompt from a scheduled, unattended run is not an owner message: list its prompt file in docs/scheduled-prompts.txt
+(or set GROWTH_SCHEDULED_PROMPT_FILE), or run with GROWTH_SCHEDULED=1 (then the one prompt of the newest session is left out).
+
 Short replies that only answer a question (yes, ok, an option label) are listed as "answers" and must appear in the
 log row of the question they answer, or in tasks.json; they are reported separately.
 """
@@ -20,11 +23,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import transcript  # noqa: E402  (one reader for owner messages, shared with the Stop-hook guards)
 from config import CFG, PROJECT, DOCS  # noqa: E402
 
 
@@ -47,38 +52,57 @@ def transcript_dirs(project: Path = PROJECT, home: Path | None = None, cfg: dict
 
 LOG = DOCS / "steps-log.md"
 MAP = DOCS / "owner-messages-map.json"
-SKIP = ("Another Claude session sent a message", "<task-notification", "<teammate-message", "<system-reminder", "<command-name>", "<local-command",
-        "Caveat:", "[Request interrupted", "This session is being continued")
-
 
 def words(t):
     return re.findall(r"[a-z0-9$']+", t.lower())
 
 
+def scheduled_prompts(docs=None):
+    """The prompts of scheduled, unattended runs: a run records its prompt file path (one per line) in
+    docs/scheduled-prompts.txt, or names it in $GROWTH_SCHEDULED_PROMPT_FILE. Such a prompt is a timer's text, not a message
+    the owner typed, so it is never an owner message and never needs a line in docs/steps-log.md."""
+    out = []
+    listed = Path(docs or DOCS) / "scheduled-prompts.txt"
+    names = (listed.read_text().splitlines() if listed.is_file() else []) + [os.environ.get("GROWTH_SCHEDULED_PROMPT_FILE", "")]
+    for n in names:
+        n = n.strip()
+        if n and not n.startswith("#"):
+            try:
+                t = Path(n).expanduser().read_text(errors="replace").strip()
+            except OSError:
+                continue
+            if t:
+                out.append(" ".join(t.split()))
+    return out
+
+
+def is_scheduled(text, prompts):
+    flat = " ".join(text.split())
+    return any(flat == p or flat.startswith(p[:200]) or p.startswith(flat[:200]) and len(flat) >= 40 for p in prompts)
+
+
 def owner_messages(since=""):
     out = []
-    for f in sorted(p for d in transcript_dirs(cfg=CFG) for p in d.glob("*.jsonl")):
-        for line in f.read_text(errors="replace").splitlines():
-            try:
-                e = json.loads(line)
-            except ValueError:
+    prompts = scheduled_prompts()
+    unattended = os.environ.get("GROWTH_SCHEDULED") == "1"      # an unattended run's one user turn is its own prompt
+    files = sorted(p for d in transcript_dirs(cfg=CFG) for p in d.glob("*.jsonl"))
+    newest = max(files, key=lambda p: p.stat().st_mtime) if files else None
+    for f in files:
+        skip_first = unattended and f == newest
+        for e in transcript.entries(f):
+            t = transcript.owner_text(e)
+            if t is None or t == "[attachment]":
                 continue
-            if e.get("type") != "user" or e.get("isMeta") or e.get("isSidechain"):
+            if skip_first:
+                skip_first = False
                 continue
-            c = e.get("message", {}).get("content")
-            parts = [c] if isinstance(c, str) else [p.get("text", "") for p in (c or []) if isinstance(p, dict) and p.get("type") == "text"]
-            for t in parts:
-                t = (t or "").strip()
-                if not t or t.startswith(SKIP):
-                    continue
-                t = re.sub(r"<system-reminder>.*?</system-reminder>", "", t, flags=re.S).strip()
-                t = re.sub(r"<pasted_content[^>]*>.*?</pasted_content[^>]*>", "[pasted]", t, flags=re.S).strip()
-                if not t or t == "[pasted]":
-                    continue
-                ts = e.get("timestamp", "")
-                if since and ts[:10] < since:
-                    continue
-                out.append({"at": ts[:16].replace("T", " "), "text": t, "session": f.stem[:8]})
+            t = re.sub(r"<pasted_content[^>]*>.*?</pasted_content[^>]*>", "[pasted]", t, flags=re.S).strip()
+            if not t or t == "[pasted]" or is_scheduled(t, prompts):
+                continue
+            ts = e.get("timestamp", "")
+            if since and ts[:10] < since:
+                continue
+            out.append({"at": ts[:16].replace("T", " "), "text": t, "session": f.stem[:8]})
     seen, uniq = set(), []
     for m in out:
         k = m["text"][:200]
