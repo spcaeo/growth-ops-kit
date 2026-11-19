@@ -22,7 +22,10 @@ rows = []
 
 
 def row(step, ok, what, fix=""):
-    rows.append((step, "OK  " if ok is True else ("TODO" if ok is None else "FAIL"), what, "" if ok is True else fix))
+    """ok: True (OK), None (TODO), False (FAIL), or "busy" (BUSY: a normal moment of work in progress, such as a database
+    being written or a page about to be rebuilt; it counts as done and never fails the run)."""
+    st = "OK  " if ok is True else ("BUSY" if ok == "busy" else ("TODO" if ok is None else "FAIL"))
+    rows.append((step, st, what, "" if ok is True or ok == "busy" else fix))
 
 
 def a5_state(setup_text, repo=None):
@@ -217,19 +220,25 @@ auto_jobs = auto_start_jobs(PROJECT)
 jobs_note = f"auto-start jobs: {len(auto_jobs)}" + (f" ({', '.join(auto_jobs)})" if auto_jobs else "")
 if db.exists():
     c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    locked = False                       # a sync is writing right now: wait, it is not a fault
     try:
         lo, hi = c.execute("select min(day), max(day) from search where path='*'").fetchone()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
         lo = hi = None
+        locked = "locked" in str(e).lower() or "busy" in str(e).lower()
     start = CFG.get("search_console_history_start")
     # with a site repo, the tracker must know which file each page is built from, or no change is ever measured
     try:
         n_files, n_changes = c.execute("select count(file), (select count(*) from changes) from pages").fetchone()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
         n_files = n_changes = None
+        locked = locked or "locked" in str(e).lower() or "busy" in str(e).lower()
     measured = not CFG.get("site_repo") or bool(n_changes)
     ok8 = (lo == start or not start) and hi and hi >= (date.today() - timedelta(days=3)).isoformat() and not auto_jobs and measured
-    row("A8 Page tracker running, history backfilled", True if ok8 else (False if not measured else None),
+    st8 = True if ok8 else (False if not measured else None)
+    if locked and st8 is not True:
+        st8, jobs_note = "busy", jobs_note + "; database is busy (a sync is writing), check again in a minute"
+    row("A8 Page tracker running, history backfilled", st8,
         f"Search Console {lo} to {hi} (history starts {start}); {jobs_note}"
         + (f"; pages with a content file: {n_files}, changes tracked: {n_changes}" if CFG.get("site_repo") else ""),
         ("set growth.json page_tracker.content_globs (or content_dirs / page_sources) so pages map to their files, then "
@@ -243,8 +252,13 @@ else:
 _oj = PROJECT / "journal" / "owner-journal.html"
 _src = [DOCS / "steps-log.md", PROJECT / "journal" / "entries.jsonl"]
 _fresh = _oj.exists() and all(_oj.stat().st_mtime >= p.stat().st_mtime - 1 for p in _src if p.exists())
-row("A9 Owner journal page current", _fresh, "journal/owner-journal.html is newer than the steps log and the journal"
-    if _fresh else "journal/owner-journal.html is older than the steps log or the journal", "growth owner_journal --no-open")
+_newest = max([p.stat().st_mtime for p in _src if p.exists()] or [0])
+_recent = (datetime.now().timestamp() - _newest) < 15 * 60   # just logged: the Stop hook rebuilds the page when the agent stops
+row("A9 Owner journal page current", True if _fresh else ("busy" if _recent and _oj.exists() else False),
+    "journal/owner-journal.html is newer than the steps log and the journal" if _fresh else
+    ("journal/owner-journal.html is behind a log line written in the last 15 minutes (BUSY: the Stop hook rebuilds it)"
+     if _recent and _oj.exists() else "journal/owner-journal.html is older than the steps log or the journal"),
+    "growth owner_journal --no-open")
 
 # A10 the agent's guards: the Stop hook is wired into Claude Code's settings for this project
 _settings = PROJECT / ".claude" / "settings.json"
@@ -267,6 +281,8 @@ w = max(len(r[0]) for r in rows)
 print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")
 for step, st, what, fix in rows:
     print(f"{st}  {step.ljust(w)}  {what}" + (f"\n      fix: {fix}" if fix else ""))
-done = sum(1 for r in rows if r[1] == "OK  ")
-print(f"\n{done}/{len(rows)} setup steps done." + ("" if done == len(rows) else " Page work starts only when all are OK (book/01-flow.md)."))
+done = sum(1 for r in rows if r[1] in ("OK  ", "BUSY"))
+busy = sum(1 for r in rows if r[1] == "BUSY")
+print(f"\n{done}/{len(rows)} setup steps done." + (f" ({busy} BUSY: work in progress, not a fault)" if busy else "")
+      + ("" if done == len(rows) else " Page work starts only when all are OK (book/01-flow.md)."))
 sys.exit(0 if all(r[1] != "FAIL" for r in rows) else 1)
