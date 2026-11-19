@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sitemaps  # noqa: E402
+import fetch_rule  # noqa: E402
 from config import CFG, PROJECT as ROOT, SITE_URL, TZ, UA  # noqa: E402
 
 OUT = ROOT / "inventory"
@@ -55,6 +56,7 @@ def paths_of(entries, site_url: str):
 
 
 def fetch(url):
+    fetch_rule.assert_may_fetch(url)   # never the live host when live_site_rule is no-crawl
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
             return r.status, r.read().decode("utf-8", errors="replace")
@@ -138,11 +140,15 @@ def build(sm: dict, pages: dict, gsc=None, readers=None, work=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--base", default="", help="read the pages from this address instead of the site's (default: growth.json site_url)")
+    ap.add_argument("--base", default="", help="read the pages from this address instead of the site's (default: growth.json site_url; refused when live_site_rule is no-crawl)")
     ap.add_argument("--offline", help="a saved sitemap.xml to read instead of the network")
     ap.add_argument("--no-pages", action="store_true", help="the sitemap only: do not fetch each page")
     a = ap.parse_args(argv)
     base = (a.base or SITE_URL).rstrip("/")
+    if not a.offline:
+        fetch_rule.assert_may_fetch(base + "/")
+        if not a.base:
+            fetch_rule.assert_may_fetch(CFG.get("sitemap_url") or base + "/sitemap.xml")
     sitemap_path = urllib.parse.urlsplit(CFG.get("sitemap_url") or "/sitemap.xml").path or "/sitemap.xml"
     if a.offline:
         source, get = a.offline, None
