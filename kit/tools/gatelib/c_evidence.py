@@ -135,6 +135,17 @@ def decision(ctx):
     # cannot be widened after the owner approved it.
     today = dt.date.today()
     live = [e for e in deleg if delegation_until(e) >= today]
+    # Or the owner's delegation written in growth.json "decision_delegation" {to, pages, until, why}: for owners who give
+    # it in chat instead of running growth approve. growth.json is closed to the operating agent (deny rules), so only
+    # the owner or the lead can write it; "why" must quote the owner.
+    cd = ctx.cfg.get("decision_delegation") or {}
+    try:
+        cd_until = dt.date.fromisoformat(str(cd.get("until"))) if cd else None
+    except ValueError:
+        cd_until = None
+    cd_pages = {paths.key(x) for x in cd.get("pages") or []}
+    if cd_until and cd_until >= today and len(str(cd.get("why") or "")) >= 20 and paths.key(ctx.need_path()) in cd_pages:
+        live = live + [{"id": "growth.json decision_delegation", "title": "Delegation", "text": f"until {cd_until}"}]
     verdict = [e for e in d if e not in good and re.search(r"\bVERDICT:\s*OK\b", str(e.get("text") or "") + str(e.get("title") or ""))]
     if live and verdict:
         ctx.ok(f"lead's VERDICT {verdict[-1]['id']} under the owner's delegation {live[-1]['id']} (until {delegation_until(live[-1])})")
