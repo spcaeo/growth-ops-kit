@@ -56,9 +56,27 @@ def ledger():
         return {}
 
 
+def _released(commit):
+    """A page checked in a worktree that release then removed: READY still holds when the commit it was checked at is
+    part of the site checkout's history (merged, so it is what went live). Kit friction 42."""
+    site = CFG.get("site_repo")
+    if not commit or not site:
+        return False
+    repo = (PROJECT / site).expanduser().resolve()
+    if not (repo / ".git").exists():
+        return False
+    r = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"], capture_output=True)
+    return r.returncode == 0
+
+
 def is_ready(path):
     e = ledger().get(path.rstrip("/") or "/")
-    return bool(e) and e.get("commit") == head(preview_repo())
+    if not e:
+        return False
+    now = head(preview_repo())
+    if e.get("commit") == now:
+        return True
+    return now == "no-repo" and _released(e.get("commit"))
 
 
 def manual_problems(path, key):

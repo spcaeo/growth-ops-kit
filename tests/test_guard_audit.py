@@ -160,7 +160,7 @@ def test_owner_message_with_blocks_resets_the_window(tmp_path, monkeypatch):
         {"type": "user", "message": {"content": "send me the unapproved link"}}, asst("http://127.0.0.1:3801/a"),
         {"type": "user", "message": {"content": [{"type": "text", "text": "thanks"}, {"type": "image", "source": {}}]}},
         asst("nothing here")])
-    text, asked = g.last_exchange(t)
+    text, asked, _ = g.last_exchange(t)
     assert "127.0.0.1" not in text and asked.startswith("thanks")
 
 
@@ -238,3 +238,39 @@ def test_install_hooks_strict_arguments_and_quoting(tmp_path):
     body = hooks_text.project_hook(Path('/tmp/we"ird $(x) `y`'))
     assert "'/tmp/we\"ird $(x) `y`'" in body and 'GROWTH_PROJECT="/tmp' not in body
     assert '"$PY" -m pytest' in hooks_text.KIT_HOOK
+
+
+# Kit friction 42: a withdrawn link stops blocking; a new mention still blocks; a stop with no correction still blocks
+def test_withdrawn_link_stops_blocking_but_new_mentions_block(tmp_path):
+    p = proj(tmp_path, cfg={"preview_url": "http://127.0.0.1:3801"})
+    rows = [{"type": "user", "message": {"content": "show me"}}, asst("Try http://127.0.0.1:3801/pricing")]
+    t = transcript(tmp_path, rows)
+    stop = lambda: run(p, "hook", "stop", stdin=json.dumps({"stop_hook_active": True, "transcript_path": t}))
+    assert stop().returncode == 2                                          # blocked
+    assert stop().returncode == 2                                          # no correction yet: still blocked
+    rows.append(asst("Correction: http://127.0.0.1:3801/pricing is withdrawn, it is not ready."))
+    t = transcript(tmp_path, rows)
+    assert stop().returncode == 0                                          # the correction names the link: passes
+    rows.append(asst("Here it is again: http://127.0.0.1:3801/pricing"))
+    t = transcript(tmp_path, rows)
+    assert stop().returncode == 2                                          # a new mention blocks again
+
+
+def test_released_page_stays_ready_after_its_worktree_is_removed(tmp_path, monkeypatch):
+    site = tmp_path / "site"
+    site.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=site)
+    (site / "a.md").write_text("a\n")
+    git(site, "add", "-A")
+    git(site, "commit", "-qm", "page")
+    commit = subprocess.run(["git", "-C", str(site), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    p = proj(tmp_path, cfg={"site_repo": str(site), "preview_repo": str(tmp_path / "gone-worktree")})
+    (p / "journal").mkdir()
+    (p / "journal" / "ready.json").write_text(json.dumps({"/pricing": {"commit": commit}}))
+    monkeypatch.setenv("GROWTH_PROJECT", str(p))
+    for m in ("ready", "config"):
+        sys.modules.pop(m, None)
+    import ready
+    assert ready.is_ready("/pricing")                                      # merged into the site: what went live
+    (p / "journal" / "ready.json").write_text(json.dumps({"/pricing": {"commit": "0" * 40}}))
+    assert not ready.is_ready("/pricing")                                  # a commit the site never got: not ready
