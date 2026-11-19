@@ -141,6 +141,34 @@ instruction logged and written into its one home). Details: [book/01-flow.md](bo
 2. **Nothing goes live without the owner's yes.** Agents never push, merge or deploy.
 3. **No page URL goes to the owner before the gate says READY.**
 
+## What the kit can and cannot guarantee
+
+The kit runs on your machine, next to your agent. An agent that has a shell on the same machine can, in the end, do
+anything you can: open a fake terminal, read your home folder, edit any file. No local tool can stop that completely.
+So the kit aims for two things.
+
+**It does not hand the agent the keys.** The permissions it writes into `.claude/settings.json` allow the `growth`
+command and read-only git. They do not allow running any Python or test file, pushing, merging to main, moving or
+deleting a branch, changing git hooks, or editing `growth.json`, the settings, the task list, the journal, the research
+records or the approvals log. Some rules match the start of a command only, so treat them as a speed bump, not a wall.
+`growth doctor` (step A13) says when one was removed or a hook is bypassed.
+
+**Your "yes" is yours, and a fake one shows.** Owner acts (a design exception, a decision, an answer to a question, the
+research browser and Google region, signing off a review, taking a baseline again) go through `growth approve`. It runs
+only in your own terminal and only when you type back the code it shows. Each yes is a line in `docs/approvals.jsonl`
+with a fingerprint (sha256) of exactly what you approved, chained to the line before and signed with a key kept in your
+home folder (`~/.config/growth-ops-kit/approvals.key`). The gate fails when an approval is missing, when the approved
+thing changed afterwards, or when the log was edited by hand. A design exception can never excuse evidence checks or a
+page that did not load.
+
+**What it checks, it reads.** A task step needs a proof that names something real (a file, a commit, a journal entry, a
+command with its output, or a web address). Screenshots must be real images of the right width. AI answers need their
+saved text. Research rows need a source and a date that is not in the future.
+
+**What it cannot promise.** That an approval was typed by you and not by an agent driving a fake terminal on your
+machine; that a screenshot shows the page it is named after; that a review was read. For that, keep the signing key
+private, look at `growth approve list` now and then, and run the gate again somewhere the agent cannot reach (a CI job).
+
 ## Licences
 
 - Code (`kit/`, `tests/`, `examples/`, `setup.sh`, `growth`, and the settings files `templates/project/growth.json` and
