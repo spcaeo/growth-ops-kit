@@ -4,6 +4,13 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.2.2 - 2026-11-19
+
+- `words.no-customers`: new growth.json `words.implied_proof_allow` (`[{"pattern", "why"}]`): an entry with a why removes that implied-proof pattern ("trusted by", "case stud(y|ies)", ...) for a site whose owner approved it; `aggregateRating` in the same list lets structured data carry a rating; customer names in `words.hidden_customers` still FAIL, also after an allowed "trusted by"; an entry without a why FAILs. Default empty, nothing changes.
+- `ev.fact-sources`: "case study" and "case studies" are a content type, never a study claim (real study sentences still count).
+- `ev.fact-sources`: postal addresses and phone numbers hold no stats: text inside `<address>`, `tel:` link text, street numbers ("222 East Main St"), "Suite B-2", ZIP codes after a state code ("AZ 85201"), Canadian postal codes and phone numbers ("+1 (623) 555-0100", "623-555-0100", international) are skipped.
+- `cta.reason-line` (rule 32a): on the conversion page (growth.json `conversion_path` or `cta.contact_path`) the main form with a submit button counts as the primary booking action; its reason line is looked for before its submit or after the form. Header buttons never counted. Other pages are unchanged.
+
 ## 2.2.1 - 2026-11-19
 
 - READY asks a trailing-slash site for `/x/` (growth.json `trailing_slash`, else the slash the caller typed), not `/x`, so there is no 301 and the technical SEO checks no longer print "input missing"; the page key and ledger stay without the slash (`ready.fetch_path`).
