@@ -54,6 +54,32 @@ GENERIC_ANCHORS = {"click here", "here", "read more", "learn more", "more", "see
                    "all articles", "all posts", "view all articles", "book a call", "book a demo", "schedule a call", "contact us", "contact", "next", "previous", "back"}
 
 
+SLASH = False   # the site's own address form ends in "/": requests use it (set by cmd_crawl / cmd_update, see use_site_form)
+
+
+def req_path(key):
+    """The address to REQUEST for a graph key (paths are keyed without a trailing slash). A static server answers 301 to
+    the slash form, so on a trailing-slash site ask for /x/ the way the sitemap gives it; never /file.txt/."""
+    if SLASH and key != "/" and "." not in key.rsplit("/", 1)[-1]:
+        return key + "/"
+    return key
+
+
+def use_site_form(c, locs=None):
+    """Decide the request form: growth.json trailing_slash, else the sitemap (most addresses end in "/"), else what the
+    last crawl found (kept in meta)."""
+    global SLASH
+    if CFG.get("trailing_slash") is not None:
+        SLASH = bool(CFG["trailing_slash"])
+    elif locs:
+        ends = [urlparse(u).path.endswith("/") for u in locs if urlparse(u).path not in ("", "/")]
+        SLASH = bool(ends) and sum(ends) * 2 > len(ends)
+    else:
+        row = c.execute("SELECT value FROM meta WHERE key='trailing_slash'").fetchone()
+        SLASH = bool(row and row[0] == "1")
+    c.execute("INSERT OR REPLACE INTO meta VALUES ('trailing_slash', ?)", ("1" if SLASH else "0",))
+
+
 def now():
     return datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -250,9 +276,9 @@ def resolve_target(origin, path, hosts, delay):
     """Follow redirects by HEAD (GET if HEAD is refused). Returns (first_status, final_path_or_url, final_status)."""
     first, cur, status = None, path, 0
     for _ in range(6):
-        status, hdr, _ = fetch(origin + cur, "HEAD", delay)
+        status, hdr, _ = fetch(origin + req_path(cur), "HEAD", delay)
         if status in (403, 405, 501):
-            status, hdr, _ = fetch(origin + cur, "GET", delay)
+            status, hdr, _ = fetch(origin + req_path(cur), "GET", delay)
         first = first or status
         if status in (301, 302, 303, 307, 308) and hdr.get("Location"):
             nxt = norm_target(hdr["Location"], origin + cur, hosts)
@@ -342,7 +368,7 @@ def save_page(c, path, status, parsed, labels, sitemap_paths, origin, hosts, sta
 
 
 def crawl_one(origin, path, delay, rp):
-    url = origin + path
+    url = origin + req_path(path)
     if rp is not None and not rp.can_fetch(UA["User-Agent"], url):
         return path, -1, None, ""
     status, hdr, body = fetch(url, "GET", delay)
@@ -357,6 +383,10 @@ def check_targets(c, origin, hosts, delay, workers, only_new=True):
         seen |= {r[0] for r in c.execute("SELECT path FROM targets")}
     todo = sorted({r[0] for r in c.execute("SELECT DISTINCT dst FROM links")} - seen)
     with ThreadPoolExecutor(workers) as ex:
+    if status in (301, 302, 307, 308) and loc and urlparse(urljoin(url, loc)).netloc == urlparse(url).netloc \
+            and re.sub(r"/+$", "", urlparse(urljoin(url, loc)).path) == path.rstrip("/"):
+        status, hdr, body = fetch(urljoin(url, loc), "GET", delay)   # same page, other slash form: follow that one hop
+        loc = hdr.get("Location", "") if hdr else ""
         futs = {ex.submit(resolve_target, origin, p, hosts, delay): p for p in todo}
         for f in as_completed(futs):
             first, final, fstatus = f.result()
@@ -432,6 +462,7 @@ def cmd_crawl(a):
     n_targets = check_targets(c, origin, hosts, delay, a.concurrency, only_new=False)
     for p in paths:
         snapshot(c, p, "crawl")
+    use_site_form(c, locs)
     c.execute("INSERT OR REPLACE INTO meta VALUES ('last_crawl', ?)", (json.dumps(
         {"at": now(), "origin": origin, "pages": len(paths), "links": n_links, "seconds": round(time.time() - t0, 1)}),))
     c.commit()
@@ -462,6 +493,7 @@ def cmd_update(a):
         snapshot(c, p, "after")
     c.commit()
     print(f"re-read {len(paths)} page(s): {n_links} internal links, {new} new targets checked, {len(bad)} not 200")
+    use_site_form(c)
     for p in paths:
         print_diff(c, p)
 

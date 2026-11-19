@@ -4,6 +4,7 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+- `growth link_graph crawl --base <static server>` asks for each page the way the sitemap spells it: on a trailing-slash site it requests `/x/`, so a plain static server's 301s no longer make a 328-page site look broken (327 of 328 "not 200"). The graph key stays slash-free. A page that still answers one same-page 301 is followed one hop. growth.json `trailing_slash` overrides the detection. (#20)
 - Progress you can watch, by default: `growth new-project` registers a Claude Code status line (`growth statusline`) that shows the open task, a progress bar and the current step at the bottom of the agent's window, e.g. `T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: step 10 ...`. Style in growth.json `statusline_style`: bars (default), squares, blocks, dots, checks, plain. The Stop hook gets a `statusMessage`. An existing status line is never replaced.
 
 - One sitemap reader (`kit/tools/sitemaps.py`, also `growth sitemaps <url-or-file>`) for the inventory, the link graph,
