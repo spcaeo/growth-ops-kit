@@ -11,13 +11,13 @@ The book's default working rules (`book/02-owner-rules.md` in the kit) apply to 
 owner of **this** project adds or changes. Where a row here is stricter than a default, this file wins. Where a row
 reverses a default, write the default's name in the first column and say so.
 
-It starts empty on purpose. Rules come from the owner's own words, one at a time.
+It starts with one rule, the workflow itself. Further rules come from the owner's own words, one at a time.
 
 ## Rules
 
 | Rule | What it means |
 | --- | --- |
-| *(none yet)* | |
+| **Every job is a task** (setup rule) | Every job, setup included, is a task in `docs/tasks.json` (`growth tasks`): its steps copied from the playbook, each ticked with proof. Work that is not a task does not count as done. |
 
 ## How to add a rule
 
