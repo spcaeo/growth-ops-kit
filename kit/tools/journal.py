@@ -16,6 +16,7 @@ Data (plain files, git-friendly, no server):
   growth journal ask  --page /pricing --tag pricing "Question for the owner" [--recheck ...]
   growth journal answer J0007 "The owner's answer" [--by owner]
   growth journal done J0007 "what was done"
+  growth journal close J0007 --output "commit abc1234, the fix and its proof"   # closes a finding; the output is required
   growth journal run  --page /x --kind ai-answer --engine chatgpt --market US --query "..." \\
                                 --response-file answer.txt [--title "..."] [--named yes|no] [--recheck ...]
   growth journal action --page /x --due 2026-11-30 --tag listings "What the owner must do" [--why "..."]
@@ -24,6 +25,7 @@ Data (plain files, git-friendly, no server):
   growth journal due [--days 0]       # re-checks due today (or within N days)
   growth journal open                 # open questions, all pages
   growth journal render               # rebuild pages/*.md and INDEX.md
+A new finding starts OPEN and stays open (ev.open-findings fails on one older than 7 days) until `journal close`.
 Kinds: finding, question, decision, run, note, owner-action (things only the owner can do, kept as a separate list). Status: open, answered, done.
 """
 import argparse
@@ -99,10 +101,21 @@ def norm_pages(pages):
     return out or ["site"]
 
 
+def check_date(value, what="--recheck"):
+    """A re-check date must be a real YYYY-MM-DD date; anything else would crash `journal due` later (#52)."""
+    if not value:
+        return ""
+    try:
+        return dt.date.fromisoformat(value).isoformat()
+    except ValueError:
+        sys.exit(f"{what} must be a real date as YYYY-MM-DD, got '{value}'")
+
+
 def cmd_add(a, kind=None, text=None):
+    a.recheck = check_date(a.recheck)
     e = {"id": next_id(), "at": now(), "kind": kind or a.kind, "pages": norm_pages(a.page), "tags": a.tag or [],
          "title": a.title or (text or a.text or "")[:90], "text": text or a.text or "", "source": a.source or "",
-         "status": "open" if (kind or a.kind) in ("question", "owner-action") else ("open" if a.recheck else "done"),
+         "status": "open" if (kind or a.kind) in ("question", "owner-action", "finding") else ("open" if a.recheck else "done"),
          "recheck_on": a.recheck or "", "by": "lead"}
     append(e)
     render()
@@ -157,7 +170,19 @@ def cmd_done(a):
     print("ok")
 
 
+def cmd_close(a):
+    if not (a.output or "").strip():
+        sys.exit("journal close needs --output: what was done and its proof (a commit, a file, a run id)")
+    cur = state().get(a.id)
+    if cur is None:
+        sys.exit(f"no entry {a.id}")
+    append({"of": a.id, "at": now(), "status": "done", "done_note": a.output.strip(), "done_at": now()})
+    render()
+    print("ok")
+
+
 def cmd_run(a):
+    a.recheck = check_date(a.recheck)
     rid = next_id()
     d = today().isoformat()
     folder = RUNS / d
@@ -254,8 +279,14 @@ def cmd_show(a):
 
 def cmd_due(a):
     lim = today() + dt.timedelta(days=a.days)
-    rows = [e for e in state().values() if e.get("recheck_on") and e.get("status") == "open"
-            and dt.date.fromisoformat(e["recheck_on"]) <= lim]
+    rows = []
+    for e in state().values():
+        if e.get("recheck_on") and e.get("status") == "open":
+            try:
+                if dt.date.fromisoformat(e["recheck_on"]) <= lim:
+                    rows.append(e)
+            except ValueError:   # a bad date filed before it was validated: show it, never crash
+                print(f"BAD DATE '{e['recheck_on']}'  {e['id']}  {', '.join(e['pages'])}  {e['title']}", file=sys.stderr)
     for e in sorted(rows, key=lambda e: e["recheck_on"]):
         print(f"{e['recheck_on']}  {e['id']}  {', '.join(e['pages'])}  {e['title']}")
     if not rows:
@@ -263,11 +294,11 @@ def cmd_due(a):
 
 
 def cmd_open(a):
-    rows = [e for e in state().values() if e["kind"] == "question" and e.get("status") == "open"]
+    rows = [e for e in state().values() if e["kind"] in ("question", "finding") and e.get("status") == "open"]
     for e in rows:
-        print(f"{e['id']}  {', '.join(e['pages'])}  {e['title']}")
+        print(f"{e['id']}  {e['kind']:8}  {', '.join(e['pages'])}  {e['title']}")
     if not rows:
-        print("No open questions.")
+        print("No open questions or findings.")
 
 
 def main():
@@ -287,6 +318,7 @@ def main():
             s.add_argument("question")
     s = sub.add_parser("answer"); s.add_argument("id"); s.add_argument("text"); s.add_argument("--by", default="owner")
     s = sub.add_parser("done"); s.add_argument("id"); s.add_argument("text")
+    s = sub.add_parser("close"); s.add_argument("id"); s.add_argument("--output", required=True)
     s = sub.add_parser("run")
     s.add_argument("--page", action="append"); s.add_argument("--tag", action="append")
     s.add_argument("--kind", default="ai-answer"); s.add_argument("--engine", required=True)
@@ -301,7 +333,7 @@ def main():
     sub.add_parser("open")
     sub.add_parser("render")
     a = ap.parse_args()
-    {"add": cmd_add, "ask": cmd_ask, "answer": cmd_answer, "done": cmd_done, "run": cmd_run, "show": cmd_show,
+    {"add": cmd_add, "ask": cmd_ask, "answer": cmd_answer, "done": cmd_done, "close": cmd_close, "run": cmd_run, "show": cmd_show,
      "due": cmd_due, "open": cmd_open, "action": cmd_action, "actions": cmd_actions, "render": lambda a: (render(), print("ok"))}[a.cmd](a)
 
 

@@ -7,6 +7,7 @@
 A page is READY only when the full gate, run on the one preview address (growth.json preview_url) against the
 worktree that serves it (growth.json preview_repo), shows 0 FAIL. That includes the independent review (rule 109),
 fresh screenshots and click-test, the fact check, the AI baseline and the speed run: no exceptions, no "known" FAILs.
+Manual checkpoints (research/<key>-checkpoints.md, see `growth checkpoints`) must each be ticked with a proof.
 READY is recorded in journal/ready.json with the commit it was checked at; any later commit makes it not READY again.
 growth url_guard (the Stop hook) blocks any reply that shows the owner a local page URL that is not READY.
 """
@@ -30,6 +31,16 @@ def preview_repo():
     return (PROJECT / given).expanduser().resolve() if given else None
 
 
+def preview_repo_problem():
+    """A site with a checkout must name the worktree the page is built in: with preview_repo empty, READY and the evidence
+    dates would read the main site folder, so commits in the worktree would never make READY stale (#51)."""
+    if CFG.get("site_repo") and not CFG.get("preview_repo"):
+        return ("growth.json has site_repo but no preview_repo: READY and the screenshot dates would read the main site "
+                "folder, not the worktree the page is built in. Set preview_repo to that worktree "
+                "(to the site_repo folder itself only if you build there).")
+    return ""
+
+
 def head(repo):
     """The commit a page was checked at. A site with no git checkout has none: READY then cannot go stale by itself."""
     if repo is None or not (repo / ".git").exists():
@@ -49,6 +60,21 @@ def is_ready(path):
     return bool(e) and e.get("commit") == head(preview_repo())
 
 
+def manual_problems(path, key):
+    """Manual checkpoints of the page still open (unticked, or ticked with no proof), read from the file preflight writes."""
+    import checkpoints
+    plan = None
+    try:
+        rel = json.loads((PROJECT / "journal" / "preflight.json").read_text()).get(path, {}).get("plan")
+        plan = PROJECT / rel if rel else None
+    except (OSError, ValueError):
+        pass
+    plan = plan if plan and plan.is_file() else PROJECT / "research" / f"{key}-checkpoints.md"
+    if not plan.is_file():
+        return []                        # no file: ev.preflight (rule 0a) is the check that wants one
+    return checkpoints.manual_status(plan.read_text())[2]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("path", nargs="?")
@@ -57,6 +83,8 @@ def main():
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
     repo = preview_repo()
+    if not a.list and a.path and preview_repo_problem():
+        sys.exit(preview_repo_problem())
     if a.list or not a.path:
         cur = head(repo)
         for p, e in sorted(ledger().items()):
@@ -72,6 +100,7 @@ def main():
            "--type", a.type, "--key", a.key, "--no-link-status"] + (["--repo", str(repo)] if repo else [])
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
+    fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     d = ledger()
     if fails:

@@ -22,7 +22,7 @@ composition each); a rebuild keeps that rule. A rebuild never renames an address
 1. **Look at what the cluster does today.** `growth link_map check --all` for orphans and missing links, the site map
    for the list of pages (see [site-map](site-map.md)), Search Console for the cluster's searches. Write the findings
    in one page.
-2. **Research before design.** One researcher per page, read only, writes `research/<slug>-research-<date>.md`: who
+2. **Research before design.** One researcher per page, read only, writes `research/<slug>-research-<date>.md` (the file `ev.research-check` reads; the same name rule is in the gate, with `<slug>-audit-<date>.md` or `<slug>-review-<date>.md` for the independent review): who
    searches and why; what the top 20 results offer and the gaps none fill; a fact base read from the sources' own
    pages (claim, URL, date, confidence); every claim of the old page judged; real pain points in the readers' own
    words; ideas for interactive elements; an outline. No page is built without it (rule 27).

@@ -9,6 +9,8 @@ import re
 
 from .core import check
 
+import paths  # noqa: E402  kit/tools/paths.py: one form of a site path
+
 # Every fold answers these. Each one is a lesson learned on a first money page.
 FOLD_FIELDS = {
     "job": "the fold's job in the reader's mind (hook, show, compare, reassure, prove, relief, act, read, answer) and the one thing they should think after it",
@@ -43,6 +45,8 @@ def problems(plan, page_folds):
     if not isinstance(plan, dict):
         return ["no plan file (growth fold_plan init <path> --url <local URL>)"]
     folds = plan.get("folds") or []
+    if not folds:
+        out.append("the plan lists no folds (growth fold_plan init <path> --url <local URL>, or list the planned folds by hand)")
     names = [f.get("fold", "") for f in folds]
     for want in page_folds:
         if want not in names:
@@ -90,7 +94,7 @@ def _archive(ctx, stage):
 
 @check("ev.archive-before", "36i", what="the live page was archived before any change ships: full-page images at 1366 and 390 plus its HTML", needs="project")
 def archive_before(ctx):
-    if ctx.need_path() in ctx.cfg.get("new_pages", []):
+    if paths.key(ctx.need_path()) in {paths.key(p) for p in ctx.cfg.get("new_pages", [])}:
         ctx.ok("new page: nothing live to archive before (growth.json new_pages)")
         return
     d, runs, good = _archive(ctx, "before")

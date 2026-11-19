@@ -124,6 +124,9 @@
   "preview_url": "",
   "_preview_url": "The one address the owner sees previews on. Empty = the golden-rule guard (ready, url_guard) is off.",
   "preview_repo": "",
+  "_preview_repo": "The worktree the page is built in. Required when site_repo is set: READY and the evidence dates read this folder, not the main site checkout.",
+  "checkpoints_extra": "",
+  "_checkpoints_extra": "A Markdown file of your own page rules, one per bullet, that no gate check runs. preflight adds them to research/<key>-checkpoints.md as manual checks; each must be ticked with a proof (' -- <what you saw>') before growth ready passes.",
   "new_pages": [],
   "page_tracker": {}
 }

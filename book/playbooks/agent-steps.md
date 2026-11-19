@@ -62,7 +62,10 @@ missing, ask the lead.
 
 4. **Pre-flight is done before you start** (rule 0a): the lead gives you the generated brief AND
    `research/<key>-checkpoints.md`. Tick each checkpoint with its evidence. Run the gate after every commit and fix
-   its FAILs before the next one; never save them for the end.
+   its FAILs before the next one; never save them for the end. Generated items are proven by the gate run. The manual
+   items (section 5: the project's own rules from growth.json `checkpoints_extra`, plus any you add) have no gate
+   check: tick each with one line of proof, `- [x] <rule> -- <what you saw>`. `growth ready` fails while one is open
+   (`growth checkpoints <file>` lists them), and re-running `growth preflight` keeps your ticks and items.
 
 ## 1. Work in your own worktree
 
