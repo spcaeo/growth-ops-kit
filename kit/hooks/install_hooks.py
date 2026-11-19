@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import stat
 import subprocess
 import sys
@@ -43,13 +44,15 @@ trap 'rm -rf "$SNAP"' EXIT
 git checkout-index -a --prefix="$SNAP/" || exit 1
 # The tests make their own git repositories: they must not inherit this commit's index, repository or author.
 for v in $(env | grep '^GIT_' | cut -d= -f1); do unset "$v"; done
+# The kit virtual environment has the test tools; the system python may not.
+PY=python3; [ -x "$HOME/.growth-ops-kit/venv/bin/python" ] && PY="$HOME/.growth-ops-kit/venv/bin/python"
 unset GIT_INDEX_FILE
-if ! out=$(cd "$SNAP" && PYTHONDONTWRITEBYTECODE=1 python3 kit/tools/leak_check.py --root "$SNAP" --private-words "$WORDS" 2>&1); then
+if ! out=$(cd "$SNAP" && PYTHONDONTWRITEBYTECODE=1 "$PY" kit/tools/leak_check.py --root "$SNAP" --private-words "$WORDS" 2>&1); then
   printf '%s\n' "$out" | tail -15
   echo "pre-commit BLOCKED: the leak check found something that must not be committed (growth leak_check)."
   exit 1
 fi
-if ! out=$(cd "$SNAP" && PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -x tests 2>&1); then
+if ! out=$(cd "$SNAP" && PYTHONDONTWRITEBYTECODE=1 "$PY" -m pytest -q -x tests 2>&1); then
   printf '%s\n' "$out" | tail -15
   echo "pre-commit BLOCKED: tests fail (python3 -m pytest tests). Fix them, then commit."
   exit 1
@@ -67,7 +70,7 @@ WORDS="$PWD/.private-words"
 [ -f "$WORDS" ] || WORDS="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)/.private-words"
 MSG="$1"; case "$MSG" in /*) ;; *) MSG="$PWD/$MSG" ;; esac
 [ -f "$MSG" ] || MSG="$(git rev-parse --git-dir)/COMMIT_EDITMSG"
-if ! out=$(PYTHONDONTWRITEBYTECODE=1 python3 "{KIT_DIR}/tools/leak_check.py" --message "$MSG" --private-words "$WORDS" 2>&1); then
+if ! out=$(PYTHONDONTWRITEBYTECODE=1 python3 {shlex.quote(str(KIT_DIR / "tools" / "leak_check.py"))} --message "$MSG" --private-words "$WORDS" 2>&1); then
   printf '%s\\n' "$out" | tail -10
   echo "commit-msg BLOCKED: the commit message holds a key or a private word. Reword it, then commit."
   exit 1
@@ -82,7 +85,7 @@ if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
 cd "$(git rev-parse --show-toplevel)" || exit 1
 WORDS="$PWD/.private-words"
 [ -f "$WORDS" ] || WORDS="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)/.private-words"
-if ! out=$(PYTHONDONTWRITEBYTECODE=1 python3 "{KIT_DIR}/tools/leak_check.py" --history --private-words "$WORDS" 2>&1); then
+if ! out=$(PYTHONDONTWRITEBYTECODE=1 python3 {shlex.quote(str(KIT_DIR / "tools" / "leak_check.py"))} --history --private-words "$WORDS" 2>&1); then
   printf '%s\\n' "$out" | tail -15
   echo "pre-push BLOCKED: growth leak_check --history found something that must not be published."
   exit 1
@@ -96,8 +99,8 @@ def project_hook(project: Path) -> str:
 # {MARK} project: written by kit/hooks/install_hooks.py (edit that file, then run it again; not this one).
 # Blocks the commit when an owner message is not in the steps log or a staged file holds a key or private word.
 if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
-export GROWTH_PROJECT="{project}"
-G="{GROWTH}"
+export GROWTH_PROJECT={shlex.quote(str(project))}
+G={shlex.quote(str(GROWTH))}
 [ -x "$G" ] || {{ echo "pre-commit: growth kit not found at $G; project hooks skipped"; exit 0; }}
 if [ -f "$GROWTH_PROJECT/docs/steps-log.md" ] && ! out=$("$G" owner_messages check 2>&1); then
   printf '%s\n' "$out" | grep -E '^(MISSING|ANSWER)' | head -10
@@ -118,11 +121,11 @@ def project_msg_hook(project: Path) -> str:
 # {MARK} project-msg: written by kit/hooks/install_hooks.py (edit that file, then run it again; not this one).
 # Blocks the commit when its message holds a key or a private word.
 if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
-export GROWTH_PROJECT="{project}"
-G="{GROWTH}"
+export GROWTH_PROJECT={shlex.quote(str(project))}
+G={shlex.quote(str(GROWTH))}
 [ -x "$G" ] || exit 0
 MSG="$1"; case "$MSG" in /*) ;; *) MSG="$PWD/$MSG" ;; esac
-if ! out=$(cd "{project}" && "$G" leak_check --message "$MSG" 2>&1); then
+if ! out=$(cd {shlex.quote(str(project))} && "$G" leak_check --message "$MSG" 2>&1); then
   printf '%s\\n' "$out" | tail -10
   echo "commit-msg BLOCKED: the commit message holds a key or a private word. Reword it, then commit."
   exit 1
@@ -136,8 +139,8 @@ def site_hook(project: Path) -> str:
 # {MARK} site: written by the growth kit's kit/hooks/install_hooks.py (edit that file, then run it again; not this one).
 # Runs the static rule gate for every page whose files are in this commit; blocks on any FAIL.
 if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
-export GROWTH_PROJECT="{project}"
-H="{KIT_DIR / 'hooks' / 'install_hooks.py'}"
+export GROWTH_PROJECT={shlex.quote(str(project))}
+H={shlex.quote(str(KIT_DIR / 'hooks' / 'install_hooks.py'))}
 [ -f "$H" ] || {{ echo "pre-commit: growth kit not found at $H; rule gate skipped"; exit 0; }}
 exec python3 "$H" run-site "$(git rev-parse --show-toplevel)"
 """
@@ -326,6 +329,10 @@ def run_site(wt: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    """Strict arguments: a word this tool does not know prints the help and changes nothing."""
+    if not argv:
+        print(__doc__)
+        return 2
     if argv == ["kit"]:
         cmd_kit()
     elif argv == ["project"]:
@@ -333,13 +340,20 @@ def main(argv: list[str]) -> int:
     elif argv[:1] == ["site"] and len(argv) == 2:
         cmd_site(argv[1])
     elif argv[:1] == ["remove"]:
+        if argv[1:] == []:
+            print("growth install_hooks remove: say what to remove: kit, project, or site <worktree>", file=sys.stderr)
+            return 2
         if argv[1:2] == ["site"] and len(argv) == 3:
             cmd_site(argv[2], remove=True)
-        elif argv[1:2] == ["project"]:
+        elif argv[1:] == ["project"]:
             cmd_project(remove=True)
-        else:
+        elif argv[1:] == ["kit"]:
             cmd_kit(remove=True)
-    elif argv[0] == "status":
+        else:
+            print(f"growth install_hooks remove: unknown target {' '.join(argv[1:])!r}; nothing removed. Use kit, project, or site <worktree>.",
+                  file=sys.stderr)
+            return 2
+    elif argv == ["status"]:
         cmd_status()
     elif argv[0] == "run-site" and len(argv) == 2:
         return run_site(argv[1])
