@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Onboarding health check: is every setup step of book/01-flow.md stage A done for this project?
 
-  growth doctor
+  growth doctor [--verbose | --summary]
 
-Prints one line per step (OK / TODO / FAIL) with the command that fixes it. It never changes the project, never prints a
+At a terminal it shows 4 stages (Your site, Access, Agent setup, Research browser) with a bar each, and for every step that is
+not done one plain sentence and the next action; --verbose (or any pipe, so scripts and agents) lists every step. Each step is
+one line (OK / TODO / FAIL) with the command that fixes it. It never changes the project, never prints a
 key, and calls the analytics server only to list its tools (only when that connector is switched on). The one thing it
 writes is the tick of each step in the setup task (docs/tasks.json, task "Project setup"): a step is ticked with its own
 result line as proof when it turns OK, and un-ticked when it is TODO or FAIL again.
@@ -361,10 +363,61 @@ row("A15 Work is tracked in a task", None if _wp else True,
     "no unticked work: every changed file belongs to an open task, every done step has proof" if not _wp else _wp[0][:220],
     "growth tasks add \"<title>\" \"<owner's words>\" (a chat that is not page work: --type chat)")
 
-w = max(len(r[0]) for r in rows)
-print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")
-for step, st, what, fix in rows:
-    print(f"{st}  {step.ljust(w)}  {what}" + (f"\n      fix: {fix}" if fix else ""))
+# The 16 steps are shown to a person as 4 stages (a bar each); a script, a pipe or --verbose gets every step, as before.
+STAGES = [("Your site", ("A1", "A2", "A3", "A7", "A7b", "A11")),
+          ("Access", ("A4", "A5", "A8")),
+          ("Agent setup", ("A6", "A9", "A10", "A12", "A13", "A15")),
+          ("Research browser", ("A14",))]
+# One plain sentence per step, said when that step is not done (the exact result and the fix line follow it).
+PLAIN = {
+    "A1": "I have no notes about your business yet.", "A2": "The project settings are not filled in, or still name an old site.",
+    "A3": "I have not studied your site's code folder yet.", "A4": "Analytics is switched on but its keys are not ready.",
+    "A5": "You have not yet proved that the kit can safely change your live site.", "A6": "The task list is missing.",
+    "A7": "I do not have a full list of your site's pages yet.", "A7b": "I have not mapped how your pages link to each other yet.",
+    "A8": "The search history is not loaded, or something starts it automatically.", "A9": "Your journal page is out of date.",
+    "A10": "The safety guard for your agent is not installed.", "A11": "I do not know the preview address where pages are checked.",
+    "A12": "The agent's hooks cannot find the kit on this computer.", "A13": "Some agent helpers (hooks, status bar, permissions) are missing.",
+    "A14": "The research browser is not connected, or Google is not set to your target country.", "A15": "Some work is not tracked in a task.",
+}
+
+
+def stage_of(step_id):
+    return next((n for n, ids in STAGES if step_id in ids), "Agent setup")
+
+
+def small_bar(done, total, width=10):
+    filled = round(width * done / total) if total else 0
+    return "▰" * filled + "▱" * (width - filled)
+
+
+def print_stages():
+    print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")
+    nw = max(len(n) for n, _ in STAGES)
+    problems = []
+    for name, _ids in STAGES:
+        mine = [r for r in rows if stage_of(r[0].split(" ", 1)[0]) == name]
+        ok_n = sum(1 for r in mine if r[1] in ("OK  ", "BUSY"))
+        print(f"{name.ljust(nw)}  {small_bar(ok_n, len(mine))}  {ok_n}/{len(mine)}")
+        problems += [r for r in mine if r[1] not in ("OK  ", "BUSY")]
+    for step, st, what, fix in problems:
+        sid = step.split(" ", 1)[0]
+        print(f"\n- {PLAIN.get(sid, step)}" + (f"\n  Next: {fix}" if fix else ""))
+    if problems:
+        print("\nEvery step, with its result: growth doctor --verbose")
+
+
+def verbose_view():
+    w = max(len(r[0]) for r in rows)
+    print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")
+    for step, st, what, fix in rows:
+        print(f"{st}  {step.ljust(w)}  {what}" + (f"\n      fix: {fix}" if fix else ""))
+
+
+_args = sys.argv[1:]
+if "--summary" in _args or (sys.stdout.isatty() and "--verbose" not in _args and "-v" not in _args):
+    print_stages()
+else:
+    verbose_view()
 done = sum(1 for r in rows if r[1] in ("OK  ", "BUSY"))
 busy = sum(1 for r in rows if r[1] == "BUSY")
 print(f"\n{done}/{len(rows)} setup steps done." + (f" ({busy} BUSY: work in progress, not a fault)" if busy else "")
