@@ -94,7 +94,7 @@ def research_fresh(ctx, pattern, what, fix, min_lines=1):
 
 @check("ev.research-check", "5", ALL, "a fact check of the page's claims against official sources, within 30 days", needs="project")
 def research_check(ctx):
-    research_fresh(ctx, r"research-check|fact-check|claims", "fact check",
+    research_fresh(ctx, RESEARCH_NAME, "fact check",
                    "check every claim against its official source and save research/<page>-research-check-<date>.md, or the researcher's "
                    "research/<page>-research-<date>.md (rules 5, 6)")
 

@@ -80,13 +80,18 @@ def print_lines(ctx, title, md=None):
     return 1 if n["FAIL"] else 0
 
 
+def default_key(path):
+    """The page key when --key is not given: the first two words of the path, never containing a slash."""
+    return "-".join((path.strip("/").replace("/", "-") or "home").split("-")[:2])
+
+
 def cmd_page(a):
     u = urllib.parse.urlsplit(a.url or "")
     if u.netloc.lower() in LIVE:
         print("Refusing to run the gate against the live site: pass a local URL.", file=sys.stderr)
         return 2
     repo = Path(a.repo).resolve() if a.repo else site_repo_default()
-    key = a.key or "-".join((a.path.strip("/") or "home").split("-")[:2])
+    key = a.key or default_key(a.path)
     static = not a.url
     ctx = Ctx(project=PROJECT, path=a.path, url=a.url or "", repo=repo, ptype=a.type, docs=DOCS, cfg=CFG, key=key, static=static)
     if not static:

@@ -116,3 +116,56 @@ def test_the_preview_repo_problem_clears_when_it_is_set_or_there_is_no_checkout(
                      ({"site_repo": "", "preview_repo": ""}, False)):
         monkeypatch.setattr(ready, "CFG", cfg, raising=False)
         assert bool(ready.preview_repo_problem()) is bad, cfg
+# ---- #52
+
+def test_a_bad_recheck_date_is_refused_and_due_never_crashes(demo_project):
+    r = tool(demo_project, "journal.py", "add", "--page", "/x", "--kind", "finding", "--title", "t", "--recheck", "2026-13-45")
+    assert r.returncode != 0 and "YYYY-MM-DD" in r.stderr
+    (demo_project / "journal").mkdir(exist_ok=True)
+    with (demo_project / "journal" / "entries.jsonl").open("a") as f:
+        f.write(json.dumps({"id": "J0099", "at": "x", "pages": ["/x"], "kind": "finding", "status": "open", "title": "bad", "recheck_on": "soon"}) + "\n")
+    r = tool(demo_project, "journal.py", "due")
+    assert r.returncode == 0 and "BAD DATE" in r.stderr
+
+
+def test_a_default_key_has_no_slash():
+    import gate
+    assert "/" not in gate.default_key("/topic/some-page")
+    assert gate.default_key("/topic/some-page") == "topic-some"
+    assert gate.default_key("/") == "home"
+
+
+def test_a_plan_with_zero_folds_does_not_pass():
+    from gatelib.c_plan import problems
+    plan = {"goal": "A goal that is long enough", "folds": [], "shared": {}}
+    assert any("no folds" in p for p in problems(plan, []))
+
+
+def test_the_books_research_file_name_satisfies_the_fact_check(tmp_path):
+    from gatelib import CHECKS
+    from gatelib.core import run_check
+    ctx = review_ctx(tmp_path, "lawn", ["lawn-research-2026-11-18.md"])
+    run_check(ctx, CHECKS["ev.research-check"])
+    assert ctx.lines[0].level == "OK", ctx.lines[0].text()
+    (tmp_path / "x").mkdir()
+    ctx = review_ctx(tmp_path / "x", "my-research", ["my-research-checkpoints.md"])    # a key that contains the word is not evidence
+    run_check(ctx, CHECKS["ev.research-check"])
+    assert ctx.lines[0].level == "FAIL"
+
+
+def test_a_new_page_in_new_pages_is_matched_without_the_trailing_slash(tmp_path):
+    from gatelib import CHECKS
+    from gatelib.core import Ctx, run_check
+    ctx = Ctx(project=tmp_path, path="/blog/new", cfg={"new_pages": ["/blog/new/"]})
+    run_check(ctx, CHECKS["ev.archive-before"])
+    assert ctx.lines[0].level == "OK"
+
+
+def test_preflight_plan_files_survives_a_project_with_no_journal(demo_project):
+    (demo_project / "journal" / "entries.jsonl").unlink(missing_ok=True)
+    set_cfg(demo_project, stack="nextjs", preview_url="http://127.0.0.1:9")
+    code = ("import sys; sys.path.insert(0, %r); import preflight; print(preflight.plan_files('/x', 'x', 'money'))" % str(TOOLS))
+    env = {**os.environ, "GROWTH_PROJECT": str(demo_project)}
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, cwd=demo_project)
+    assert r.returncode == 0, r.stderr
+    assert "links.plan" in r.stdout          # reported as a missing plan, not a crash

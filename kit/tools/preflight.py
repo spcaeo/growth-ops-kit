@@ -47,7 +47,8 @@ def plan_files(path, key, ptype):
                        capture_output=True, text=True, cwd=PROJECT)
     if r.returncode:
         probs.append("FAIL 36h   [ev.fold-plan] fold plan not complete: " + (r.stdout + r.stderr).strip().splitlines()[-1][:160])
-    ents = [json.loads(l) for l in (PROJECT / "journal" / "entries.jsonl").read_text().splitlines() if l.strip()]
+    jf = PROJECT / "journal" / "entries.jsonl"       # no journal yet is a finding to report, not a crash
+    ents = [json.loads(l) for l in jf.read_text().splitlines() if l.strip()] if jf.exists() else []
     planned = [e for e in ents if "internal-link" in (e.get("tags") or []) and path in (e.get("title", "") + " " + e.get("text", ""))
                and (e.get("pages") or []) != [path]]
     if "links.plan" not in scope or (CFG.get("stack") or "static").lower() != "nextjs":
