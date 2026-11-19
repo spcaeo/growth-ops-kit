@@ -78,6 +78,7 @@ TOOLS = {
     "leak_check": ("tools/leak_check.py", "fail on keys, .env files, personal emails, phone numbers and private words (--history: every commit)"),
     "new_project": ("tools/new_project.py", "make a project folder from templates/project (growth new-project <folder> --site <url>)"),
     "front_door": ("tools/front_door.py", "(library) the plain front door behind setup, page, check, ready, measure and status"),
+    "approvals": ("tools/approvals.py", "(also: growth approve) owner-only approvals typed in the owner's own terminal: exceptions, decisions, answers, browser and region, review sign-off, baseline re-freeze; the gate checks the log"),
     "wizard": ("tools/wizard.py", "the setup wizard: one guided setup (market, access, harness, detection, research browser); --check, --repair, status, confirm"),
     "detect": ("tools/detect.py", "detect a site's stack, sitemap shape, trailing-slash form, language copies, redirects and content folders"),
     "harness": ("tools/harness.py", "(library) the agent harness of a project: install and check hooks, status line, permissions, skills, CLAUDE.md, git hooks"),
@@ -90,7 +91,7 @@ TOOLS = {
     "checks": ("adapters/nextjs/checks.sh", "(Next.js adapter) run only the tests and build a change touches"),
     "page_tracker": ("page-tracker/tracker.py", "the page tracker: sync, report (did our page changes help?); also serve, ai-summary"),
 }
-ALIASES = {"design": "site_design", "serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
+ALIASES = {"approve": "approvals", "design": "site_design", "serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
 
 
 MENU = """Growth Ops Kit: the commands you need

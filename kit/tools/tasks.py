@@ -12,7 +12,7 @@ Data: docs/tasks.json (one file, easy to read, copy and reuse for another projec
   growth tasks tick T5 3 [--status done] --output "proof"   # update step 3 in place (never re-add it)
   growth tasks status T5 done|doing|blocked|waiting-owner|todo
   growth tasks ask "Question for the owner" [--task T5]
-  growth tasks answer Q1 "Owner's answer"
+  growth tasks answer Q1 "Owner's answer"     # the owner only, in their own terminal (same as growth approve answer)
 """
 import json
 import re
@@ -148,9 +148,9 @@ def main(argv: list) -> None:
         save(db)
         print(qid)
     elif cmd == "answer":
-        q = next(q for q in db["questions"] if q["id"] == args[0])
-        q["answer"], q["answered"] = args[1], now()
-        save(db)
+        # the owner's answer is the owner's act: typed in their own terminal and logged (growth approve answer)
+        import approvals
+        approvals.main(["answer", *args])
     else:
         sys.exit(f"Unknown command {cmd}. Try --help.")
 
