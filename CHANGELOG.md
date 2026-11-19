@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.1.0 - 2026-11-19
+
+- Page tracker: YAML dates in front matter no longer crash `growth page-tracker sync` ("Object of type date is not JSON serializable", found on an Astro site whose MDX has `date: 2026-08-13`). `repo_meta.split_md` turns every date and time, at any depth, into its ISO text (`repo_meta.plain`), and `diffs.flat` falls back to `default=str`. Test: `tests/test_research_measure.py::test_yaml_dates_in_front_matter_become_text_and_diff`.
+- `kit/VERSION` now matches this changelog (it said 1.0.0 while the changelog was at 2.0.1).
+
 - `growth approve pending`: everything that waits for the owner (unapproved design exceptions, a recorded research browser or Google region) on one screen with one typed code; each item is still its own signed log line. Items that cannot be approved (an evidence check, a bad date) are listed and skipped.
 
 - Doctor A8: jobs the owner chose to schedule (growth.json `automation.jobs`, each with a `label` and a `why`, for example a daily unattended operator run) are shown but no longer block setup; any other auto-start job still does.

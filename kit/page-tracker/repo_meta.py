@@ -8,7 +8,7 @@ Pages with no markdown file (home, pricing, topic pages) are built from files li
 `page_sources`. Frontmatter: title, slug, vertical, date, updated, excerpt, metaTitle, metaDescription, draft.
 Any other layout (Astro, Hugo, JSON pages): growth.json page_tracker.content_globs, see glob_docs().
 """
-import glob, json, os, subprocess
+import datetime, glob, json, os, subprocess
 import yaml
 import config
 
@@ -34,8 +34,20 @@ def branch_ref():
     return "HEAD"
 
 
+def plain(v):
+    """A front-matter value with every YAML date or time turned into its ISO text, at any depth. yaml.safe_load reads an
+    unquoted `date: 2026-08-13` as a datetime.date, which JSON (diffs, the tracker's database, the dashboard) cannot hold."""
+    if isinstance(v, (datetime.date, datetime.time)):
+        return v.isoformat()
+    if isinstance(v, dict):
+        return {k: plain(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [plain(x) for x in v]
+    return v
+
+
 def split_md(text):
-    """(frontmatter dict, body) of a markdown file."""
+    """(frontmatter dict, body) of a markdown file. Dates come back as ISO text (see plain)."""
     if text.startswith("---"):
         parts = text.split("\n---", 1)
         if len(parts) == 2:
@@ -43,7 +55,7 @@ def split_md(text):
                 fm = yaml.safe_load(parts[0][3:]) or {}
             except yaml.YAMLError:
                 fm = {}
-            return (fm if isinstance(fm, dict) else {}), parts[1].lstrip("-\n")
+            return (plain(fm) if isinstance(fm, dict) else {}), parts[1].lstrip("-\n")
     return {}, text
 
 
