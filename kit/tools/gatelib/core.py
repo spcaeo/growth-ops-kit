@@ -98,6 +98,10 @@ def run(cmd, cwd=None, timeout=300):
         return 99, f"{type(e).__name__}: {e}"
 
 
+# Code and data that render every page: a commit here makes every page's evidence stale (growth.json evidence.shared_paths replaces it).
+SHARED_PATHS = ["src/components", "src/layouts", "src/styles", "styles", "src/lib", "src/data", "astro.config.*"]
+
+
 @dataclass
 class Ctx:
     """Everything a check may read. Built once per gate run; every input is optional so the
@@ -205,8 +209,59 @@ class Ctx:
         return [e for e in self.journal() if p in {paths.key(x) for x in (e.get("pages") or [])}]
 
     def last_commit_time(self):
-        """Unix time of the newest commit in the worktree."""
+        """Unix time of the page's last change in the site checkout: the newest commit that touched the page's own content
+        file(s) (growth.json page_tracker.page_sources / content_globs, or evidence.content_globs) or shared code that renders
+        it (growth.json evidence.shared_paths, default SHARED_PATHS). A commit that only touches OTHER pages' content does not
+        count, so parallel lanes do not make every page's evidence stale. When the page's own files cannot be found, or no
+        commit touches any of them, it is the newest commit of the whole checkout (the older, stricter rule)."""
+        files = self.content_files()
+        if files:
+            shared = (self.cfg.get("evidence") or {}).get("shared_paths")
+            shared = SHARED_PATHS if shared is None else [str(x) for x in shared]
+            out = self.git("log", "-1", "--format=%ct", "--", *files, *shared).strip()
+            if out:
+                return int(out)
         return int(self.git("log", "-1", "--format=%ct").strip())
+
+    def content_files(self):
+        """Repo-relative content files of this page (page_tracker.page_sources, then page_tracker.content_globs or
+        evidence.content_globs: {"glob", "address": "/{cluster}/{slug}/", "values"}); [] when the page maps to none."""
+        import glob
+        import paths
+        want = paths.normalize(self.need_path())
+        pt = self.cfg.get("page_tracker") or {}
+        srcs = {paths.normalize(k): v for k, v in (pt.get("page_sources") or {}).items() if isinstance(v, (list, tuple))}
+        if want in srcs and srcs[want]:
+            return [str(x) for x in srcs[want]]
+        out, repo = [], self.need_repo()
+        for g in list(pt.get("content_globs") or []) + list((self.cfg.get("evidence") or {}).get("content_globs") or []):
+            pattern, template = (g or {}).get("glob"), (g or {}).get("address")
+            if not pattern or not template:
+                continue
+            for f in sorted(glob.glob(str(repo / pattern))):
+                try:
+                    text = Path(f).read_text(encoding="utf-8")
+                    if f.endswith(".json"):
+                        fm = json.loads(text)
+                    else:
+                        import yaml
+                        fm = (yaml.safe_load(text.split("\n---", 1)[0][3:]) or {}) if text.startswith("---") else {}
+                except (OSError, ValueError, ImportError, Exception):          # noqa: BLE001  an unreadable file maps to no page
+                    continue
+                if not isinstance(fm, dict):
+                    continue
+                fields = {k: v for k, v in fm.items() if isinstance(v, (str, int))}
+                fields.setdefault("slug", Path(f).stem)
+                for k, m in (g.get("values") or {}).items():
+                    if fields.get(k) in m:
+                        fields[k] = m[fields[k]]
+                try:
+                    addr = template.format(**fields)
+                except (KeyError, ValueError, IndexError):
+                    continue
+                if paths.normalize(addr) == want:
+                    out.append(os.path.relpath(f, repo))
+        return out
 
     def last_change_time(self):
         """Unix time of the page's last change, so evidence (screenshots, click-through, share preview) can be checked

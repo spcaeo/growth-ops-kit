@@ -151,6 +151,10 @@
   "_checkpoints_extra": "A Markdown file of your own page rules, one per bullet, that no gate check runs. preflight adds them to research/<key>-checkpoints.md as manual checks; each must be ticked with a proof (' -- <what you saw>') before growth ready passes.",
   "new_pages": [],
   "page_tracker": {},
+  "evidence": {"shared_paths": null, "content_globs": []},
+  "_evidence": "What makes a page's screenshots, click-test and share preview stale: the newest commit that touched the page's own content file(s) (page_tracker.page_sources or content_globs, or evidence.content_globs, each {glob, address, values}) or shared code that renders it. shared_paths (null = the default: src/components, src/layouts, src/styles, styles, src/lib, src/data, astro.config.*) replaces that list. A commit that only touches other pages' content does not count. A page whose own files cannot be found falls back to the newest commit of the whole checkout.",
+  "thin_ok_paths": [],
+  "_thin_ok_paths": "Pages that are short by nature (an author page): [{\"glob\": \"*/author/*/\", \"why\": \"an author page lists a bio and posts\"}]. A matching page gets a WARN, not a FAIL, on CNT-01 and JSR-02. An entry without a why is ignored. Default empty: no blanket exception.",
   "indexing": {"provider": "off", "keys_file": "", "key_name": "FRESHLYCITED_API_KEY", "max_pages_per_day": 50, "sitemap": ""},
   "_indexing": "After a page is live, growth index <urls> sends it to the provider: freshlycited (FreshlyCited, paid credits, smart mode), indexnow (free; Bing and others, not Google) or manual (prints the Search Console steps). off = nothing is sent. The key lives in keys_file (outside git), never here. max_pages_per_day is a hard cap."
 }

@@ -212,3 +212,114 @@ def test_style_checks_skip_blockquote_and_q_but_not_the_rest_of_the_page():
 def test_never_claims_still_read_inside_a_quote():
     quote = "<blockquote><p>They promised $50/hr.</p></blockquote>"
     assert words_check("words.never-claim", quote, {"never_claims": [r"\$\d+/hr"]}).level == "FAIL"
+
+
+# ---- 11 / 12: a sitemap page lists section names; they are no claims --------------------------------------------------------
+SITEMAP = ('<html><head><title>Sitemap</title></head><body><nav><a href="/case-studies/">Case Studies</a> <a href="/reviews/">Client Reviews</a></nav>'
+           '<main><h1>Sitemap</h1><h2>Case Studies</h2><ul><li><a href="/case-studies/">Case Studies</a></li><li><a href="/client-reviews/">Client Reviews</a></li>'
+           '<li><a href="/blog/study-notes/">Study notes</a></li></ul><nav aria-label="Breadcrumb"><a href="/">Home</a> / Sitemap</nav></main></body></html>')
+
+
+def test_a_sitemap_page_of_section_names_has_no_stat_sentences_and_no_customer_claims():
+    from fact_sources import page_stats
+    from gatelib import domx
+    from techseo.dom import parse
+    assert page_stats(parse(SITEMAP), domx) == []
+    ln = customers("/sitemap/", SITEMAP, {"hidden_customers": ["Client Reviews"]})
+    assert ln.level == "OK", ln.what
+
+
+def test_a_real_study_sentence_is_still_a_stat_and_a_hidden_customer_in_prose_still_fails():
+    from fact_sources import page_stats
+    from gatelib import domx
+    from techseo.dom import parse
+    html = "<html><body><main><h2>Case Studies</h2><p>According to a recent study by the state board, most buyers wait.</p></main></body></html>"
+    assert [s["sentence"][:12] for s in page_stats(parse(html), domx)] == ["According to"]
+    prose = "<html><body><main><p>We worked with Client Reviews Ltd last year.</p></main></body></html>"
+    assert customers("/x/", prose, {"hidden_customers": ["Client Reviews"]}).level == "FAIL"
+
+
+# ---- 13: evidence goes stale only when the page's own files or shared code change -----------------------------------------------
+def git_repo(tmp_path):
+    import subprocess
+
+    def sh(*a, when):
+        env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+               "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when, "PATH": __import__("os").environ["PATH"], "HOME": str(tmp_path)}
+        subprocess.run(["git", "-C", str(tmp_path / "site"), *a], check=True, capture_output=True, env=env)
+    r = tmp_path / "site"
+    (r / "src/content/blog").mkdir(parents=True)
+    (r / "src/components").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(r)], check=True)
+
+    def commit(rel, text, when):
+        (r / rel).write_text(text)
+        sh("add", "-A", when=when)
+        sh("commit", "-q", "-m", rel, when=when)
+    return r, commit
+
+
+def test_the_pages_last_change_ignores_commits_to_other_pages_content(tmp_path):
+    r, commit = git_repo(tmp_path)
+    commit("src/content/blog/a.md", "---\ntitle: A\nslug: a\n---\nA", "2026-11-01T10:00:00+00:00")
+    commit("src/content/blog/b.md", "---\ntitle: B\nslug: b\n---\nB", "2026-11-02T10:00:00+00:00")
+    cfg = {"page_tracker": {"content_globs": [{"glob": "src/content/blog/*.md", "address": "/blog/{slug}/"}]}}
+    ctx = Ctx(project=tmp_path, repo=r, path="/blog/a/", cfg=cfg)
+    day = lambda t: __import__("datetime").datetime.fromtimestamp(t, __import__("datetime").timezone.utc).strftime("%m-%d")  # noqa: E731
+    assert day(ctx.last_commit_time()) == "11-01"                          # b.md (11-02) is another page's content
+    commit("src/content/blog/b.md", "---\ntitle: B\nslug: b\n---\nB again", "2026-11-03T10:00:00+00:00")
+    assert day(ctx.last_commit_time()) == "11-01"
+    commit("src/components/Hero.astro", "<h1/>", "2026-11-04T10:00:00+00:00")             # shared code renders every page
+    assert day(ctx.last_commit_time()) == "11-04"
+    ctx2 = Ctx(project=tmp_path, repo=r, path="/blog/a/", cfg={**cfg, "evidence": {"shared_paths": ["src/lib"]}})
+    assert day(ctx2.last_commit_time()) == "11-01"                         # shared_paths replaces the default list
+    ctx3 = Ctx(project=tmp_path, repo=r, path="/not-mapped/", cfg=cfg)
+    assert day(ctx3.last_commit_time()) == "11-04"                         # unmapped page: the whole checkout, as before
+
+
+# ---- 14: thin_ok_paths --------------------------------------------------------------------------------------------------------
+def test_thin_ok_paths_turn_a_short_page_into_a_warn_only_for_a_matching_path_with_a_why():
+    from techseo import c_map, c_meta
+    from gatelib.c_seo import thin_ok_why
+    short = '<html><head><title>Sam</title></head><body><main><h1>Sam</h1><p>Short bio of the author.</p></main></body></html>'
+    cfg = {"thin_ok_paths": [{"glob": "*/author/*/", "why": "an author page is short"}, {"glob": "*/nowhy/*/"}]}
+    assert thin_ok_why(Ctx(project=Path("."), path="/author/sam/", cfg=cfg)) == "an author page is short"
+    assert thin_ok_why(Ctx(project=Path("."), path="/services/", cfg=cfg)) is None
+    assert thin_ok_why(Ctx(project=Path("."), path="/nowhy/x/", cfg=cfg)) is None                      # no why: ignored
+    assert thin_ok_why(Ctx(project=Path("."), path="/author/sam/", cfg={})) is None                    # default: no exception
+    for why, cnt, jsr in (("an author page is short", ["WARN"], ["WARN"]), (None, ["FAIL"], ["FAIL"])):
+        p, rep = page("/author/sam/", short)
+        p.thin_ok = why
+        c_meta.run_content(p)
+        c_map.run_js(p)
+        assert level(rep, "CNT-01") == cnt and level(rep, "JSR-02") == jsr, (why, [(r.cid, r.level) for r in rep.results])
+
+
+# ---- 15: a fact row sourced from the site's own saved page ---------------------------------------------------------------------
+def test_a_fact_row_from_the_sites_own_saved_page_is_accepted(tmp_path):
+    import os
+    import subprocess
+    p = tmp_path / "p"
+    (p / "docs").mkdir(parents=True)
+    (p / "inventory" / "mirror").mkdir(parents=True)
+    (p / "inventory" / "mirror" / "about.html").write_text("<main><p>We have served 120 clinics since 2019.</p></main>")
+    (p / "growth.json").write_text(json.dumps({"name": "Own Co", "site_url": "https://own.example"}))
+    env = {**os.environ, "GROWTH_PROJECT": str(p), "HOME": str(tmp_path / "home")}
+    research = str(Path(__file__).resolve().parent.parent / "kit" / "tools" / "research.py")
+
+    def cli(*a):
+        return subprocess.run([sys.executable, research, *a], capture_output=True, text=True, env=env, cwd=p)
+    assert cli("init", "/about", "--key", "about").returncode == 0
+    r = cli("fact", "/about", "--key", "about", "--vendor", "Own Co", "--fact", "clinics served", "--value", "120 clinics", "--view", "page",
+            "--how", "raw", "--raw-file", "inventory/mirror/about.html", "--source-url", "https://own.example/about/", "--quote", "served 120 clinics since 2019")
+    assert r.returncode == 0, r.stderr
+    import fact_sources
+    row = json.loads((p / "research" / "about-record.json").read_text())["vendor_facts"][0]
+    assert fact_sources.row_problem(row, __import__("datetime").date.today(), {"site_url": "https://own.example"}) is None
+    html = "<html><body><main><p>We have served 120 clinics since 2019.</p></main></body></html>"
+    ctx = Ctx(project=p, path="/about/", key="about", html=html, cfg={"site_url": "https://own.example"}, today=__import__("datetime").date.today())
+    run_check(ctx, CHECKS["ev.fact-sources"])
+    assert ctx.lines[0].level == "OK", ctx.lines[0].what                                  # 120 and 2019 are both in the quote
+    ctx2 = Ctx(project=p, path="/about/", key="about", html=html.replace("120", "130"), cfg={}, today=__import__("datetime").date.today())
+    run_check(ctx2, CHECKS["ev.fact-sources"])
+    assert ctx2.lines[0].level == "FAIL" and "130" in ctx2.lines[0].what

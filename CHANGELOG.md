@@ -4,6 +4,15 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.2.1 - 2026-11-19
+
+- READY asks a trailing-slash site for `/x/` (growth.json `trailing_slash`, else the slash the caller typed), not `/x`, so there is no 301 and the technical SEO checks no longer print "input missing"; the page key and ledger stay without the slash (`ready.fetch_path`).
+- `ev.fact-sources`: "study", "survey", "report" and "according to" count only in a prose sentence of 8 or more words, never in a heading or a label; link-only blocks (menus, sitemap lists), nav and breadcrumbs are skipped.
+- `words.no-customers`: link text and nav labels that name a site section ("Case Studies", "Client Reviews") are no customer claim (any short internal link in nav, header or footer; elsewhere a link whose words are its own address); on a sitemap page short section headings too. Customer names in prose still FAIL.
+- Evidence freshness: a page's last change is the newest commit touching its own content file(s) (page_tracker.page_sources, page_tracker.content_globs or evidence.content_globs) or shared code (growth.json `evidence.shared_paths`, default src/components, src/layouts, src/styles, styles, src/lib, src/data, astro.config.*). Commits that only touch other pages' content do not count; a page whose files cannot be found falls back to the newest commit of the checkout.
+- `thin_ok_paths`: `[{"glob", "why"}]`; a matching page gets a WARN, not a FAIL, on CNT-01 and JSR-02. An entry without a why is ignored; the default is empty.
+- `ev.fact-sources` with the site's own claims: checked that `growth research fact --how raw --raw-file <mirror file> --source-url https://<own site>/<page>/ --vendor "<own name>"` is accepted and covers the stat (nothing refused the own host; a test now holds it).
+
 ## 2.2.0 - 2026-11-19
 
 - New gate check `ev.fact-sources` (rule 5): every stat sentence of the page's main text (numbers with %, +, x, years, durations, money, counts next to a noun, named regulations such as 45 CFR, HIPAA §, HTI-1, and sentences with "according to", study, survey, report) must be the project's own claim (the number and unit written in a non-"never" line of BRAND.md, in growth.json `research.own_claims`, or in the record's `other_numbers`) or match a research-record fact row whose quote holds the number (1,000 and 1000 alike), read within 90 days (`research.fact_max_age_days`), by browser or raw text, on a source that is not banned. FAIL lists each unsourced stat with its sentence and why. Banned sources (one list in `kit/tools/fact_sources.py`, replace it with `research.banned_sources` or add to it with `research.banned_sources_extra`): ChatGPT, Perplexity, Gemini, Bard, Copilot, Claude chats and Google results or AI Overview pages. `growth research fact` refuses such a source address at write time ("ChatGPT is not a source: open the real page and quote it"). Tests: `tests/test_fact_sources.py`.

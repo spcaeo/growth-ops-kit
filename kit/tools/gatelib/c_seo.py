@@ -67,6 +67,19 @@ def migration_info(ctx):
     return {"task": str(m.get("task") or "the migration task"), "paths": inventory_paths(ctx.project)}
 
 
+def thin_ok_why(ctx):
+    """growth.json thin_ok_paths: [{"glob": "*/author/*/", "why": "an author page is short by nature"}]. The why when this page fits
+    one (a glob without a why is ignored), else None. Default: no page may be thin."""
+    from fnmatch import fnmatch
+
+    import paths
+    p = paths.normalize(ctx.path or "/")
+    for e in ctx.cfg.get("thin_ok_paths") or []:
+        if isinstance(e, dict) and e.get("glob") and str(e.get("why") or "").strip() and any(fnmatch(x, e["glob"]) for x in (p, p + "/")):
+            return str(e["why"]).strip()
+    return None
+
+
 def techseo(ctx):
     """Run the technical SEO checks once (dev mode) and keep the results."""
     if "tseo" not in ctx.cache:
@@ -77,6 +90,7 @@ def techseo(ctx):
         rep = Report(url=ctx.url, mode="dev")
         mig = migration_info(ctx)
         p = Page(f, rep, ctx.url, mode="dev", site_origin=ctx.site_origin(), old_hosts=ctx.cfg.get("old_hosts") or [])
+        p.thin_ok = thin_ok_why(ctx)
         if c_index.run_index(p) and p.resp.status == 200:
             c_index.run_url(p)
             c_meta.run_meta(p)

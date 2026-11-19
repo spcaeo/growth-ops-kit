@@ -177,6 +177,17 @@ def print_held(lines):
             print(" ", l[:200])
 
 
+def fetch_path(path: str, typed: str, cfg: dict) -> str:
+    """The address the preview is asked for. `path` is the page key (no trailing slash). A trailing-slash site answers 301 to
+    /x/, and a 301 makes the technical SEO checks report "input missing", so ask for the site's own form: growth.json
+    trailing_slash (true, or "slash"), else the slash the caller typed. Never a slash on a file ("/feed.xml")."""
+    ts = cfg.get("trailing_slash")
+    slash = ts in (True, "slash", "1", 1) if ts is not None else typed.endswith("/")
+    if slash and path != "/" and "." not in path.rsplit("/", 1)[-1]:
+        return path + "/"
+    return path
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("path", nargs="?")
@@ -197,7 +208,7 @@ def main():
     path = a.path.rstrip("/") or "/"
     if not CFG.get("preview_url"):
         sys.exit("growth.json has no preview_url: set the one address the owner sees previews on")
-    url = CFG["preview_url"].rstrip("/") + path
+    url = CFG["preview_url"].rstrip("/") + fetch_path(path, a.path, CFG)
     cmd = [sys.executable, str(KIT_DIR / "tools" / "gate.py"), "page", path, "--url", url,
            "--type", a.type, "--key", a.key] + (["--repo", str(repo)] if repo else [])
     r = run_gate(cmd)

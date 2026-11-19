@@ -52,17 +52,38 @@ def case_study_page(ctx) -> bool:
     return "case-stud" in p.lower() or any(fnmatch(x, g) for g in wcfg(ctx, "no_customers_allow_paths", []) for x in (p, p + "/", p.rstrip("/")))
 
 
-def page_text_without_own_name(ctx):
-    """The page's text without its H1, nav and breadcrumb, where a case-study page names itself (customer names are still caught elsewhere)."""
+def text_without(ctx, drop):
+    """The page's body text with every element for which drop(element, in_chrome) is true cut out (on a private copy of the tree)."""
     from techseo.dom import parse
     root = parse(ctx.need_html())
-
-    def own_name(n):
-        return n.tag in ("h1", "nav") or domx.has_cls(n, r".*crumb.*") or "breadcrumb" in (n.get("aria-label") or "").lower()
     for n in list(root.iter()):
         if getattr(n, "children", None):
-            n.children = [c for c in n.children if isinstance(c, str) or not own_name(c)]
+            n.children = [c for c in n.children if isinstance(c, str) or not drop(c)]
     return domx.text(domx.body(root))
+
+
+def page_text_without_own_name(ctx):
+    """The page's text without its H1, nav and breadcrumb, where a case-study page names itself (customer names are still caught elsewhere)."""
+    return text_without(ctx, lambda n: n.tag in ("h1", "nav") or domx.has_cls(n, r".*crumb.*") or "breadcrumb" in (n.get("aria-label") or "").lower()
+                        or section_link(n))
+
+
+def section_link(n) -> bool:
+    """An internal link whose words name a site section: in the site's nav, header or footer, any short internal link; elsewhere
+    a link whose words are the section's own address (text "Case Studies" to /case-studies/). Such a label is no customer claim."""
+    if n.tag != "a":
+        return False
+    href = (n.get("href") or "").strip()
+    if not href.startswith("/") or href.startswith("//"):
+        return False
+    label = domx.text(n)
+    if not label or len(label.split()) > 4:
+        return False
+    if domx.in_chrome(n):
+        return True
+    slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+    path = "/" + href.split("#")[0].split("?")[0].strip("/").lower()
+    return bool(slug) and (slug in path or path.rsplit("/", 1)[-1] in slug and path != "/")
 
 
 def allow_path(ctx, glob) -> bool:
@@ -165,7 +186,8 @@ def hype(ctx):
 
 @check("words.no-customers", "2", what="no hidden case-study customers, 'trusted by' or implied customer lists (BRAND proof rules)", needs="live")
 def no_customers(ctx):
-    t = page_text(ctx)
+    sitemap = "sitemap" in (ctx.path or "").lower()      # a sitemap page headlines each section by its name
+    t = text_without(ctx, lambda n: section_link(n) or (sitemap and re.fullmatch(r"h[2-6]", n.tag or "") and len(domx.text(n).split()) <= 4))
     own = page_text_without_own_name(ctx) if case_study_page(ctx) else t
     probs = [f"'{h}'" for p in IMPLIED_PROOF for h in word_hits(own if p == CASE_STUDY else t, p)]
     probs += [f"'{h}'" for p in wcfg(ctx, "hidden_customers", []) for h in word_hits(t, p)]       # customer names are never allowed
