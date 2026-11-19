@@ -58,3 +58,63 @@ def test_jobs_the_owner_scheduled_are_allowed(demo_project, tmp_path):
     cfg["automation"] = {"jobs": [{"label": "com.example.operator"}]}            # no why: not allowed
     (demo_project / "growth.json").write_text(json.dumps(cfg))
     assert "auto-start jobs: 1" in doctor(demo_project, agents)
+
+
+def test_a8_before_go_live_needs_mapped_pages_not_changes(demo_project, tmp_path):
+    """A site rebuilt locally sets page_tracker.changes_since to a future day so local commits are not read as live
+    changes. A8 then passes with 0 changes as long as pages are mapped to files, and says it is waiting for go-live."""
+    import json
+    import sqlite3
+    from datetime import date
+    agents = tmp_path / "LaunchAgents"
+    agents.mkdir()
+    (demo_project / "page-tracker").mkdir(exist_ok=True)
+    db = sqlite3.connect(demo_project / "page-tracker" / "tracker.db")
+    db.executescript("create table search(path, day); create table pages(path, file); create table changes(id);")
+    db.execute("insert into search values ('*', '2025-07-27'), ('*', ?)", (date.today().isoformat(),))
+    db.execute("insert into pages values ('/x', 'src/content/x.mdx'), ('/y', null)")
+    db.commit()
+    db.close()
+    site = tmp_path / "site"
+    site.mkdir()
+    cfg = json.loads((demo_project / "growth.json").read_text())
+    cfg.update(site_repo=str(site), search_console_history_start="2025-07-27", tracker_port=1)
+    (demo_project / "growth.json").write_text(json.dumps(cfg))
+    line = doctor(demo_project, agents)
+    assert line.startswith("FAIL") and "changes tracked: 0" in line and "waiting for go-live" not in line
+    cfg["page_tracker"] = {"changes_since": "9999-12-31"}
+    (demo_project / "growth.json").write_text(json.dumps(cfg))
+    line = doctor(demo_project, agents)
+    assert line.startswith("OK") and "waiting for go-live: changes count from 9999-12-31" in line and "changes tracked: 0" in line
+    cfg["page_tracker"] = {"changes_since": "2000-01-01"}                       # a past day: changes are expected again
+    (demo_project / "growth.json").write_text(json.dumps(cfg))
+    line = doctor(demo_project, agents)
+    assert line.startswith("FAIL") and "waiting for go-live" not in line
+
+
+def test_our_own_dashboard_on_the_tracker_port_is_recognised_whatever_the_case():
+    """The tracker's start page says "Page Change Tracker"; doctor must not call our own dashboard a foreign program."""
+    import ast
+    import http.server
+    import threading
+    import urllib.request
+    src = DOCTOR.read_text()
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "port_is_our_tracker")
+    ns = {"urllib": urllib}
+    exec(compile(ast.Module([fn], []), "doctor", "exec"), ns)
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<!doctype html><title>Page Change Tracker</title>")
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        assert ns["port_is_our_tracker"](srv.server_address[1])
+    finally:
+        srv.shutdown()
