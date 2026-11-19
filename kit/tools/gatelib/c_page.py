@@ -341,6 +341,12 @@ def gsc_top(ctx, n=2):
 
 @check("seo.title-query", "81", types=("money", "hub", "post"), what="the title holds one of the page's top-2 Search Console queries and fits 60 characters", needs="live")
 def title_query(ctx):
+    hold = (ctx.cfg.get("holds") or {}).get("title")
+    if isinstance(hold, dict) and hold.get("why"):
+        # the owner has frozen titles (e.g. while a Google core update rolls out): report, never block on it
+        ctx.warn(f"titles are held ({hold['why']}; until {hold.get('until', 'lifted')}): title query not judged now",
+                 "queue the new title in the research file; it ships as its own change when the hold lifts")
+        return
     root = ctx.root()
     t = domx.text(domx.page_title(root)) if domx.page_title(root) is not None else ""
     top = gsc_top(ctx)
