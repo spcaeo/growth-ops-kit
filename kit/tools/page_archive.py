@@ -36,7 +36,8 @@ WIDTHS = {"desktop-1366.png": (1366, 900, False), "mobile-390.png": (390, 844, T
 
 
 def slug_of(path):
-    return path.strip("/").replace("/", "-") or "home"
+    import paths
+    return paths.snapshot_slug(path)
 
 
 def folder(path, stage, day=None):

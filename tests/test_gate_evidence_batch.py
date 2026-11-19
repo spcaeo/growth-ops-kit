@@ -135,7 +135,7 @@ def test_a_bad_recheck_date_is_refused_and_due_never_crashes(demo_project):
 def test_a_default_key_has_no_slash():
     import gate
     assert "/" not in gate.default_key("/topic/some-page")
-    assert gate.default_key("/topic/some-page") == "topic-some"
+    assert gate.default_key("/topic/some-page") == "topic__some-page"
     assert gate.default_key("/") == "home"
 
 

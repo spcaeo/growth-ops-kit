@@ -84,7 +84,8 @@ def fold_plan(ctx):
 
 def _archive(ctx, stage):
     path = ctx.need_path()
-    slug = path.strip("/").replace("/", "-") or "home"
+    import paths
+    slug = paths.snapshot_slug(path)
     d = ctx.project / "archive" / "pages" / slug
     runs = sorted(x for x in d.glob(f"*-{stage}") if x.is_dir()) if d.exists() else []
     need = ("desktop-1366.png", "mobile-390.png", "page.html", "meta.json")

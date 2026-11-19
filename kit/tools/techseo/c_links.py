@@ -111,7 +111,8 @@ def run_links(p, max_links=80, check_status=True):
     if p.f.allow_live:
         rep.skip("LNK-02", "live site: links are not fetched (only the page, robots.txt and sitemap.xml)")
         return
-    targets = sorted({p.abs(a.get("href")).split("#")[0] for a in internal})[:max_links]
+    all_targets = sorted({p.abs(a.get("href")).split("#")[0] for a in internal})
+    targets = all_targets[:max_links]
     def probe(u):
         r = p.f.head_or_get(u)
         return u, p.f.settle(u, r)
@@ -126,4 +127,5 @@ def run_links(p, max_links=80, check_status=True):
         rep.warn("LNK-02", f"{len(redirects)} internal link(s) go through a redirect: " + "; ".join(f"{urllib.parse.urlsplit(u).path} -> {r.status} {r.h('location')}" for u, r in redirects[:5]),
                  "point the link at the final address")
     if not broken and not redirects:
-        rep.ok("LNK-02", f"all {len(res)} unique internal targets answer 200 (of {len(uniq)} unique targets)")
+        rep.ok("LNK-02", f"all {len(res)} unique internal targets answer 200 ({len(res)} of {len(all_targets)} unique internal targets checked"
+                         + ("; raise growth.json link_check_cap to check the rest" if len(res) < len(all_targets) else "") + ")")

@@ -22,11 +22,11 @@ def brandish(ctx):
 def need_browser(ctx):
     """These two checks measure the page in a real headless browser. Without one they are SKIP (never a pass)."""
     if ctx.cache.get("no_browser"):
-        raise Skip("browser checks are switched off for this run (--no-browser)")
+        raise Skip("browser checks are switched off for this run (--no-browser)", blocked=True)
     try:
         import playwright.sync_api  # noqa: F401
     except ImportError:
-        raise Skip("playwright is not installed (pip install playwright; python3 -m playwright install chromium)")
+        raise Skip("playwright is not installed (pip install playwright; python3 -m playwright install chromium)", blocked=True)
 
 
 def browser_failed(e):
@@ -139,7 +139,7 @@ def contrast_states(ctx):
             n += len(rows)
     except Exception as e:  # noqa: BLE001
         if browser_failed(e):
-            raise Skip("no headless browser installed (python3 -m playwright install chromium)")
+            raise Skip("no headless browser installed (python3 -m playwright install chromium)", blocked=True)
         raise
     ctx.verdict(probs, f"{n} control states at AA contrast (rest, hover, focus; 1366 and 390)",
                 "give the state its own text colour token that reads on its background, e.g. a filled button keeps light text on hover; re-run growth contrast_check (rule 36j)")
@@ -159,7 +159,7 @@ def phone(ctx):
         probs = [f"{w}px {x}" for w in WIDTHS for x in _pc(ctx.url, w)]
     except Exception as e:  # noqa: BLE001
         if browser_failed(e):
-            raise Skip("no headless browser installed (python3 -m playwright install chromium)")
+            raise Skip("no headless browser installed (python3 -m playwright install chromium)", blocked=True)
         raise
     ctx.verdict(probs[:12] + ([f"+{len(probs) - 12} more"] if len(probs) > 12 else []),
                 "no small text, small tap targets, clipped text or sideways scroll at 360, 390, 820 and 1024",
