@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
 from config import REGISTRY, RULEBOOK  # noqa: E402
 from gatelib import CHECKS, registry  # noqa: E402
 
@@ -49,13 +50,20 @@ def write(reg):
     out.append(' "rules": [')
     out.append(",\n".join("  " + json.dumps(e, ensure_ascii=False) for e in reg["rules"]))
     out.append(" ]\n}")
-    REGISTRY.write_text("\n".join(out) + "\n")
+    atomic.write_text(REGISTRY, "\n".join(out) + "\n")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
+    if not a.check:
+        with atomic.locked(REGISTRY):      # read, fix and write the registry under one lock
+            return _sync(a)
+    return _sync(a)
+
+
+def _sync(a):
     reg = registry.load()
     bad = []
     ver = rulebook_version()

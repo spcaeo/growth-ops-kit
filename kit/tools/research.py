@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
 
 SCHEMA = 1
 HOW_OK = ("raw", "browser")                 # a summary tool is never the source of a number (#43)
@@ -68,8 +69,7 @@ def load(project: Path, key: str) -> dict | None:
 
 def save(project: Path, key: str, rec: dict) -> Path:
     p = record_path(project, key)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(rec, indent=1, ensure_ascii=False) + "\n")
+    atomic.write_json(p, rec, indent=1)
     return p
 
 
@@ -364,6 +364,12 @@ def main(argv=None):
     for f in ("source", "raw-file", "reason", "engine", "market", "query", "summary", "seen-on", "vendor", "fact", "value", "view", "how", "source-url", "quote", "read-on", "shown-as"):
         ap.add_argument("--" + f, default="")
     a = ap.parse_args(argv)
+    from config import PROJECT
+    with atomic.locked(record_path(PROJECT, a.key)):      # load, change and save of one record under one lock
+        return _command(a)
+
+
+def _command(a):
     from config import CFG, PROJECT
     import paths
     pk = paths.key(a.path)
@@ -454,10 +460,10 @@ def main(argv=None):
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(plan_markdown(rec))
         pj = PROJECT / "research" / "plans" / f"{a.key}.json"
-        plan = json.loads(pj.read_text()) if pj.exists() else {"page": pk, "goal": "", "folds": []}
-        plan["target_searches"] = target_searches(rec)
-        plan["research_paa"] = [q["question"] for q in rec.get("paa") or [] if q.get("status") == "chosen"]
-        pj.write_text(json.dumps(plan, indent=1, ensure_ascii=False) + "\n")
+        def fill(plan):
+            plan["target_searches"] = target_searches(rec)
+            plan["research_paa"] = [q["question"] for q in rec.get("paa") or [] if q.get("status") == "chosen"]
+        atomic.update_json(pj, fill, default={"page": pk, "goal": "", "folds": []}, indent=1)
         print(f"wrote {out.relative_to(PROJECT)} and target_searches in {pj.relative_to(PROJECT)}")
         return 0
     print(f"saved {save(PROJECT, a.key, rec).relative_to(PROJECT)}")

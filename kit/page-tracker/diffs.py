@@ -116,7 +116,7 @@ def write_diffs(c):
                 d.update(sha=sha, prev_sha=prev_sha, live_at=live, file=rel)
                 out[sha] = d
                 n += 1
-        json.dump(out, open(os.path.join(OUT, page_file_name(path)), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+        config.save_json(os.path.join(OUT, page_file_name(path)), out, ensure_ascii=False, separators=(",", ":"))
     print(f"diffs: {n} changes written to diffs/")
 
 

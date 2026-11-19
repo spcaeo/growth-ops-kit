@@ -18,6 +18,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
 import wizard_state  # noqa: E402
 
 KIT_DIR = Path(__file__).resolve().parent.parent
@@ -133,49 +134,49 @@ def install(folder: Path, name: str, site: str, kit_root: Path = KIT_ROOT, permi
     settings = folder / ".claude" / "settings.json"
     command, status_command = f"{run_growth()} hook stop".replace(str(KIT_ROOT), str(kit_root)), \
         f"{run_growth()} statusline".replace(str(KIT_ROOT), str(kit_root))
-    cfg_s = _load(settings)
-    before = json.dumps(cfg_s, sort_keys=True)
-    stop = cfg_s.setdefault("hooks", {}).setdefault("Stop", [])
-    if "stop_hook.sh" not in json.dumps(stop) and "hook stop" not in json.dumps(stop):
-        stop.append({"hooks": [{"type": "command", "command": command, "statusMessage": STOP_MESSAGE}]})
-    for entry in stop:
-        for h in entry.get("hooks", []):
-            c = h.get("command", "")
-            if "${GROWTH_KIT:-" in c and "stop_hook.sh" in c:           # our own older form (absolute kit path)
-                h["command"] = command
-            elif "hook stop" in c:
-                h["command"] = _refresh(c, command)
-            if ("hook stop" in h.get("command", "") or "stop_hook.sh" in h.get("command", "")) and not h.get("statusMessage"):
-                h["statusMessage"] = STOP_MESSAGE
-    post = cfg_s["hooks"].setdefault("PostToolUse", [])       # the workflow guard: re-read the checkpoints at each stage (once)
-    if "hook stage" not in json.dumps(post):
-        post.append({"matcher": "Bash", "hooks": [{"type": "command", "command": f"{run_growth()} hook stage".replace(str(KIT_ROOT), str(kit_root)),
-                                                    "statusMessage": STAGE_MESSAGE}]})
-    stage_command = f"{run_growth()} hook stage".replace(str(KIT_ROOT), str(kit_root))
-    for entry in post:
-        for h in entry.get("hooks", []):
-            if "hook stage" in h.get("command", ""):
-                h["command"] = _refresh(h["command"], stage_command)
-    if not post:
-        del cfg_s["hooks"]["PostToolUse"]
-    if "statusLine" not in cfg_s:       # the owner watches the open task tick off at the bottom of the window (never replaced)
-        cfg_s["statusLine"] = {"type": "command", "padding": 0, "command": status_command}
-    elif "${GROWTH_KIT:-" in str(cfg_s["statusLine"].get("command", "")) and "statusline.py" in cfg_s["statusLine"]["command"]:
-        cfg_s["statusLine"]["command"] = status_command
-    elif str(cfg_s["statusLine"].get("command", "")).endswith(" statusline"):
-        cfg_s["statusLine"]["command"] = _refresh(cfg_s["statusLine"]["command"], status_command)
-    if permissions:
-        allow, deny = permissions_wanted(cfg or _project_cfg(folder), kit_root)
-        perm = cfg_s.setdefault("permissions", {})
-        if perm.get("allow"):
-            perm["allow"] = [a for a in perm["allow"] if not unsafe_allow(a)]     # our own older, unsafe entries only
-        for key, wanted in (("allow", allow), ("deny", deny)):
-            have = perm.setdefault(key, [])
-            have.extend(w for w in wanted if w not in have)
-    if json.dumps(cfg_s, sort_keys=True) != before:
-        settings.parent.mkdir(parents=True, exist_ok=True)
-        settings.write_text(json.dumps(cfg_s, indent=2) + "\n")
-        made.append(settings)
+    with atomic.locked(settings):          # read, merge and write under one lock: two installs never lose each other's entries
+        cfg_s = _load(settings)
+        before = json.dumps(cfg_s, sort_keys=True)
+        stop = cfg_s.setdefault("hooks", {}).setdefault("Stop", [])
+        if "stop_hook.sh" not in json.dumps(stop) and "hook stop" not in json.dumps(stop):
+            stop.append({"hooks": [{"type": "command", "command": command, "statusMessage": STOP_MESSAGE}]})
+        for entry in stop:
+            for h in entry.get("hooks", []):
+                c = h.get("command", "")
+                if "${GROWTH_KIT:-" in c and "stop_hook.sh" in c:           # our own older form (absolute kit path)
+                    h["command"] = command
+                elif "hook stop" in c:
+                    h["command"] = _refresh(c, command)
+                if ("hook stop" in h.get("command", "") or "stop_hook.sh" in h.get("command", "")) and not h.get("statusMessage"):
+                    h["statusMessage"] = STOP_MESSAGE
+        post = cfg_s["hooks"].setdefault("PostToolUse", [])       # the workflow guard: re-read the checkpoints at each stage (once)
+        if "hook stage" not in json.dumps(post):
+            post.append({"matcher": "Bash", "hooks": [{"type": "command", "command": f"{run_growth()} hook stage".replace(str(KIT_ROOT), str(kit_root)),
+                                                        "statusMessage": STAGE_MESSAGE}]})
+        stage_command = f"{run_growth()} hook stage".replace(str(KIT_ROOT), str(kit_root))
+        for entry in post:
+            for h in entry.get("hooks", []):
+                if "hook stage" in h.get("command", ""):
+                    h["command"] = _refresh(h["command"], stage_command)
+        if not post:
+            del cfg_s["hooks"]["PostToolUse"]
+        if "statusLine" not in cfg_s:       # the owner watches the open task tick off at the bottom of the window (never replaced)
+            cfg_s["statusLine"] = {"type": "command", "padding": 0, "command": status_command}
+        elif "${GROWTH_KIT:-" in str(cfg_s["statusLine"].get("command", "")) and "statusline.py" in cfg_s["statusLine"]["command"]:
+            cfg_s["statusLine"]["command"] = status_command
+        elif str(cfg_s["statusLine"].get("command", "")).endswith(" statusline"):
+            cfg_s["statusLine"]["command"] = _refresh(cfg_s["statusLine"]["command"], status_command)
+        if permissions:
+            allow, deny = permissions_wanted(cfg or _project_cfg(folder), kit_root)
+            perm = cfg_s.setdefault("permissions", {})
+            if perm.get("allow"):
+                perm["allow"] = [a for a in perm["allow"] if not unsafe_allow(a)]     # our own older, unsafe entries only
+            for key, wanted in (("allow", allow), ("deny", deny)):
+                have = perm.setdefault(key, [])
+                have.extend(w for w in wanted if w not in have)
+        if json.dumps(cfg_s, sort_keys=True) != before:
+            atomic.write_json(settings, cfg_s, indent=2)
+            made.append(settings)
     if claude_md:
         md = folder / "CLAUDE.md"
         text = md.read_text() if md.exists() else ""

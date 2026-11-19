@@ -138,7 +138,7 @@ def write(c):
     import insights, google_updates
     gu = google_updates.export(c)
     ins = insights.compute(c)
-    open(os.path.join(HERE, "insights-digest.json"), "w", encoding="utf-8").write(json.dumps(insights.digest(ins, gu), indent=1))
+    config.save_json(os.path.join(HERE, "insights-digest.json"), insights.digest(ins, gu), indent=1)
     conv = conversions.export(c)
     gday = lambda d: dt.date.fromisoformat(d)
     # no Google figures yet (Search Console off): the "newest Google day" is today, so findings stay empty and honest
@@ -156,6 +156,6 @@ def write(c):
                start=first_change or (config.TRACKING_START and config.TRACKING_START + "T00:00:00"), config=config.public(),
                site=site, insights=ins, pages=pages, gupdates=gu, clusters=clusters, conversions=conv, ga4=ga4.export(c),
                findings=findings.build(ins, pages, clusters, gu, g_last, g_final, conv["days"]))
-    open(os.path.join(HERE, "cluster-digests.json"), "w", encoding="utf-8").write(json.dumps(out["findings"].pop("cluster_digests"), indent=1))
-    open(os.path.join(HERE, "data.json"), "w", encoding="utf-8").write(json.dumps(out, separators=(",", ":")))
+    config.save_json(os.path.join(HERE, "cluster-digests.json"), out["findings"].pop("cluster_digests"), indent=1)
+    config.save_json(os.path.join(HERE, "data.json"), out, separators=(",", ":"))
     print(f"data.json: {len(pages)} pages, {len(site['gs'])} site days")

@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
 from config import CFG, KIT_DIR, PROJECT, TZ  # noqa: E402
 from ready import preview_repo_problem  # noqa: E402
 import checkpoints  # noqa: E402
@@ -116,9 +117,9 @@ def write_plan(path, ptype, key, checks, stack=None, extra_rules=None):
     for rf in extra_rules or []:          # a site's own rules for this page (--extra-rules, or research/<key>-site-rules.md)
         extra += [t for t in checkpoints.extra_items(rf) if t not in extra]
     p = PROJECT / "research" / f"{key}-checkpoints.md"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    old = p.read_text() if p.exists() else ""
-    p.write_text(checkpoints.merge(old, [(head[k], when[k]) for k in head], extra, header, dt.datetime.now(TZ).strftime("%Y-%m-%d")))
+    with atomic.locked(p):                # the merge reads the old file: read and write under one lock
+        old = p.read_text() if p.exists() else ""
+        atomic.write_text(p, checkpoints.merge(old, [(head[k], when[k]) for k in head], extra, header, dt.datetime.now(TZ).strftime("%Y-%m-%d")))
     total, done, _ = checkpoints.manual_status(p.read_text())
     return p, {**{k: len(v) for k, v in when.items()}, "manual": total, "manual_done": done}
 
@@ -170,12 +171,11 @@ def main():
     print("Planning evidence: " + ("OK" if not plan_fails else f"{len(plan_fails)} missing:"))
     for l in plan_fails:
         print("  " + l[:220])
-    d = json.loads(LEDGER.read_text()) if LEDGER.exists() else {}
     ok = not health and not plan_fails
-    d[path] = {"ok": ok, "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "site_problems": len(health),
+    entry = {"ok": ok, "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "site_problems": len(health),
                "plan_missing": len(plan_fails), "plan": plan_file.relative_to(PROJECT).as_posix(),
                "key": a.key}
-    LEDGER.write_text(json.dumps(d, indent=1) + "\n")
+    atomic.update_json(LEDGER, lambda d: d.update({path: entry}), default={}, indent=1)
     print(f"PRE-FLIGHT {'PASS' if ok else 'FAIL'} {path}: " + ("build may start." if ok else "do not start the build."))
     sys.exit(0 if ok else 1)
 

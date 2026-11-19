@@ -11,6 +11,11 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import sys as _sys
+from pathlib import Path as _P
+_sys.path.insert(0, str(_P(__file__).resolve().parent))
+import atomic  # noqa: E402
+
 FILE = "setup-state.json"
 STATUSES = ("todo", "asked", "answered", "tested", "done", "declined")
 CLOSED = ("done", "declined")
@@ -36,9 +41,7 @@ def load(project) -> dict:
 
 def save(project, state: dict) -> None:
     state["updated"] = now()
-    tmp = path(project).with_suffix(".tmp")
-    tmp.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
-    tmp.replace(path(project))
+    atomic.write_json(path(project), state)
 
 
 def get(project, step: str) -> dict:
@@ -49,20 +52,27 @@ def record(project, step: str, status: str, answer=None, source: str = "", test:
     """Write one step. A field left out keeps what was there, so a later test never erases the answer."""
     if status not in STATUSES:
         raise ValueError(f"unknown status {status}")
-    state = load(project)
-    entry = state["steps"].get(step) or {}
-    entry["status"] = status
-    entry["date"] = now()
-    if answer is not None:
-        entry["answer"] = answer
-    if source:
-        entry["source"] = source
-    if test:
-        entry["test"] = test
-    entry.update(extra)
-    state["steps"][step] = entry
-    save(project, state)
-    return entry
+    out = {}
+
+    def change(state):
+        if not isinstance(state.get("steps"), dict):
+            state.clear()
+            state.update({"version": 1, "started": now(), "steps": {}})
+        entry = state["steps"].get(step) or {}
+        entry["status"] = status
+        entry["date"] = now()
+        if answer is not None:
+            entry["answer"] = answer
+        if source:
+            entry["source"] = source
+        if test:
+            entry["test"] = test
+        entry.update(extra)
+        state["steps"][step] = entry
+        state["updated"] = now()
+        out["entry"] = entry
+    atomic.update_json(path(project), change, default=load(project))
+    return out["entry"]
 
 
 def first_open(project, order) -> str | None:

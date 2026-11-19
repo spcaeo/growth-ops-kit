@@ -79,7 +79,7 @@ def fetch(force=False):
                 raise ValueError("the sitemap lists no page")
             out = dict(fetched=now.isoformat(timespec="minutes"), source="sitemap", pages=pages, error=None,
                        trailing_slash=bool(slash) and sum(slash) * 2 > len(slash))   # most addresses end in "/"
-            json.dump(out, open(CACHE, "w", encoding="utf-8"), indent=1)
+            config.save_json(CACHE, out, indent=1)
             return out
         except Exception as e:
             err = f"{type(e).__name__}: {e}"[:300]
