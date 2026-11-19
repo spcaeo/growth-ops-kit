@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import paths  # noqa: E402
 from config import PROJECT, SITE_URL, TZ  # noqa: E402
 
 BLOCK = re.compile(
@@ -36,6 +37,7 @@ WIDTHS = {"desktop-1366.png": (1366, 900, False), "mobile-390.png": (390, 844, T
 
 
 def slug_of(path):
+    return paths.snapshot_slug(path)   # the one folder name per page (the same as inventory/pages/<slug>/)
     import paths
     return paths.snapshot_slug(path)
 

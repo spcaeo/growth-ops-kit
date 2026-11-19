@@ -85,8 +85,8 @@ def today():
 
 
 def slug(path):
-    s = path.strip("/") or "home"
-    return re.sub(r"[^a-z0-9-]+", "-", s.lower()).strip("-")
+    """The page's folder/note name: paths.snapshot_slug, the same one every tool uses ("site"/"off-site" stay words)."""
+    return paths.snapshot_slug(path) if path.startswith("/") else (re.sub(r"[^a-z0-9-]+", "-", path.lower()).strip("-") or "site")
 
 
 def load():
