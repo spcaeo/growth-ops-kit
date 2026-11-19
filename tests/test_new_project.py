@@ -167,7 +167,7 @@ def test_hook_commands_use_the_growth_command_and_old_ones_are_moved(tmp_path):
 def test_growth_hook_stop_runs_the_stop_hook(tmp_path):
     r = subprocess.run([sys.executable, str(ROOT / "growth"), "hook"], capture_output=True, text=True)
     assert r.returncode == 2 and "Available: stop" in r.stderr
-    assert "hook" in subprocess.run([sys.executable, str(ROOT / "growth"), "help"], capture_output=True, text=True).stdout
+    assert "hook" in subprocess.run([sys.executable, str(ROOT / "growth"), "help", "--all"], capture_output=True, text=True).stdout
 
 
 def test_doctor_a12_flags_a_kit_folder_that_is_gone(tmp_path):
