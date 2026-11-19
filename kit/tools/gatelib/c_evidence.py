@@ -106,6 +106,17 @@ def shots_106(ctx):
                 "check the page at 360, 390, 820, 1280 and 1920 and save <name>-<width>.png (rules 106, 68, 39)")
 
 
+def delegation_until(e):
+    """The end date of an owner's delegation decision (title 'Delegation: ...', text '... until YYYY-MM-DD'), else None."""
+    if not str(e.get("title") or "").lower().startswith("delegation"):
+        return None
+    m = re.search(r"until\s+(\d{4}-\d{2}-\d{2})", str(e.get("text") or "") + " " + str(e.get("title") or ""))
+    try:
+        return dt.date.fromisoformat(m.group(1)) if m else None
+    except ValueError:
+        return None
+
+
 @check("ev.decision", "116", ALL, "the owner's check-in or yes for this page is filed as a journal decision", needs="project")
 def decision(ctx):
     import approvals
@@ -113,6 +124,29 @@ def decision(ctx):
     docs = ctx.docs or (ctx.project / "docs")
     states = [(e, approvals.status(docs, "decision", e.get("id"), approvals.decision_content(e))) for e in d]
     good = [e for e, (st, _) in states if st == "ok"]
+    deleg = [e for e in good if delegation_until(e) is not None]
+    own = [e for e in good if e not in deleg]
+    if own:
+        ctx.ok(f"{len(own)} owner-approved decision(s), latest {own[-1]['id']}: {own[-1].get('title', '')[:60]}")
+        return
+    # The owner may delegate: ONE owner-approved decision titled "Delegation: ..." that lists the pages and says
+    # "until YYYY-MM-DD". Then the lead's own decision for the page ("VERDICT: OK" in its text) stands in for the owner's
+    # look, for the listed pages, until that date. The delegation's pages, title and text are signed, so its scope
+    # cannot be widened after the owner approved it.
+    today = dt.date.today()
+    live = [e for e in deleg if delegation_until(e) >= today]
+    verdict = [e for e in d if e not in good and re.search(r"\bVERDICT:\s*OK\b", str(e.get("text") or "") + str(e.get("title") or ""))]
+    if live and verdict:
+        ctx.ok(f"lead's VERDICT {verdict[-1]['id']} under the owner's delegation {live[-1]['id']} (until {delegation_until(live[-1])})")
+        return
+    if deleg and not live:
+        ctx.fail(f"the owner's delegation {deleg[-1]['id']} ended on {delegation_until(deleg[-1])}",
+                 "the owner approves this page (growth approve decision <id>) or a new delegation (rules 0, 116)")
+        return
+    if live:
+        ctx.fail(f"delegated to the lead (owner's {live[-1]['id']}), but no lead decision with 'VERDICT: OK' is filed for this page",
+                 "the lead files it: growth journal add --page <path> --kind decision --title 'Lead VERDICT: OK' --text '...' (rule 116)")
+        return
     if good:
         ctx.ok(f"{len(good)} owner-approved decision(s), latest {good[-1]['id']}: {good[-1].get('title', '')[:60]}")
     elif d:

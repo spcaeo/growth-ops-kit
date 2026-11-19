@@ -124,3 +124,22 @@ def test_runs_from_an_excluded_engine_do_not_count(tmp_path):
     google = [entry(i, "google-ai-mode") for i in range(10)]
     (p / "journal" / "entries.jsonl").write_text("".join(json.dumps(e) + "\n" for e in gpt + google))
     assert line(Ctx(project=p, path="/x", key="x", ptype="money", cfg=cfg), "ev.ai-baseline").level == "OK"
+
+
+def test_an_owner_delegation_lets_the_leads_verdict_stand_in(tmp_path):
+    d = {"id": "J0001", "at": "2026-11-19 15:00", "kind": "decision", "pages": ["/x", "/y"], "tags": [],
+         "title": "Delegation: lead's VERDICT stands in for my look", "text": "RhinoMove plan pages until 2099-12-31"}
+    v = {"id": "J0002", "at": "2026-11-19 16:00", "kind": "decision", "pages": ["/x"], "tags": [],
+         "title": "Lead VERDICT: OK", "text": "reviewed screens 1366/390, gate 0 FAIL"}
+    p = project(tmp_path, [d, v])
+    c = lambda path="/x": Ctx(project=p, path=path, key="x", cfg={}, docs=p / "docs")   # noqa: E731
+    assert line(c(), "ev.decision").level == "FAIL"                       # the delegation is not approved yet
+    approvals.record(p / "docs", "decision", "J0001", approvals.decision_content(d), by="owner")
+    assert line(c(), "ev.decision").level == "OK"                         # approved delegation + the lead's verdict
+    assert line(c("/y"), "ev.decision").level == "FAIL"                   # listed page, but no lead verdict yet
+    assert line(c("/z"), "ev.decision").level == "FAIL"                   # not in the delegation's pages
+    old = {**d, "id": "J0003", "text": "until 2020-01-01"}
+    q = project(tmp_path / "q", [old, {**v, "id": "J0004"}])
+    approvals.record(q / "docs", "decision", "J0003", approvals.decision_content(old), by="owner")
+    ln = line(Ctx(project=q, path="/x", key="x", cfg={}, docs=q / "docs"), "ev.decision")
+    assert ln.level == "FAIL" and "ended" in ln.what

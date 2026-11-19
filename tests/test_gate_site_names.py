@@ -60,3 +60,12 @@ def test_reveal_from_lets_a_site_keep_its_first_folds_still():
     assert line(ctx(still), "motion.reveal").level == "FAIL"
     cfg = {**CFG, "features": {**CFG["features"], "reveal_from": 3}}
     assert line(ctx(still, cfg), "motion.reveal").level == "OK"
+
+
+def test_the_header_label_exception_is_honoured_only_with_a_reason():
+    page = BODY.replace('href="/contact-us/?cta=head">Book a free call', 'href="/contact-us/?cta=head">Book a call')
+    assert line(ctx(page), "cta.label-same").level == "FAIL"
+    cfg = {**CFG, "cta": {**CFG["cta"], "header_label": {"label": "Book a call", "why": "owner rule 536c: fits beside the logo"}}}
+    assert line(ctx(page, cfg), "cta.label-same").level == "OK"
+    cfg2 = {**CFG, "cta": {**CFG["cta"], "header_label": {"label": "Book a call"}}}       # no reason: not honoured
+    assert line(ctx(page, cfg2), "cta.label-same").level == "FAIL"

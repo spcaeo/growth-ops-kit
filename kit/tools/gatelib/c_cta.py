@@ -112,7 +112,14 @@ def one_path(ctx):
 def label_same(ctx):
     root = ctx.root()
     labels = {}
+    # growth.json cta.header_label {label, why}: the site header's own short label, an owner-approved exception (it fits
+    # beside the logo and menu); only header buttons with exactly that label are left out
+    hl = cta(ctx).get("header_label") or {}
+    hl_ok = isinstance(hl, dict) and hl.get("label") and len(str(hl.get("why") or "")) >= 10
     for a in primaries(ctx, root):
+        in_head = any(x.tag in ("header", "nav") or domx.has_cls(x, r"site-header") for x in a.ancestors())
+        if hl_ok and in_head and domx.label(a).strip().rstrip("→↗ ").strip().lower() == str(hl["label"]).strip().lower():
+            continue
         labels.setdefault(domx.label(a), []).append(a.get("href").split("cta=")[-1][:40])
     want = cta(ctx).get("label")
     if not labels:
