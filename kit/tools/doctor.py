@@ -22,7 +22,45 @@ rows = []
 
 
 def row(step, ok, what, fix=""):
-    rows.append((step, "OK  " if ok is True else ("TODO" if ok is None else "FAIL"), what, "" if ok is True else fix))
+    """ok: True (OK), None (TODO), False (FAIL), or "busy" (BUSY: a normal moment of work in progress, such as a database
+    being written or a page about to be rebuilt; it counts as done and never fails the run)."""
+    st = "OK  " if ok is True else ("BUSY" if ok == "busy" else ("TODO" if ok is None else "FAIL"))
+    rows.append((step, st, what, "" if ok is True or ok == "busy" else fix))
+
+
+def port_in_use(port):
+    import socket
+    with socket.socket() as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def port_is_our_tracker(port):
+    """True when what answers on the port is a page tracker dashboard."""
+    try:
+        return b"page change tracker" in urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2).read(200_000)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def a5_state(setup_text, repo=None):
+    """(ok, what) for the 'Control check' row of SETUP.md: the status cell (the last one) says done, and the row names at
+    least one commit id. With a site repo, every id must exist in it (git cat-file), so a made-up id does not pass."""
+    line = next((l for l in setup_text.splitlines() if "Control check" in l and "|" in l), None)
+    if line is None:
+        return None, "SETUP.md has no 'Control check' row"
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    status = re.sub(r"<[^>]*>", "", cells[-1])           # a template placeholder such as <fill in: done or not> is not an answer
+    ids = [m for m in re.findall(r"\b[0-9a-f]{7,40}\b", " ".join(cells[1:])) if re.search(r"\d", m)]
+    if not re.search(r"\bdone\b", status, re.I):
+        return None, "SETUP.md 'Control check' row does not say done in its status cell"
+    if not ids:
+        return None, "SETUP.md 'Control check' row says done but names no commit id (the release and the rollback)"
+    if repo is not None:
+        bad = [i for i in ids if subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{i}^{{commit}}"], capture_output=True).returncode]
+        if bad:
+            return None, f"SETUP.md 'Control check' row names commit ids not found in the site repo: {', '.join(bad)}"
+    return True, "SETUP.md 'Control check' row says done, with commit ids" + (" found in the site repo" if repo is not None else "")
 
 
 LAUNCHD_DIRS = ["~/Library/LaunchAgents", "/Library/LaunchAgents", "/Library/LaunchDaemons"]
@@ -153,8 +191,9 @@ else:
 # A5 control check
 setup_f = PROJECT / "SETUP.md"
 setup = setup_f.read_text() if setup_f.exists() else ""
-row("A5 Control of the live site proven", bool(re.search(r"Control check[^\n]*\| *done", setup)) or None,
-    "SETUP.md 'Control check' row says done", "book/01-flow.md A5: tiny visible edit, owner checks, roll back")
+_a5_ok, _a5_what = a5_state(setup, SITE_REPO if CFG.get("site_repo") and (SITE_REPO / ".git").exists() else None)
+row("A5 Control of the live site proven", _a5_ok, _a5_what,
+    "book/01-flow.md A5: tiny visible edit, owner checks, roll back; then fill the row: the commit ids and 'done'")
 # A6 task tracker
 try:
     t = json.loads((DOCS / "tasks.json").read_text())
@@ -196,24 +235,36 @@ auto_jobs = auto_start_jobs(PROJECT)
 jobs_note = f"auto-start jobs: {len(auto_jobs)}" + (f" ({', '.join(auto_jobs)})" if auto_jobs else "")
 if db.exists():
     c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    locked = False                       # a sync is writing right now: wait, it is not a fault
     try:
         lo, hi = c.execute("select min(day), max(day) from search where path='*'").fetchone()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
         lo = hi = None
+        locked = "locked" in str(e).lower() or "busy" in str(e).lower()
     start = CFG.get("search_console_history_start")
     # with a site repo, the tracker must know which file each page is built from, or no change is ever measured
     try:
         n_files, n_changes = c.execute("select count(file), (select count(*) from changes) from pages").fetchone()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
         n_files = n_changes = None
+        locked = locked or "locked" in str(e).lower() or "busy" in str(e).lower()
     measured = not CFG.get("site_repo") or bool(n_changes)
     ok8 = (lo == start or not start) and hi and hi >= (date.today() - timedelta(days=3)).isoformat() and not auto_jobs and measured
-    row("A8 Page tracker running, history backfilled", True if ok8 else (False if not measured else None),
+    _port = int(CFG.get("tracker_port", 18700))
+    _foreign = port_in_use(_port) and not port_is_our_tracker(_port)
+    jobs_note += f"; port {_port} is in use by another program" if _foreign else ""
+    st8 = True if ok8 else (False if not measured else None)
+    if locked and st8 is not True:
+        st8, jobs_note = "busy", jobs_note + "; database is busy (a sync is writing), check again in a minute"
+    elif _foreign and st8 is True:
+        st8 = None
+    row("A8 Page tracker running, history backfilled", st8,
         f"Search Console {lo} to {hi} (history starts {start}); {jobs_note}"
         + (f"; pages with a content file: {n_files}, changes tracked: {n_changes}" if CFG.get("site_repo") else ""),
         ("set growth.json page_tracker.content_globs (or content_dirs / page_sources) so pages map to their files, then "
          "growth page-tracker sync" if not measured else
-         "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job"))
+         "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job"
+         + (f" | set tracker_port in growth.json to a free port ({_port} is taken)" if _foreign else "")))
 else:
     row("A8 Page tracker running, history backfilled", False, f"page-tracker/tracker.db missing; {jobs_note}",
         "growth page-tracker sync (book/01-flow.md A8)" + (" | remove any auto-start job" if auto_jobs else ""))
@@ -222,8 +273,13 @@ else:
 _oj = PROJECT / "journal" / "owner-journal.html"
 _src = [DOCS / "steps-log.md", PROJECT / "journal" / "entries.jsonl"]
 _fresh = _oj.exists() and all(_oj.stat().st_mtime >= p.stat().st_mtime - 1 for p in _src if p.exists())
-row("A9 Owner journal page current", _fresh, "journal/owner-journal.html is newer than the steps log and the journal"
-    if _fresh else "journal/owner-journal.html is older than the steps log or the journal", "growth owner_journal --no-open")
+_newest = max([p.stat().st_mtime for p in _src if p.exists()] or [0])
+_recent = (datetime.now().timestamp() - _newest) < 15 * 60   # just logged: the Stop hook rebuilds the page when the agent stops
+row("A9 Owner journal page current", True if _fresh else ("busy" if _recent and _oj.exists() else False),
+    "journal/owner-journal.html is newer than the steps log and the journal" if _fresh else
+    ("journal/owner-journal.html is behind a log line written in the last 15 minutes (BUSY: the Stop hook rebuilds it)"
+     if _recent and _oj.exists() else "journal/owner-journal.html is older than the steps log or the journal"),
+    "growth owner_journal --no-open")
 
 # A10 the agent's guards: the Stop hook is wired into Claude Code's settings for this project
 _settings = PROJECT / ".claude" / "settings.json"
@@ -246,6 +302,8 @@ w = max(len(r[0]) for r in rows)
 print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")
 for step, st, what, fix in rows:
     print(f"{st}  {step.ljust(w)}  {what}" + (f"\n      fix: {fix}" if fix else ""))
-done = sum(1 for r in rows if r[1] == "OK  ")
-print(f"\n{done}/{len(rows)} setup steps done." + ("" if done == len(rows) else " Page work starts only when all are OK (book/01-flow.md)."))
+done = sum(1 for r in rows if r[1] in ("OK  ", "BUSY"))
+busy = sum(1 for r in rows if r[1] == "BUSY")
+print(f"\n{done}/{len(rows)} setup steps done." + (f" ({busy} BUSY: work in progress, not a fault)" if busy else "")
+      + ("" if done == len(rows) else " Page work starts only when all are OK (book/01-flow.md)."))
 sys.exit(0 if all(r[1] != "FAIL" for r in rows) else 1)

@@ -113,3 +113,39 @@ def test_a_fresh_project_passes_the_setup_steps_that_need_no_keys(tmp_path):
     for step in ("A1 ", "A5 ", "A7 ", "A8 ", "A11 "):         # these wait for work or the owner, each with a fix line
         line = next(l for l in out.splitlines() if step in l[:10])
         assert not line.startswith("OK") and "fix:" in out.split(line, 1)[1].splitlines()[1]
+
+
+def test_new_project_moves_the_tracker_port_when_the_default_is_taken(tmp_path, monkeypatch):
+    default = json.loads((ROOT / "templates" / "project" / "growth.json").read_text())["tracker_port"]
+    monkeypatch.setattr(new_project, "port_is_free", lambda p: p != default)
+    folder, _ = new_project.make(tmp_path / "busy", "https://x.example")
+    assert json.loads((folder / "growth.json").read_text())["tracker_port"] == default + 1
+    monkeypatch.setattr(new_project, "port_is_free", lambda p: True)
+    folder, _ = new_project.make(tmp_path / "free", "https://x.example")
+    assert json.loads((folder / "growth.json").read_text())["tracker_port"] == default
+
+
+def test_doctor_warns_when_another_program_holds_the_tracker_port(tmp_path):
+    import socket
+    import os
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    try:
+        folder, _ = new_project.make(tmp_path / "p", "https://x.example")
+        cfg = json.loads((folder / "growth.json").read_text())
+        cfg["tracker_port"] = port
+        (folder / "growth.json").write_text(json.dumps(cfg))
+        db = folder / "page-tracker" / "tracker.db"
+        import sqlite3
+        c = sqlite3.connect(db)
+        c.execute("create table search (day text, path text)")
+        c.commit()
+        c.close()
+        env = {**os.environ, "GROWTH_PROJECT": str(folder), "GROWTH_CRONTAB": "", "GROWTH_LAUNCHD_DIRS": str(folder / "none")}
+        out = subprocess.run([sys.executable, str(ROOT / "kit" / "tools" / "doctor.py")], cwd=folder, capture_output=True, text=True, env=env).stdout
+        assert f"port {port} is in use by another program" in out
+        assert f"set tracker_port in growth.json to a free port ({port} is taken)" in out
+    finally:
+        srv.close()
