@@ -5,7 +5,7 @@
 
 Creates <folder> with growth.json (site URL and name filled in), BRAND.md, OWNER-RULES.md, SETUP.md, CLAUDE.md, docs/
 (steps log, tasks.json), .claude/skills/onboard (the /onboard skill) and .claude/settings.json (the Stop hook that makes the
-agent follow the rules), and the empty working folders (journal, research, inventory, archive, page-tracker) with a
+agent follow the rules), and the empty working folders (journal, research, inventory, archive, page-tracker), a commented .private-words template (git-ignored) and a
 .gitignore that keeps the tracker's data, keys and scratch files out of git. Then it prints what to do next.
 It refuses to write into a folder that already holds files, unless --force (which never overwrites a file that exists).
 """
@@ -42,6 +42,17 @@ archive/
 research/raw/
 __pycache__/
 .DS_Store
+.private-words
+"""
+
+PRIVATE_WORDS = """# Words that must never appear in anything you publish or commit (git-ignored; `growth leak_check` reads it).
+# One per line, case-insensitive; a line starting with # is a comment. Put the names a public file must not carry:
+#   - client or business names and their domains
+#   - people's names, private emails and phone numbers
+#   - internal project or server names
+# Example lines (delete the # to use):
+# acme corp
+# jane.doe@example.com
 """
 
 
@@ -120,6 +131,10 @@ def make(folder: Path, site: str, name: str = "", stack: str = "static", force: 
     gi = folder / ".gitignore"
     if not gi.exists():
         gi.write_text(GITIGNORE)
+    words = folder / ".private-words"
+    if not words.exists():                           # a commented template: the owner fills it in, git never sees it
+        words.write_text(PRIVATE_WORDS)
+        made.append(words)
     return folder, made
 
 
