@@ -69,7 +69,8 @@ def head_and_body(ctx):
     from . import design, domx
     root = ctx.root()
     m = domx.main(root)
-    verdicts = design.select(root, (ctx.cfg.get("design") or {}).get("verdict", "") or "") if (ctx.cfg.get("design") or {}).get("verdict") else []
+    sel = design.design_map(ctx).get("verdict")
+    verdicts = design.select(root, sel) if sel else []
     verdicts += [n for n in m.iter() if n.tag and ("data-verdict" in n.attrs or any(VERDICT_CLASS.fullmatch(c) for c in domx.classes(n)))]
     vid = {id(n) for n in verdicts}
     head, body, seen_h2 = [], [], False

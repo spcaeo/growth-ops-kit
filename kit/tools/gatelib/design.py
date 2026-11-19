@@ -91,8 +91,22 @@ def select(root, selector):
 
 
 # ---- concepts -------------------------------------------------------------------------------------------------------
+def design_map(ctx):
+    """The project's design map: design.json "map" (written by `growth design learn`) under growth.json "design"
+    (the hand-written entries win)."""
+    if "design_map" not in ctx.cache:
+        learned = {}
+        try:
+            d = json.loads((ctx.project / "design.json").read_text())
+            learned = d.get("map") or {} if isinstance(d, dict) else {}
+        except (OSError, ValueError, TypeError):
+            pass
+        ctx.cache["design_map"] = {**learned, **(ctx.cfg.get("design") or {})}
+    return ctx.cache["design_map"]
+
+
 def _mapped(ctx, root, concept):
-    sel = (ctx.cfg.get("design") or {}).get(concept)
+    sel = design_map(ctx).get(concept)
     return select(root, sel) if sel else []
 
 
@@ -171,7 +185,9 @@ def _semantic(ctx, root, concept):
     if concept == "calculator":
         return [n for n in root.iter() if "data-calculator" in n.attrs or n.get("role") == "application"]
     if concept == "read_next":
-        return [n for n in root.iter() if n.tag == "aside" and re.match(r"(?i)\s*(read next|related|you may also)", domx.text(n))]
+        return [n for n in root.iter() if n.tag in ("aside", "nav", "section") and (
+            re.match(r"(?i)\s*(read next|related|you may also)", domx.text(n) if n.tag == "aside" else "")
+            or re.match(r"(?i)\s*(read next|related|you may also|more (posts|articles))", n.get("aria-label")))]
     if concept == "disclosure":
         pat = ctx.cfg.get("disclosure_pattern")
         rx = re.compile(pat, re.I) if pat else None

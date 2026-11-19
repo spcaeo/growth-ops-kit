@@ -43,6 +43,7 @@ TOOLS = {
     "serve_build": ("tools/serve_build.py", "(also: growth serve) serve a production build's folder on 127.0.0.1 (growth serve <dist>), so READY runs on the build and not on a dev server"),
     "review": ("tools/review.py", "the independent review of a page: start research/<key>-review-<date>.md from the kit's fixed checklist (rule 109)"),
     "held": ("tools/held.py", "held-field proposals in the page plan: add, list, mark stale when a quoted fact changes, rewrite, apply"),
+    "site_design": ("tools/site_design.py", "(also: growth design) learn a site's design for the gate (design.json) and calibrate the gate on known-good pages"),
     "ready": ("tools/ready.py", "the golden rule: a page is READY only when the full gate shows 0 FAIL on the one preview address"),
     "checkpoints": ("tools/checkpoints.py", "the manual checks of a page's checkpoints file: which are ticked with proof, which are open"),
     "preflight": ("tools/preflight.py", "before building a page: planning complete, site healthy, every checkpoint written down"),
@@ -84,7 +85,7 @@ TOOLS = {
     "checks": ("adapters/nextjs/checks.sh", "(Next.js adapter) run only the tests and build a change touches"),
     "page_tracker": ("page-tracker/tracker.py", "the page tracker: sync, report (did our page changes help?); also serve, ai-summary"),
 }
-ALIASES = {"serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
+ALIASES = {"design": "site_design", "serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
 
 
 def usage():
