@@ -100,3 +100,25 @@ def head_figures(ctx):
     ctx.verdict([f"{', '.join(missing)} in the first screen or verdict, never stated in the body"] if missing else [],
                 f"{len(figs)} money figure(s) in the head, all stated in the body",
                 "state each head figure in the body with its source and the sum behind it, or take it out of the head (rule 109)")
+
+
+# ---- held-field proposals must not be stale (#61) -------------------------------------------------------------------
+@check("ev.held-proposals", "109", ALL, "no held-field proposal quotes a fact that changed or that the page no longer states", needs="project")
+def held_proposals(ctx):
+    import held
+    key = ctx.need_key()
+    plan = held.load(held.plan_path(ctx.project, key))
+    live = [e for e in held.entries(plan) if e.get("status", "open") not in ("applied", "dropped")]
+    if not live:
+        ctx.ok("no held-field proposals")
+        return
+    from . import domx
+    text = domx.text(domx.main(ctx.root())) if ctx.html else None
+    stale = []
+    for e in live:
+        st, why = held.status_of(e, text)
+        if st == "stale":
+            stale.append(f"{e.get('id')} ({e.get('field')}): {why}")
+    ctx.verdict(stale, f"{len(live)} held-field proposal(s), none stale",
+                f"rewrite each stale proposal against the page's facts (growth held rewrite {key} <id> --proposed ...), or drop it (growth held drop); "
+                "it would ship stale the day the freeze ends")
