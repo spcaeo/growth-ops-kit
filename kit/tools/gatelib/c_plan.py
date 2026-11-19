@@ -46,7 +46,7 @@ def problems(plan, page_folds):
         return ["no plan file (growth fold_plan init <path> --url <local URL>)"]
     folds = plan.get("folds") or []
     if not folds:
-        out.append("the plan lists no folds (growth fold_plan init <path> --url <local URL>, or list the planned folds by hand)")
+        out.append("the plan lists no folds (growth fold_plan init <path> --url <local URL>; a new page: --folds \"Hero;Proof;...\" and use those names as data-fold)")
     names = [f.get("fold", "") for f in folds]
     for want in page_folds:
         if want not in names:
