@@ -110,3 +110,20 @@ def test_the_title_check_reads_the_trackers_slashless_queries():
                         "insert into search_queries values('/blog/post', '2026-11-18', 'best mowing height', 3, 900, 4.1);")
         c.commit(); c.close()
         assert gsc_top(Ctx(project=p, path="/blog/post/"), 2) == [("best mowing height", 900)]
+
+
+def test_yaml_dates_in_front_matter_become_text_and_diff(demo_project):
+    """Astro front matter often has unquoted dates (date: 2026-08-13), which yaml reads as datetime.date. The tracker must
+    read them as ISO text and the diff must not crash (kit friction: 'Object of type date is not JSON serializable')."""
+    code = ("import json, diffs, repo_meta\n"
+            "a = '---\\ntitle: T\\ndate: 2026-08-13\\nupdated: 2026-08-13\\nseo:\\n  at: 2026-08-13 10:00:00\\ntags: [2026-01-01]\\n---\\nbody\\n'\n"
+            "b = a.replace('updated: 2026-08-13', 'updated: 2026-09-01').replace('body', 'new body')\n"
+            "fm, _ = repo_meta.split_md(a)\n"
+            "print(json.dumps(dict(fm=fm, diff=diffs.diff(a, b, 't.mdx'))))")
+    r = subprocess.run([sys.executable, "-c", code], cwd=TRACKER, capture_output=True, text=True,
+                       env={**os.environ, "GROWTH_PROJECT": str(demo_project), "PYTHONDONTWRITEBYTECODE": "1"}, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["fm"]["date"] == "2026-08-13" and out["fm"]["tags"] == ["2026-01-01"]
+    assert out["fm"]["seo"]["at"].startswith("2026-08-13")
+    assert "2026-09-01" in json.dumps(out["diff"])
