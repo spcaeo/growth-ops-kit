@@ -35,6 +35,8 @@
   "_conversion_path": "The one page every call to action leads to (booking, quote or contact).",
   "booking_hosts": [],
   "_booking_hosts": "Extra outside booking hosts that must never be linked directly (a pasted booking link breaks rule 32). Well-known hosts (Calendly, Cal.com, Zoom, HubSpot meetings) are always checked.",
+  "booking_allowed": [],
+  "_booking_allowed": "The site's OWN booking links that it uses on purpose, each {\"match\": \"<part of the link>\", \"why\": \"<the reason>\"}, for example {\"match\": \"calendly.com/example-team/\", \"why\": \"the booking dialog's 'Pick a time' button opens it\"}. Rule 32 then prints a WARN naming the exception instead of a FAIL; any other booking link still FAILs.",
   "cta": {
     "_about": "The one call to action. label: the one text on every primary button. contact_path: the plain contact page. reason_words: words a reason line beside a button talks about (regex alternatives). events, components: dataLayer events and shared components the Next.js adapter looks for. color, color_pressed, color_token: the one CTA colour (Next.js adapter).",
     "label": "",

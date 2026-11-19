@@ -2,6 +2,14 @@
 
 The kit and the book share one version number. Dates are written year-month-day.
 
+## Unreleased
+
+- Rule 32 (`cta.one-path`): `growth.json` `booking_allowed` lists the site's OWN booking links that it uses on purpose,
+  each with a required reason (`{"match": ..., "why": ...}`). The gate prints them as a WARN that names the exception
+  and its reason, never a silent OK; any other booking link still FAILs, and an entry with no reason FAILs.
+- The booking paths (`conversion_path`, `cta.contact_path`) are compared without a trailing slash: a site whose
+  addresses end in "/" (for example "/contact/") was told "no link to the booking path at all" on every page.
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.
