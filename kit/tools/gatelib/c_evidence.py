@@ -231,7 +231,11 @@ def run_answer(ctx, e):
 def ai_baseline(ctx):
     cut = dt.datetime.now(tz(ctx)) - dt.timedelta(days=FRESH_DAYS)
     market = (ctx.cfg.get("market") or {}).get("primary_country", "US")
-    cand = [e for e in ctx.page_entries() if e.get("kind") == "run" and e.get("market") == market and (at(e, tz(ctx)) or cut) >= cut]
+    # engines the owner does not trust as a source (growth.json "research": {"excluded_engines": ["chatgpt"]}) never count
+    banned = {str(x).lower() for x in ((ctx.cfg.get("research") or {}).get("excluded_engines") or [])}
+    eng = lambda e: next((t.lower() for t in (e.get("tags") or []) if t.lower() in banned), "")  # noqa: E731
+    cand = [e for e in ctx.page_entries() if e.get("kind") == "run" and e.get("market") == market and (at(e, tz(ctx)) or cut) >= cut
+            and not eng(e)]
     runs, seen_q, seen_a = [], set(), set()
     for e in cand:              # distinct questions, each with its own saved, non-empty answer
         got = run_answer(ctx, e)

@@ -103,3 +103,24 @@ def test_an_owner_question_answered_by_hand_is_seen(tmp_path):
     assert ln.level == "FAIL" and "Q1" in ln.what and "growth approve answer Q1" in ln.what
     approvals.record(p / "docs", "answer", "Q1", approvals.answer_content(q), by="owner")
     assert line(Ctx(project=p, path="/x", key="x", cfg={}, docs=p / "docs"), "ev.task-steps").level == "OK"
+
+
+def test_runs_from_an_excluded_engine_do_not_count(tmp_path):
+    # owner rule (a real project, 19 Nov 2026): ChatGPT is not a research source; Google AI Overview / AI Mode are
+    now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    p = project(tmp_path)
+    runs = p / "journal" / "runs"
+    runs.mkdir()
+    def entry(i, engine):
+        f = runs / f"J{engine}{i}.json"
+        f.write_text(json.dumps({"query": f"{engine} question {i}", "response": f"Answer {i} from {engine}: Acme first, Beta second."}))
+        return {"id": f"J{engine}{i}", "at": now, "kind": "run", "pages": ["/x"], "market": "US", "tags": ["ai-answer", engine],
+                "title": f"{engine} (US): q{i}", "source": str(f.relative_to(p))}
+    gpt = [entry(i, "chatgpt") for i in range(10)]
+    (p / "journal" / "entries.jsonl").write_text("".join(json.dumps(e) + "\n" for e in gpt))
+    cfg = {"research": {"excluded_engines": ["ChatGPT"]}}
+    assert line(Ctx(project=p, path="/x", key="x", ptype="money", cfg={}), "ev.ai-baseline").level == "OK"   # no rule: counted
+    assert line(Ctx(project=p, path="/x", key="x", ptype="money", cfg=cfg), "ev.ai-baseline").level == "FAIL"
+    google = [entry(i, "google-ai-mode") for i in range(10)]
+    (p / "journal" / "entries.jsonl").write_text("".join(json.dumps(e) + "\n" for e in gpt + google))
+    assert line(Ctx(project=p, path="/x", key="x", ptype="money", cfg=cfg), "ev.ai-baseline").level == "OK"
