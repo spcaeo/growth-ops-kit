@@ -21,18 +21,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transcript as transcripts  # noqa: E402
 
-# Default roles: builders sonnet; the independent reviewer opus (the strongest model, and different from the builders);
+# Default roles: builders and researchers sonnet; the independent reviewer opus (the strongest model, and different from the builders);
 # log and count work haiku; screenshots and click-tests sonnet (they need sight). (growth.json "agent_models": {"roles": [{"match": "<regex on name + description>", "models": ["sonnet"]}, ...],
 # "lead": "<model>" used only when the transcript names none, "exempt_types": ["Explore", ...]} replaces them).
 # role pattern -> allowed models, first match wins
 DEFAULT_ROLES = [
     # a helper that fixes or builds is a builder even when its name says what it fixes ("review fixes builder")
     (r"(?i)\bbuild(er|s|ing)?\b|\bfix(er|es|ing)?\b", {"sonnet"}),
+    # a researcher reads sources and writes a research file (it may "verify facts"): mid model, before the reviewer pattern
+    (r"(?i)\bresearch(er|ers|ing)?\b", {"sonnet"}),
     (r"(?i)review|audit|verif", {"opus"}),
     (r"(?i)log|count|triage|summar|tally", {"haiku"}),
     (r"(?i)evidence|shots|screenshot|click", {"sonnet"}),
 ]
 BUILDER = DEFAULT_ROLES[0][0]
+REVIEWER = r"(?i)review|audit|verif"   # the independent reviewer's pattern (matched by value, not by list position)
 DECLARED = re.compile(r"(?i)(review|audit|verif).*of opus-built|of opus-built.*(review|audit|verif)")
 EXEMPT_TYPES = {"fork", "explore", "plan", "claude-code-guide", "statusline-setup"}   # read-only or inherit by design
 FAMILIES = ("opus", "sonnet", "haiku", "fable")
@@ -94,7 +97,7 @@ def problems(calls, lead=None, roles=None, builders=None, exempt=None):
                        "(builder, review, log/count, evidence) and start it again, or list the role in growth.json agent_models.")
             continue
         ok = set(pat[1])
-        if pat[0] == DEFAULT_ROLES[1][0]:            # an independent reviewer differs from the model its builder ran on
+        if pat[0] == REVIEWER:            # an independent reviewer differs from the model its builder ran on
             if builders is not None:
                 if model in builders:      # the strongest model reviews, so a builder on it leaves no different model to review with
                     out.append(f"helper '{who}' reviews on {model}, the same model a builder ran on. Builders run on sonnet "
