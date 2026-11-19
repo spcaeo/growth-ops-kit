@@ -129,19 +129,91 @@ def test_the_sites_own_label_with_a_reason_line_is_not_bare_but_a_bare_one_is():
     assert run(bare, "cta.no-bare-book", BASE).level == "FAIL"
 
 
-def test_design_exceptions_warn_with_their_reason_and_expire(tmp_path):
+def _approve(docs, exc):
+    import approvals
+    approvals.record(docs, "exception", exc["check"], exc, "test approval", by="owner")
+
+
+@pytest.fixture
+def owner_home(tmp_path, monkeypatch):
+    (tmp_path / "home").mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))       # never the real signing key
+
+
+# Updated for audit C3: an exception now needs an 'until' within 30 days and the owner's approval (growth approve), so the
+# old test's exceptions without either no longer excuse anything; the expiry and task rules are kept.
+def test_design_exceptions_warn_with_their_reason_and_expire(tmp_path, owner_home):
     html = SEMANTIC.replace('alt="A lawn being mowed"', 'alt=""')
-    exc = {"check": "post.cover", "why": "covers are decorative on this site", "task": "T9"}
+    until = (dt.date.today() + dt.timedelta(days=20)).isoformat()
+    exc = {"check": "post.cover", "why": "covers are decorative on this site", "task": "T9", "until": until}
     docs = tmp_path / "docs"
     docs.mkdir()
     (docs / "tasks.json").write_text(json.dumps({"tasks": [{"id": "T9", "status": "doing", "steps": []}]}))
+    _approve(docs, exc)
     line = run(html, "post.cover", {**BASE, "design_exceptions": [exc]}, docs=docs)
     assert line.level == "WARN" and "covers are decorative on this site" in line.what and "task T9" in line.what
+    assert "owner approval A0001" in line.what
     (docs / "tasks.json").write_text(json.dumps({"tasks": [{"id": "T9", "status": "done", "steps": []}]}))
     assert run(html, "post.cover", {**BASE, "design_exceptions": [exc]}, docs=docs).level == "FAIL"       # task done
     old = {"check": "post.cover", "why": "covers are decorative on this site", "until": "2026-11-01"}
-    assert run(html, "post.cover", {**BASE, "design_exceptions": [old]}).level == "FAIL"                  # date passed
-    assert run(html, "post.cover", {**BASE, "design_exceptions": [{"check": "post.cover"}]}).level == "FAIL"  # no reason
+    _approve(docs, old)
+    assert run(html, "post.cover", {**BASE, "design_exceptions": [old]}, docs=docs).level == "FAIL"       # date passed
+    assert run(html, "post.cover", {**BASE, "design_exceptions": [{"check": "post.cover"}]}, docs=docs).level == "FAIL"  # no reason
+
+
+def test_an_exception_the_owner_did_not_approve_excuses_nothing(tmp_path, owner_home):
+    """audit C3: before, any entry the agent typed into growth.json turned a FAIL into a WARN."""
+    html = SEMANTIC.replace('alt="A lawn being mowed"', 'alt=""')
+    exc = {"check": "post.cover", "why": "covers are decorative on this site", "until": (dt.date.today() + dt.timedelta(days=5)).isoformat()}
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    line = run(html, "post.cover", {**BASE, "design_exceptions": [exc]}, docs=docs)
+    assert line.level == "FAIL" and "no owner approval" in line.what and "growth approve exception post.cover" in line.what
+    _approve(docs, exc)
+    changed = {**exc, "why": "covers are decorative on this site, and more"}
+    line = run(html, "post.cover", {**BASE, "design_exceptions": [changed]}, docs=docs)
+    assert line.level == "FAIL" and "changed after the owner approved it" in line.what
+    far = {**exc, "until": (dt.date.today() + dt.timedelta(days=90)).isoformat()}
+    _approve(docs, far)
+    assert run(html, "post.cover", {**BASE, "design_exceptions": [far]}, docs=docs).level == "FAIL"        # more than 30 days
+    log = docs / "approvals.jsonl"
+    log.write_text(log.read_text().replace('"by": "owner"', '"by": "someone"', 1))                       # edited by hand
+    line = run(html, "post.cover", {**BASE, "design_exceptions": [exc]}, docs=docs)
+    assert line.level == "FAIL" and "cannot be trusted" in line.what
+
+
+def test_no_exception_excuses_evidence_or_a_page_that_did_not_load(tmp_path, owner_home):
+    """audit C3: ev.* / proc.* checks and 'input missing' lines are never excused, even when approved."""
+    import approvals
+    from gatelib.core import Ctx
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    until = (dt.date.today() + dt.timedelta(days=5)).isoformat()
+    excs = [{"check": c, "why": "does not fit this site's design", "until": until} for c in ("ev.decision", "seo.basics")]
+    for e in excs:
+        _approve(docs, e)
+    cfg = {**BASE, "design_exceptions": excs}
+    (tmp_path / "journal").mkdir()
+    (tmp_path / "journal" / "entries.jsonl").write_text("")
+    ctx = Ctx(project=tmp_path, path="/x", key="x", cfg=cfg, docs=docs, today=dt.date(2026, 11, 19))
+    run_check(ctx, CHECKS["ev.decision"])
+    assert ctx.lines[-1].level == "FAIL" and "evidence or process check" in ctx.lines[-1].what
+    ctx = Ctx(project=tmp_path, path="/x", url="http://127.0.0.1:9/x", ptype="post", cfg=cfg, docs=docs, today=dt.date(2026, 11, 19))
+    run_check(ctx, CHECKS["seo.basics"])                    # no page HTML: input missing
+    assert [ln.level for ln in ctx.lines] == ["FAIL"] and "input missing" in ctx.lines[0].what
+    assert approvals.exception_problem(excs[0], dt.date.today())
+    assert approvals.excuses_blocked_skip(tmp_path, {"design_exceptions": [excs[0]]}, "ev.decision")[0] is False
+
+
+def test_ready_may_accept_a_blocked_skip_only_with_an_owner_approved_exception(tmp_path, owner_home):
+    import approvals
+    (tmp_path / "docs").mkdir()
+    exc = {"check": "phone.readable", "why": "no headless browser on this machine yet", "until": (dt.date.today() + dt.timedelta(days=7)).isoformat()}
+    ok, why = approvals.excuses_blocked_skip(tmp_path, {"design_exceptions": [exc]}, "phone.readable")
+    assert not ok and "no owner approval" in why
+    _approve(tmp_path / "docs", exc)
+    ok, why = approvals.excuses_blocked_skip(tmp_path, {"design_exceptions": [exc]}, "phone.readable")
+    assert ok and "excused by the owner" in why
 
 
 def test_the_selector_subset():

@@ -197,6 +197,59 @@ def exception_problem(e: dict, approved_on: dt.date) -> str | None:
     return None
 
 
+def exception_state(docs, cfg: dict, cid: str, today: dt.date, task_done=None):
+    """Does growth.json design_exceptions excuse check `cid` today? One answer for the gate and for READY.
+
+    ("ok", entry, why_line)    an entry for cid, approved by the owner (same content), until not passed and within 30 days
+                               of the approval, its task (if any) not done
+    ("refused", entry, why)    an entry exists but does not count: evidence/process check, no approval, changed since,
+                               log tampered, no or too far 'until', date passed, task done
+    ("none", None, "")         no entry names cid
+    task_done: a function(task_id) -> bool (docs/tasks.json), optional."""
+    mine = [e for e in (cfg or {}).get("design_exceptions") or [] if isinstance(e, dict) and e.get("check") == cid]
+    if not mine:
+        return "none", None, ""
+    why = ""
+    for e in mine:
+        state, info = status(docs, "exception", cid, e)
+        if state != "ok":
+            why = explain(state, info, f"the growth.json exception for {cid}", f"growth approve exception {cid}")
+            if not excusable(cid):
+                why = f"{cid} is an evidence or process check; no exception can excuse it"
+            continue
+        try:
+            approved_on = dt.date.fromisoformat(str(info.get("at"))[:10])
+        except ValueError:
+            approved_on = today
+        prob = exception_problem(e, approved_on)
+        if prob:
+            why = prob
+            continue
+        if today > dt.date.fromisoformat(str(e["until"])[:10]):
+            why = f"the exception for {cid} ended on {e['until']}"
+            continue
+        if e.get("task") and task_done and task_done(e["task"]):
+            why = f"the exception's task {e['task']} is done"
+            continue
+        return "ok", e, f"{e['why'].strip()}{'; task ' + e['task'] if e.get('task') else ''}; owner approval {info.get('id')}"
+    return "refused", mine[0], why
+
+
+def excuses_blocked_skip(project, cfg: dict, cid: str, today: dt.date | None = None) -> tuple[bool, str]:
+    """For READY: may a BLOCKED-SKIP of `cid` be accepted? Only when an owner-approved, unexpired design exception names
+    it, and never for an evidence or process check. (accepted, one plain line)."""
+    def done(tid):
+        try:
+            return any(t.get("id") == tid and t.get("status") == "done"
+                       for t in json.loads((Path(project) / "docs" / "tasks.json").read_text())["tasks"])
+        except (OSError, ValueError, KeyError):
+            return False
+    state, _e, why = exception_state(Path(project) / "docs", cfg, cid, today or dt.date.today(), done)
+    if state == "ok":
+        return True, f"{cid} could not run; excused by the owner: {why}"
+    return False, why or f"{cid} could not run and no owner-approved exception names it"
+
+
 def decision_content(e: dict) -> dict:
     return {k: e.get(k) for k in ("id", "kind", "pages", "title", "text")}
 
