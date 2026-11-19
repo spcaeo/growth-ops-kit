@@ -14,7 +14,7 @@ is "nextjs"; on any other stack the gate prints "SKIP <id>: no adapter for <stac
   growth gate engine         # kit files hold no project facts (file:line, count by file)
   growth gate coverage       # per rule: code or judgment + proxy, and the % enforced by code
 
-Each line: FAIL|WARN|OK <rule> [check id] <what> -> <exact fix>, or SKIP <id>: <why>. Exit 1 when any line is FAIL.
+Each line: FAIL|WARN|OK <rule> [check id] <what> -> <exact fix>, or SKIP <id>: <why> (does not apply here) or BLOCKED-SKIP <id>: <why> (applies but could not run: no browser, no way to date the page; READY refuses it). Exit 1 when any line is FAIL.
 Read-only: GETs the one local page (and the links the technical SEO check follows); never fetches the live site.
 """
 import argparse
@@ -71,9 +71,13 @@ def print_lines(ctx, title, md=None):
     order = {"FAIL": 0, "WARN": 1, "OK": 2, "SKIP": 3}
     ctx.lines.sort(key=lambda l: (order[l.level], rule_key(l.rule), l.cid))
     n = {k: sum(1 for l in ctx.lines if l.level == k) for k in order}
-    out = [title, ""] + [l.text() for l in ctx.lines] + ["", f"Gate: {n['FAIL']} FAIL, {n['WARN']} WARN, {n['OK']} OK, {n['SKIP']} SKIP "
-                                                           f"({len(ctx.lines)} checks; SKIP = does not apply to this site, never counted as OK). "
-                                                           f"{'BLOCKED: fix every FAIL before release.' if n['FAIL'] else 'PASS.'}"]
+    n["BLOCKED"] = sum(1 for l in ctx.lines if l.level == "SKIP" and l.blocked)
+    n["SKIP"] -= n["BLOCKED"]
+    out = [title, ""] + [l.text() for l in ctx.lines] + ["", f"Gate: {n['FAIL']} FAIL, {n['WARN']} WARN, {n['OK']} OK, {n['SKIP']} SKIP, {n['BLOCKED']} BLOCKED-SKIP "
+                                                           f"({len(ctx.lines)} checks; SKIP = does not apply to this site, BLOCKED-SKIP = applies but could not run, "
+                                                           f"never counted as OK). "
+                                                           f"{'BLOCKED: fix every FAIL before release.' if n['FAIL'] else 'PASS.'}"
+                                                           + (f" {n['BLOCKED']} check(s) could not run: READY needs them." if n["BLOCKED"] and not n["FAIL"] else "")]
     print("\n".join(out))
     if md:
         Path(md).write_text("\n".join(["```", *out, "```", ""]))
@@ -81,8 +85,9 @@ def print_lines(ctx, title, md=None):
 
 
 def default_key(path):
-    """The page key when --key is not given: the first two words of the path, never containing a slash."""
-    return "-".join((path.strip("/").replace("/", "-") or "home").split("-")[:2])
+    """The page key when --key is not given: the path's snapshot slug (paths.default_key), never containing a slash."""
+    import paths
+    return paths.default_key(path)
 
 
 def cmd_page(a):
@@ -179,7 +184,7 @@ def main(argv=None):
     p.add_argument("--no-browser", action="store_true", help="skip the two checks that measure the page in a headless browser (contrast, phone)")
     p.add_argument("--needs", default="", help="only checks that read: live, project, nextjs (comma list)")
     p.add_argument("--type", choices=["money", "hub", "post", "core"], default="money")
-    p.add_argument("--key", default="", help="research file key (default: first two words of the slug)")
+    p.add_argument("--key", default="", help="research file key (default: the path as a slug, e.g. blog__my-post)")
     p.add_argument("--stage", choices=["build", "release"], default="build", help="release = after the merge")
     p.add_argument("--no-link-status", action="store_true", help="skip the status check of every internal link (faster)")
     p.add_argument("--only", default="", help="comma list of check ids to run (growth preflight uses it)")

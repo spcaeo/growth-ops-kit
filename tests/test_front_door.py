@@ -96,10 +96,10 @@ def test_a_job_from_start_to_check_and_status(tmp_path):
         assert r.returncode == 0, r.stdout
         job = growth(tmp_path, "page", "/blog/post-a", cwd=proj)
         assert job.returncode == 0, job.stdout + job.stderr
-        assert "Opened T2" in job.stdout and "Brief for your agent: research/briefs/blog-post.md" in job.stdout
-        assert job.stdout.rstrip().splitlines()[-1].startswith("Next:") and (proj / "research" / "briefs" / "blog-post.md").is_file()
+        assert "Opened T2" in job.stdout and "Brief for your agent: research/briefs/blog__post-a.md" in job.stdout
+        assert job.stdout.rstrip().splitlines()[-1].startswith("Next:") and (proj / "research" / "briefs" / "blog__post-a.md").is_file()
         task = json.loads((proj / "docs" / "tasks.json").read_text())["tasks"][-1]
-        assert task["page"] == {"path": "/blog/post-a", "type": "post", "key": "blog-post", "playbook": "update-post"} and task["steps"]
+        assert task["page"] == {"path": "/blog/post-a", "type": "post", "key": "blog__post-a", "playbook": "update-post"} and task["steps"]
         again = growth(tmp_path, "page", "/blog/post-a", cwd=proj)
         assert "already open: T2" in again.stdout
         status = growth(tmp_path, "status", cwd=proj).stdout
