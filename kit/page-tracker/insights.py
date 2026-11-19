@@ -16,6 +16,7 @@ from collections import defaultdict
 
 D = dt.date.fromisoformat
 N_MAX = 14
+WINDOWS = (7, 14, 28, 56)     # days after a release that are looked at; a window not over yet is 'not yet', never a guess
 FLOOR = {"readers": 1, "clicks": 1, "impressions": 10, "ctr": 0.001, "leads": 0.3}
 LOWER_BETTER = {"position", "bounce"}
 RULES = ("Before vs after use same-length windows (up to 14 days) and skip the change day. Too early = fewer than 7 whole "
@@ -55,6 +56,22 @@ def gwin(d0, last, lastfinal, n_max=N_MAX):
         return None
     return dict(n=n, b_from=iso(d0 - dt.timedelta(days=n)), b_to=iso(d0 - dt.timedelta(days=1)),
                 a_from=iso(d0 + dt.timedelta(days=1)), a_to=iso(a_to), prov=max(0, (a_to - lastfinal).days))
+
+
+def day_windows(rows, d0, last, lastfinal):
+    """The page's impressions and clicks per day, before vs after its release, for each of day 7, 14, 28 and 56. A window
+    whose days are not all in yet says 'not yet'; its verdict never rests on a shorter window."""
+    out = []
+    for n in WINDOWS:
+        w = gwin(d0, last, lastfinal, n_max=n)
+        if not w or w["n"] < n:
+            out.append(dict(n=n, status="not yet"))
+            continue
+        b, a = gsum(rows, w["b_from"], w["b_to"]), gsum(rows, w["a_from"], w["a_to"])
+        out.append(dict(n=n, status="measured", provisional_days=w["prov"], clicks_per_day=[round(b["clicks"] / n, 2), round(a["clicks"] / n, 2)],
+                        impressions_per_day=[round(b["impressions"] / n, 1), round(a["impressions"] / n, 1)], position=[b["position"], a["position"]],
+                        verdict=verdict("impressions", b["impressions"] / n, a["impressions"] / n, n, w["prov"])))
+    return out
 
 
 def rwin(d0, newest, n_max=N_MAX):
@@ -145,7 +162,7 @@ def compute(c):
     changes = defaultdict(list)
     for path, live, wb, wa in c.execute("SELECT path, live_at, words_before, words_after FROM changes ORDER BY live_at"):
         changes[path].append((live, wb or 0, wa or 0))
-    main = {p: max(ch, key=lambda r: abs(r[2] - r[1]))[0] for p, ch in changes.items()}
+    main = {p: max(ch, key=lambda r: r[0])[0] for p, ch in changes.items()}   # the latest change is the release being judged, not the one that moved most words
     changed = sorted(main)
     S = min(D(v[:10]) for v in main.values()) if main else dt.date.today()
     # no Google figures yet (Search Console is off): "last" days = the split day, so every window is empty and every
@@ -186,8 +203,9 @@ def compute(c):
         # readers on the changed pages (Skald)
         rw = rwin(S, newest_ok)
         if rw:
-            rb = c.execute("SELECT sum(readers), count(DISTINCT day) FROM daily WHERE state='ok' AND day BETWEEN ? AND ?", (rw["b_from"], rw["b_to"])).fetchone()
-            ra = c.execute("SELECT sum(readers), count(DISTINCT day) FROM daily WHERE state='ok' AND day BETWEEN ? AND ?", (rw["a_from"], rw["a_to"])).fetchone()
+            mark = ",".join("?" * len(changed))     # the changed pages only: without this filter it was the whole site's readers
+            rb = c.execute(f"SELECT sum(readers), count(DISTINCT day) FROM daily WHERE state='ok' AND path IN ({mark}) AND day BETWEEN ? AND ?", (*changed, rw["b_from"], rw["b_to"])).fetchone()
+            ra = c.execute(f"SELECT sum(readers), count(DISTINCT day) FROM daily WHERE state='ok' AND path IN ({mark}) AND day BETWEEN ? AND ?", (*changed, rw["a_from"], rw["a_to"])).fetchone()
             bv = round((rb[0] or 0) / rb[1], 1) if rb[1] else None; av = round((ra[0] or 0) / ra[1], 1) if ra[1] else None
             groups[0]["readers"] = dict(metric="readers", before=bv, after=av, change_pct=pct(bv, av) if bv and av is not None else None,
                                         verdict=verdict("readers", bv, av, rw["n"]), window=rw)
@@ -209,7 +227,8 @@ def compute(c):
                           position=[b["position"], a["position"]],
                           readers_per_day=[round(rb, 1) if rb is not None else None, round(ra, 1) if ra is not None else None],
                           verdict=verdict("impressions", b["impressions"] / n, a["impressions"] / n, n, pw_["prov"]),
-                          delta=round((a["impressions"] - b["impressions"]) / n, 1)))
+                          delta=round((a["impressions"] - b["impressions"]) / n, 1),
+                          windows=day_windows(srch[p], D(main[p][:10]), last, lastfinal)))
     moves.sort(key=lambda m: m["delta"], reverse=True)
     out["winners"] = [m for m in moves if m["delta"] > 0][:6]
     out["losers"] = [m for m in moves if m["delta"] < 0][::-1][:6]

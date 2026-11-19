@@ -109,6 +109,13 @@ The research record's baseline (`growth research baseline`) is the number every 
 At day 28 and 56 also re-run the page's AI answers check (money-page playbook question 35): the same ChatGPT and
 Google prompts, recorded next to the baseline, to see whether the page is now named or cited.
 
+On release day file the four re-checks on their dates: `growth measure schedule <path> --release <date>` (day 7, 14, 28
+and 56 after that release; `ev.rechecks-release` fails when any is missing or sits on another date). Each re-check runs
+`growth measure run <path> --key <key> --release <date>`: the page's clicks, impressions and position per day, the N
+days after the release against the SAME frozen baseline numbers from its research record, with searches won and lost.
+A window that is not over says "not yet"; unsettled Google days make a verdict "too early". The whole site's numbers
+print in their own table and are never read as the page's.
+
 The page tracker keeps the release date. Look at day 1 to 3 (re-crawled?), day 7 (first look), day 14 (click rate and
 position), day 28 (rankings, clicks, engagement, conversions) and day 56 (conversions). What each result means and
 what to change next is the table in the money-page playbook, Part 4. One change at a time, each dated, so every number

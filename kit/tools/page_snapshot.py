@@ -86,8 +86,10 @@ def tracker_rows(path):
     if not db.exists():
         return {}
     c = sqlite3.connect(db).cursor()
-    q = c.execute("select query,sum(clicks),max(impressions),round(avg(position),1) from search_queries where path=? "
-                  "group by query order by 3 desc", (path,)).fetchall()
+    # Each snapshot is a rolling 28-day window of Google's top queries, so snapshots overlap: adding clicks across them
+    # (as this once did) counted the same click again at every sync. One window, the newest, is the page's figure.
+    q = c.execute("select query,clicks,impressions,round(position,1) from search_queries where path=? and snapshot="
+                  "(select max(snapshot) from search_queries where path=?) order by impressions desc", (path, path)).fetchall()
     v = c.execute("select sum(readers),sum(views),sum(search),sum(ai_asked) from daily where path=?", (path,)).fetchone()
     return {"stored_queries": [{"query": a, "clicks": b, "impressions": i, "position": p} for a, b, i, p in q],
             "skald_daily_totals": dict(zip(["visitors", "views", "from_search", "ai_asked"], v or []))}
