@@ -120,3 +120,70 @@ def test_pending_approves_everything_waiting_with_one_code(tmp_path):
     assert all("batch" in e["via"] for e in lines)
     rc, out = owner_approve(tmp_path, "pending", cwd=p)
     assert "nothing waits for your approval" in out                       # already approved: nothing left
+
+
+# ---- delegated approvals for local work (2.2.0) ----------------------------------------------------------------------------
+DELEGATE = {"delegate_local": True, "delegated_to": "lead agent", "owner_words": "you approve the local things yourself", "since": "2026-11-19"}
+
+
+def delegated_project(tmp_path, on=True):
+    p = project(tmp_path)
+    cfg = json.loads((p / "growth.json").read_text())
+    cfg["approvals"] = {**DELEGATE, "delegate_local": on}
+    (p / "growth.json").write_text(json.dumps(cfg))
+    return p
+
+
+def run_approve(p, monkeypatch, *args):
+    monkeypatch.setenv("GROWTH_PROJECT", str(p))
+    monkeypatch.chdir(p)
+    monkeypatch.setattr(sys, "stdin", open(os.devnull))          # no terminal at all: an agent's tool call
+    return approvals.main(list(args))
+
+
+def test_delegated_answer_needs_no_terminal_and_is_marked_delegated(tmp_path, home, monkeypatch, capsys):
+    p = delegated_project(tmp_path)
+    assert run_approve(p, monkeypatch, "answer", "Q1", "yes", "name", "it", "--delegated") == 0
+    e = json.loads((p / "docs" / "approvals.jsonl").read_text().splitlines()[-1])
+    assert e["mode"] == "delegated" and e["via"] == "delegated" and e["kind"] == "answer"
+    assert e["by"] == "lead agent (delegated by owner 2026-11-19)" and e["owner_words"] == DELEGATE["owner_words"]
+    assert approvals.verify(p / "docs")[1] == []                       # signed and chained like any other line
+    run_approve(p, monkeypatch, "list")
+    assert "[delegated]" in capsys.readouterr().out
+
+
+def test_delegated_is_refused_when_off_and_for_browser_region_and_pending(tmp_path, home, monkeypatch):
+    off = delegated_project(tmp_path, on=False)
+    with pytest.raises(SystemExit, match="delegated"):
+        run_approve(off, monkeypatch, "answer", "Q1", "yes", "--delegated")
+    on = delegated_project(tmp_path / "b")
+    for what in ("browser", "region", "pending", "key", "release", "go-live"):
+        with pytest.raises(SystemExit, match="never delegated"):
+            run_approve(on, monkeypatch, what, "--delegated")
+    assert not (on / "docs" / "approvals.jsonl").exists()
+
+
+def test_a_delegated_approval_counts_only_while_delegate_local_is_on(tmp_path, home, monkeypatch):
+    p = delegated_project(tmp_path)
+    assert run_approve(p, monkeypatch, "answer", "Q1", "yes", "--delegated") == 0
+    db = json.loads((p / "docs" / "tasks.json").read_text())
+    q = db["questions"][0]
+    content = approvals.answer_content(q)
+    assert approvals.status(p / "docs", "answer", "Q1", content)[0] == "ok"
+    cfg = json.loads((p / "growth.json").read_text())
+    cfg["approvals"]["delegate_local"] = False
+    (p / "growth.json").write_text(json.dumps(cfg))
+    st, info = approvals.status(p / "docs", "answer", "Q1", content)
+    assert st == "delegation_off" and "no longer on" in approvals.explain(st, info, "the answer", "growth approve answer Q1")
+
+
+def test_generated_permissions_allow_only_the_delegated_form_when_on():
+    import harness
+    allow, deny = harness.permissions_wanted({})
+    assert "Bash(growth approve*)" in deny and not any("--delegated" in a for a in allow)
+    allow, deny = harness.permissions_wanted({"approvals": DELEGATE})
+    assert "Bash(growth approve * --delegated)" in allow and "Bash(growth approve*)" not in deny
+    for never in ("browser", "region", "pending", "key"):
+        assert f"Bash(growth approve {never}*)" in deny
+    assert "Bash(growth approvals*)" in deny and "Bash(growth wizard confirm*)" in deny
+    assert harness.permissions_wanted({"approvals": {**DELEGATE, "delegate_local": False}}) == harness.permissions_wanted({})

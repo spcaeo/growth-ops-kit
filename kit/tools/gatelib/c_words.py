@@ -42,12 +42,55 @@ def wcfg(ctx, key, default=None):
     return default if v is None else v
 
 
+CASE_STUDY = r"case stud(y|ies)"
+
+
+def case_study_page(ctx) -> bool:
+    """A page about case studies may use the words in its own name: its path holds "case-stud", or fits words.no_customers_allow_paths."""
+    from fnmatch import fnmatch
+    p = paths.normalize(ctx.path or "/")
+    return "case-stud" in p.lower() or any(fnmatch(x, g) for g in wcfg(ctx, "no_customers_allow_paths", []) for x in (p, p + "/", p.rstrip("/")))
+
+
+def page_text_without_own_name(ctx):
+    """The page's text without its H1, nav and breadcrumb, where a case-study page names itself (customer names are still caught elsewhere)."""
+    from techseo.dom import parse
+    root = parse(ctx.need_html())
+
+    def own_name(n):
+        return n.tag in ("h1", "nav") or domx.has_cls(n, r".*crumb.*") or "breadcrumb" in (n.get("aria-label") or "").lower()
+    for n in list(root.iter()):
+        if getattr(n, "children", None):
+            n.children = [c for c in n.children if isinstance(c, str) or not own_name(c)]
+    return domx.text(domx.body(root))
+
+
+def allow_path(ctx, glob) -> bool:
+    """Does this page's path fit a words.never_claims_allow glob ("*/companies/")? Tried with and without the trailing slash."""
+    from fnmatch import fnmatch
+    p = paths.normalize(ctx.path or "/")
+    return any(fnmatch(x, glob) for x in (p, p + "/", p.rstrip("/")))
+
+
 def product(ctx):
     return ctx.cfg.get("product") or ctx.cfg.get("name") or "the business"
 
 
 def page_text(ctx):
     return domx.text(domx.body(ctx.root()))
+
+
+def unquoted_text(ctx):
+    """The page's text without anything inside <blockquote> or <q> (and so its <p> and <cite> children): a client's own words,
+    which we never edit. Style checks (hype, banned offer words, spelling) read this; words.never-claim and the claims read page_text."""
+    if "unquoted" not in ctx.cache:
+        from techseo.dom import parse
+        root = parse(ctx.need_html())
+        for n in list(root.iter()):
+            if getattr(n, "children", None):
+                n.children = [c for c in n.children if isinstance(c, str) or c.tag not in ("blockquote", "q")]
+        ctx.cache["unquoted"] = domx.text(domx.body(root))
+    return ctx.cache["unquoted"]
 
 
 def ctx_window(t, m, before=70, after=50):
@@ -75,7 +118,7 @@ def banned(ctx):
     old = ctx.cfg.get("old_brand_words")
     if not banned_offer and not old and not wcfg(ctx, "free_banned") and not wcfg(ctx, "demo_banned"):
         raise Skip("no banned offer words in growth.json (words.banned_offer, words.free_banned, old_brand_words)")
-    t = page_text(ctx)
+    t = unquoted_text(ctx)
     for tb in find_all(ctx.root(), "table"):          # a comparison whose caption names a free tool prices THAT tool
         cap = find(tb, "caption")
         if cap is not None and re.search(r"(?i)\bfree\b(\s+\w+){0,2}\s+(planners?|tools?|apps?)\b", domx.text(cap)):
@@ -115,7 +158,7 @@ def cta_banned(ctx):
 
 @check("words.hype", "29", what="no hype words (BRAND voice)", needs="live")
 def hype(ctx):
-    t = page_text(ctx)
+    t = unquoted_text(ctx)
     probs = [f"'{h}'" for p in wcfg(ctx, "hype", HYPE) for h in word_hits(t, p)]
     ctx.verdict(probs, "no hype words", "use plain words (BRAND.md voice): name the unit, the place, the problem")
 
@@ -123,7 +166,9 @@ def hype(ctx):
 @check("words.no-customers", "2", what="no hidden case-study customers, 'trusted by' or implied customer lists (BRAND proof rules)", needs="live")
 def no_customers(ctx):
     t = page_text(ctx)
-    probs = [f"'{h}'" for p in IMPLIED_PROOF + wcfg(ctx, "hidden_customers", []) for h in word_hits(t, p)]
+    own = page_text_without_own_name(ctx) if case_study_page(ctx) else t
+    probs = [f"'{h}'" for p in IMPLIED_PROOF for h in word_hits(own if p == CASE_STUDY else t, p)]
+    probs += [f"'{h}'" for p in wcfg(ctx, "hidden_customers", []) for h in word_hits(t, p)]       # customer names are never allowed
     for n in domx.jsonld(ctx.root()):
         for x in domx.walk_json(n):
             if any(k in x for k in ("aggregateRating", "review")):
@@ -149,7 +194,16 @@ def never_claim(ctx):
     if not pats:
         raise Skip("no never-claims in growth.json (words.never_claims)")
     t = page_text(ctx)
-    probs = [f"'{h}'" for p in pats for h in word_hits(t, p)]
+    allow = [a for a in wcfg(ctx, "never_claims_allow", []) if isinstance(a, dict) and a.get("pattern") and a.get("paths") and a.get("why")]
+    probs, allowed = [], []
+    for p in pats:
+        for h in word_hits(t, p):
+            why = next((a["why"] for a in allow if allow_path(ctx, a["paths"]) and re.search(a["pattern"], h, re.I)), None)
+            (allowed.append(f"'{h}' ({why})") if why else probs.append(f"'{h}'"))
+    if allowed and not probs:
+        ctx.warn(f"{len(allowed)} never-claim match(es) allowed on this page by words.never_claims_allow: " + "; ".join(allowed[:4]),
+                 "keep the wording exactly as the third party states it; the owner reviews the allow entry's reason")
+        return
     ctx.verdict(probs, "none of BRAND.md's never-claims", "remove the claim or get the owner's yes into BRAND.md first (rule 3)")
 
 
@@ -190,7 +244,7 @@ def us_spelling(ctx):
     if loc is None:
         raise Skip(why)
     root = ctx.root()
-    parts = [page_text(ctx)] + [i.get("alt") for i in find_all(root, "img")]
+    parts = [unquoted_text(ctx)] + [i.get("alt") for i in find_all(root, "img")]
     parts += [m.get("content") for m in find_all(root, "meta") if m.get("name") in ("description",)]
     t = " ".join(parts)
     probs = spelling.problems(t, loc, spelling.allowlist(ctx.cfg, ctx.project))

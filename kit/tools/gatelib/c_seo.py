@@ -40,6 +40,33 @@ BRIDGE = {
 }
 
 
+def inventory_paths(project):
+    """The normalised paths of the live site's inventory (growth inventory writes inventory/inventory.json and .csv)."""
+    import csv
+    import json
+
+    import paths
+    base = project / "inventory"
+    try:
+        rows = json.loads((base / "inventory.json").read_text()).get("pages") or []
+    except (OSError, ValueError, AttributeError):
+        try:
+            with open(base / "inventory.csv", newline="") as f:
+                rows = list(csv.DictReader(f))
+        except OSError:
+            rows = []
+    return {paths.normalize(r["path"]) for r in rows if isinstance(r, dict) and r.get("path")}
+
+
+def migration_info(ctx):
+    """growth.json "migration": {"on": true, "task": "T4"} -> {"task", "paths"} (None when off): a 404 internal link to a path the
+    live site's inventory lists is a WARN while the pages are not migrated yet (LNK-02)."""
+    m = ctx.cfg.get("migration") or {}
+    if not (isinstance(m, dict) and m.get("on")):
+        return None
+    return {"task": str(m.get("task") or "the migration task"), "paths": inventory_paths(ctx.project)}
+
+
 def techseo(ctx):
     """Run the technical SEO checks once (dev mode) and keep the results."""
     if "tseo" not in ctx.cache:
@@ -48,12 +75,13 @@ def techseo(ctx):
         u = urllib.parse.urlsplit(ctx.url)
         f = Fetcher(f"{u.scheme}://{u.netloc}", ctx.site_origin(), allow_live=False)
         rep = Report(url=ctx.url, mode="dev")
+        mig = migration_info(ctx)
         p = Page(f, rep, ctx.url, mode="dev", site_origin=ctx.site_origin(), old_hosts=ctx.cfg.get("old_hosts") or [])
         if c_index.run_index(p) and p.resp.status == 200:
             c_index.run_url(p)
             c_meta.run_meta(p)
             c_meta.run_content(p)
-            c_links.run_links(p, int(ctx.cfg.get("link_check_cap") or 200), not ctx.cache.get("no_link_status"))
+            c_links.run_links(p, int(ctx.cfg.get("link_check_cap") or 200), not ctx.cache.get("no_link_status"), mig)
             c_images.run_images(p)
             c_schema.run_schema(p, {"money": "money", "post": "article", "hub": "hub"}.get(ctx.ptype, "other"),
                                 (ctx.cfg.get("schema_types") or {}).get("money"))
@@ -78,6 +106,8 @@ def make(cid, rule, ids, what):
                           f"run growth tech_seo_check {ctx.url} and fix why it stopped")
         if not ctx.cache.get("no_link_status") and any(r.cid == "LNK-02" and r.level == "SKIP" for r in sel):
             raise Skip("internal link status was not fetched (the run did not allow it)", blocked=True)
+        if all(r.level == "SKIP" for r in sel) and ids is not None:
+            raise Skip(sel[0].msg)
         fails = [r for r in sel if r.level == "FAIL"]
         warns = [r for r in sel if r.level == "WARN"]
         if fails:

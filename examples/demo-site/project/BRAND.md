@@ -10,6 +10,9 @@ Brightline Lawn Care is a made-up business, used by the kit's tests and examples
 - The one button label on every page is "Get a quote". It goes to /contact.
 - The reason line beside a button says what happens next: we reply within one working day with a fixed price.
 
+## Crew times (from our own time sheets)
+- A small lawn (under 2,000 sq ft) takes 20 minutes, a medium one takes 35 minutes, a large one takes 60 minutes.
+
 ## Words we do not use
 - "Free estimate" and "no obligation" (we quote, and the quote is the offer).
 - Hype words: "revolutionary", "seamless", "best in class".

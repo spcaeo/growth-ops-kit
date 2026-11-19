@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import fact_sources as fact_sources_mod  # noqa: E402  kit/tools/fact_sources.py
 import research  # noqa: E402  kit/tools/research.py
 
 from . import domx
@@ -76,3 +77,21 @@ def rechecks_release(ctx):
     miss = [f"day {n} ({(d + dt.timedelta(days=n)).isoformat()})" for n in WINDOWS if (d + dt.timedelta(days=n)) not in have]
     ctx.verdict(miss, f"re-checks on release {d.isoformat()} + 7/14/28/56",
                 f"growth measure schedule {ctx.path} --release {d.isoformat()} files the four re-checks on their dates")
+
+
+@check("ev.fact-sources", "5", what="every stat, number, regulation and study on the page is the project's own claim (BRAND.md) or a fact row read within 90 days on a real page by browser or raw text, never from a chat or a Google results page", needs="live")
+def fact_sources(ctx):
+    items = fact_sources_mod.page_stats(ctx.root(), domx)
+    if not items:
+        ctx.ok("no stat, number, regulation or study on the page that needs a source")
+        return
+    rec = record(ctx) or {}
+    own = fact_sources_mod.own_claims_text(ctx.project, rec, ctx.cfg)
+    probs = fact_sources_mod.stat_problems(items, rec, own, ctx.today, ctx.cfg)
+    n = sum(len(i["stats"]) for i in items)
+    if probs:
+        ctx.fail(f"{len(probs)} of {n} stat(s) have no source: " + " | ".join(probs[:8]) + (f" | +{len(probs) - 8} more" if len(probs) > 8 else ""),
+                 f"open the real page (found through Google, never a chat or a results page), then growth research fact {ctx.path} --key {ctx.key} with its address, quote and date; "
+                 "a fact read more than 90 days ago is read again; a claim that is ours goes in BRAND.md (rule 5)")
+    else:
+        ctx.ok(f"{n} stat(s) on the page, each the project's own claim or backed by a fresh fact row on a real page")

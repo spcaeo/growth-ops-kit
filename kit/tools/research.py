@@ -434,6 +434,9 @@ def _command(a):
             sys.exit(f"a fact needs {', '.join(bad) or 'how_read raw|browser|summary'} (the vendor's own words in --quote, the view in --view)")
         if future(row["read_on"], today):
             sys.exit("refused: " + future(row["read_on"], today))
+        import fact_sources
+        if fact_sources.banned_problem(a.source_url, CFG):
+            sys.exit("refused: " + fact_sources.banned_problem(a.source_url, CFG))
         if row["how_read"] == "raw":
             import hashlib
             row["raw_file"] = a.raw_file
