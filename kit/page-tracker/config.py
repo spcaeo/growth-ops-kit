@@ -114,7 +114,7 @@ def source_on(name):
 def trailing_slash():
     """Does the site's own address of a page end in "/" (/blog/post/)? growth.json page_tracker.trailing_slash, else what
     the sitemap showed (sitemap-cache.json). Analytics tools key pages by the exact address, so /x and /x/ differ."""
-    if CFG.get("trailing_slash") is not None:
+    if CFG.get("trailing_slash") is not None:   # CFG holds growth.json page_tracker merged in (see CFG above)
         return bool(CFG["trailing_slash"])
     try:
         return bool(json.load(open(os.path.join(DATA_DIR, "sitemap-cache.json"), encoding="utf-8")).get("trailing_slash"))
@@ -127,7 +127,7 @@ def variants(path):
     form: the tracker keeps paths without a trailing slash, the site (and Search Console) may use one."""
     out = [v + path if v else path for v in VARIANTS]
     if trailing_slash():
-        out = [x if x == "/" or x.endswith("/") else x + "/" for x in out]
+        out = [x if x == "/" or x.endswith("/") or "." in x.rsplit("/", 1)[-1] else x + "/" for x in out]   # never /llms.txt/
     return out
 
 

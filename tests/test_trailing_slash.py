@@ -59,3 +59,21 @@ def test_the_tracker_asks_for_the_sites_own_address_form(demo_project, tmp_path,
     assert r.returncode == 0, r.stderr
     assert "['/', '/about', '/blog/a-post']" in r.stdout          # the tracker keeps one form inside
     assert f"['{expect}'] ['/']" in r.stdout                        # and asks analytics for the site's own
+
+
+def test_the_growth_json_override_wins_and_files_keep_their_name(demo_project, tmp_path):
+    srv = serve_sitemap(tmp_path, ["https://brightline.example/", "https://brightline.example/about"])   # no slash
+    try:
+        cfg = json.loads((demo_project / "growth.json").read_text())
+        cfg["sitemap_url"] = f"http://127.0.0.1:{srv.server_address[1]}/sitemap.xml"
+        cfg["page_tracker"] = {"trailing_slash": True}
+        (demo_project / "growth.json").write_text(json.dumps(cfg))
+        code = ("import sitepaths, config; sitepaths.fetch(force=True); "
+                "print(config.variants('/about'), config.variants('/llms.txt'), config.variants('/feed.xml'))")
+        r = subprocess.run([sys.executable, "-c", code], cwd=ROOT / "kit" / "page-tracker", capture_output=True, text=True,
+                           env={**os.environ, "GROWTH_PROJECT": str(demo_project), "PYTHONDONTWRITEBYTECODE": "1"}, timeout=60)
+    finally:
+        srv.shutdown()
+        srv.server_close()
+    assert r.returncode == 0, r.stderr
+    assert "['/about/'] ['/llms.txt'] ['/feed.xml']" in r.stdout
