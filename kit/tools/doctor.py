@@ -3,8 +3,10 @@
 
   growth doctor
 
-Prints one line per step (OK / TODO / FAIL) with the command that fixes it. Read-only: it never changes anything,
-never prints a key, and calls the analytics server only to list its tools (only when that connector is switched on).
+Prints one line per step (OK / TODO / FAIL) with the command that fixes it. It never changes the project, never prints a
+key, and calls the analytics server only to list its tools (only when that connector is switched on). The one thing it
+writes is the tick of each step in the setup task (docs/tasks.json, task "Project setup"): a step is ticked with its own
+result line as proof when it turns OK, and un-ticked when it is TODO or FAIL again.
 """
 import json
 import re
@@ -327,6 +329,26 @@ row("A12 Hook commands find the kit", None if not _cmds else not _gone,
      f"the kit folder named in .claude/settings.json is not here: {', '.join(sorted(set(_gone)))}"),
     "run bash setup.sh in the kit checkout (links growth onto the PATH), or set GROWTH_KIT to the kit folder, or: growth new-project <this folder> --site <url> --force")
 
+# A13 the agent harness is complete: each piece listed with its own state and fix (growth wizard --repair installs what is missing)
+import harness as _harness
+_pieces = _harness.check(PROJECT, CFG)
+_todo = [p for p in _pieces if p[1] == "todo"]
+row("A13 Agent harness complete", None if _todo else True,
+    "; ".join(f"{p[0]}: {'OK' if p[1] == 'ok' else ('n/a' if p[1] == 'na' else 'TODO')}" for p in _pieces)
+    + ("" if not _todo else " | " + "; ".join(f"{p[0]}: {p[2]}" for p in _todo)),
+    "growth wizard --repair")
+
+# A14 the research browser is connected and Google is set to the target country (a FAIL, not a TODO, when jobs need web research)
+import research_gate as _gate
+if not _gate.required(CFG):
+    row("A14 Research browser connected, market region set", True, "not required (growth.json research_browser.required is not true)")
+else:
+    _gp = _gate.problems(PROJECT, CFG)
+    _m = CFG.get("market") or {}
+    row("A14 Research browser connected, market region set", False if _gp else True,
+        ("; ".join(_gp)) if _gp else f"research browser connected, Google region {_gate.country_name(_m)} confirmed, parameters {_m.get('google_params')}",
+        "growth wizard (it walks you through both: connect the browser with /chrome, set Google's Results region, confirm)")
+
 w = max(len(r[0]) for r in rows)
 print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")
 for step, st, what, fix in rows:
@@ -335,4 +357,9 @@ done = sum(1 for r in rows if r[1] in ("OK  ", "BUSY"))
 busy = sum(1 for r in rows if r[1] == "BUSY")
 print(f"\n{done}/{len(rows)} setup steps done." + (f" ({busy} BUSY: work in progress, not a fault)" if busy else "")
       + ("" if done == len(rows) else " Page work starts only when all are OK (book/01-flow.md)."))
+try:    # tick the setup task from these results (the task and doctor share one step list)
+    import setup_task
+    setup_task.sync(PROJECT, [(r[0], r[1], r[2]) for r in rows], CFG)
+except Exception:  # noqa: BLE001  (a task file problem is A6's to report, never a crash here)
+    pass
 sys.exit(0 if all(r[1] != "FAIL" for r in rows) else 1)

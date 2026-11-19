@@ -21,7 +21,7 @@ def test_makes_the_folder_and_fills_the_site(tmp_path):
         assert (folder / f).is_file(), f
     for d in ("journal", "research", "inventory", "archive", "page-tracker"):
         assert (folder / d).is_dir()
-    assert json.loads((folder / "docs" / "tasks.json").read_text())["tasks"] == []
+    assert [t["title"] for t in json.loads((folder / "docs" / "tasks.json").read_text())["tasks"]] == ["Project setup"]
     assert "{{" not in (folder / "growth.json").read_text()
 
 
@@ -89,7 +89,7 @@ def test_the_stop_hook_merges_into_existing_settings_and_is_not_added_twice(tmp_
     new_project.make(f, "https://x.example", force=True)
     new_project.make(f, "https://x.example", force=True)
     cfg = json.loads((f / ".claude" / "settings.json").read_text())
-    assert cfg["permissions"] == {"allow": ["Bash(ls)"]} and len(cfg["hooks"]["Stop"]) == 1
+    assert cfg["permissions"]["allow"][0] == "Bash(ls)" and len(cfg["hooks"]["Stop"]) == 1       # the owner's own entry stays first
 
 
 def test_doctor_checks_the_hook_and_the_preview_address(tmp_path):
