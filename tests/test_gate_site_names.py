@@ -53,3 +53,10 @@ def test_named_author_can_be_limited_to_some_page_types():
 
 def test_a_fold_with_no_reveal_marker_still_fails():
     assert line(ctx(BODY.replace("<section data-reveal>", "<section>")), "motion.reveal").level == "FAIL"
+
+
+def test_reveal_from_lets_a_site_keep_its_first_folds_still():
+    still = BODY.replace("<section><div data-reveal>", "<section><div>")             # fold 2 has no marker
+    assert line(ctx(still), "motion.reveal").level == "FAIL"
+    cfg = {**CFG, "features": {**CFG["features"], "reveal_from": 3}}
+    assert line(ctx(still, cfg), "motion.reveal").level == "OK"
