@@ -5,7 +5,7 @@ import re
 
 from techseo.dom import find, find_all
 
-from . import domx
+from . import design, domx
 from .core import check
 
 
@@ -19,7 +19,9 @@ def cover(ctx):
     root = ctx.root()
     h1 = find(root, "h1")
     body = article(root)
-    imgs = [i for i in find_all(domx.main(root), "img") if not any(a is body for a in i.ancestors())]
+    # the cover is the image the page's structured data names (or itemprop=image), else growth.json design.cover_image;
+    # only then the first image outside the article text
+    imgs = design.find(ctx, "cover_image") or [i for i in find_all(domx.main(root), "img") if not any(a is body for a in i.ancestors())]
     if h1 is None or not imgs:
         ctx.fail("no cover image outside the article text", "render the post's own cover (rule 61)")
     elif not imgs[0].get("alt"):
@@ -36,11 +38,12 @@ def reading_aids(ctx):
     probs = []
     if not re.search(r"progress", cls):
         probs.append("no reading-progress line")
-    if not re.search(r"(?i)min left", domx.text(m)):
+    if not design.find(ctx, "reading_aid"):          # 'N min left' anywhere on the page (a side rail too)
         probs.append("no 'x min left'")
     if not re.search(r"\btoc\b|-toc", cls):
         probs.append("no contents list")
-    heads = [h for h in find_all(article(root), "h2") + find_all(article(root), "h3")]
+    # a heading that is a disclosure toggle (inside <summary>, e.g. an FAQ question) carries no copy-link button
+    heads = [h for h in find_all(article(root), "h2") + find_all(article(root), "h3") if not h.in_tag("summary")]
     bare = [domx.text(h)[:30] for h in heads if not any(re.search(r"(?i)copy", b.get("aria-label")) for b in find_all(h.parent, "button"))]
     if bare:
         probs.append(f"{len(bare)} of {len(heads)} headings without a copy-link button")

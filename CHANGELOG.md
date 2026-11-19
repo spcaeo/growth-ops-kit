@@ -57,6 +57,17 @@ The kit and the book share one version number. Dates are written year-month-day.
   "Step 16"), not by list position. Journal entries and the title check's Search Console queries match a page with
   or without its trailing slash.
 
+- Design-agnostic gate, first part (`kit/tools/gatelib/design.py`): one place finds each page part (site header and
+  footer, main, cover image, byline, updated date, reading aid, FAQ, table source, calculator, read next, disclosure)
+  from semantic signals first (landmarks, ARIA, schema.org, `<time datetime>`, rel=author, itemprop), then the
+  project's `design` map of CSS selectors. Rewritten on it: faq.schema-equal and every FAQ check (only the FAQ's own
+  questions, found through the FAQPage markup; never a contents list or a fold), post.cover, layout.shared-frame,
+  cta.no-bare-book (the site's own label with its reason line passes), words.named-author, post.reading-aids ("N min
+  left" anywhere; FAQ toggles need no copy button), geo.updated (the shown date that equals dateModified), geo.table-
+  sources (its own box, the component's data-checked/data-source, or the section), claims.box-numbers (data-calculator
+  and `box_ignore` skipped). New growth.json settings: `design`, `design_exceptions` (a WARN with its reason; FAILs
+  again when its task is done or its date has passed), `disclosure_pattern`, `box_ignore`.
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.

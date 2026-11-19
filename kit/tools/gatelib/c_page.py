@@ -11,7 +11,7 @@ import paths  # kit/tools/paths.py: one form of a site path
 from techseo.c_schema import main_types
 from techseo.dom import find, find_all
 
-from . import domx
+from . import design, domx
 from .core import ALL, Missing, Skip, check, short  # noqa: F401  (the Next.js adapter star-imports this module)
 
 
@@ -81,23 +81,32 @@ def pronoun_openers(ctx):
 @check("geo.updated", "12", types=("money", "hub", "post", "core"), what="a visible 'Updated' date with the publisher, true and equal to dateModified", needs="live")
 def updated(ctx):
     root = ctx.root()
-    times = [t for t in find_all(domx.main(root), "time") if t.get("datetime")]
-    # A page never changed after it went up says "Published <date>", not "Updated": the word must be true. The date must
-    # still equal dateModified (checked below), so "Published" passes only when nothing changed since.
-    vis = [t for t in times if re.search(r"(?i)updated|published", domx.text(t.parent) + domx.text(t))]
+    # The shown date is the <time> design.py finds for "updated_date" (the one equal to dateModified, or the one the
+    # words "Updated" introduce), never simply the first date in the byline (that is often the publish date).
+    vis = design.find(ctx, "updated_date")
+    if not vis:
+        # A page never changed after it went up says "Published <date>", not "Updated": the word must be true.
+        times = [t for t in find_all(domx.main(root), "time") if t.get("datetime")]
+        vis = [t for t in times if re.search(r"(?i)updated|published", domx.text(t.parent) + domx.text(t))]
     if not vis:
         ctx.fail("no visible 'Updated <date>' (or 'Published <date>' if never changed) with a <time datetime>", "show 'Updated <date> · by <publisher>' near the H1 (rules 12, 36b)")
         return
     t = vis[0]
     probs = []
     try:
-        d = dt.date.fromisoformat(t.get("datetime")[:10])
+        stamp = dt.datetime.fromisoformat(t.get("datetime").replace("Z", "+00:00"))
+        if stamp.tzinfo is not None:   # a UTC time is judged on the project's own calendar day (growth.json timezone)
+            from zoneinfo import ZoneInfo
+            stamp = stamp.astimezone(ZoneInfo(ctx.cfg.get("timezone") or "UTC"))
+        d = stamp.date()
         if d > ctx.today:
             probs.append(f"updated date {d} is in the future")
     except ValueError:
         probs.append(f"datetime '{t.get('datetime')}' is not ISO")
-    if not re.search(r"(?i)\bby\b|" + re.escape(product(ctx)), domx.text(t.parent)):
-        probs.append("no publisher beside the date")
+    by = {id(a) for a in design.find(ctx, "byline")}
+    if not (re.search(r"(?i)\bby\b|" + re.escape(product(ctx)), domx.text(t.parent))
+            or any(id(n) in by for a in [t.parent, t.parent.parent] if a is not None for n in a.iter())):
+        probs.append("no publisher or byline beside the date")
     mods = [n.get("dateModified") for n in domx.jsonld(root) if n.get("dateModified")]
     if not mods:
         probs.append("no dateModified in the structured data")
@@ -122,34 +131,27 @@ def table_sources(ctx):
     m = domx.main(ctx.root())
     probs = []
     for t in find_all(m, "table"):
-        box = t.parent.parent if t.parent is not None and t.parent.parent is not None else t
-        txt = domx.text(box)
-        has_src = bool(find_all(box, "a")) or re.search(r"(?i)\bsources?\b|according to", txt)
-        has_date = re.search(r"(?i)(checked|as of|updated)\s+\w*\s*\d{1,2}?\s*\w+\s*20\d\d|20\d\d-\d\d-\d\d", txt)
+        has_src, has_date = design.table_sourced(ctx, t)   # its box, its component (data-checked/data-source), its section
         if not (has_src and has_date):
             cap = find(t, "caption")
             probs.append(f"table '{short(domx.text(cap) if cap is not None else '', 50)}' lacks a {'source' if not has_src else 'check date'}")
     if not find_all(m, "table"):
         ctx.ok("no tables on the page")
         return
-    ctx.verdict(probs, "every table names its source and check date", "add a source line with a link and 'Checked <date>' under the table (rule 25)")
+    ctx.verdict(probs, "every table names its source and check date", "add a source line with a link and 'Checked <date>' under the table, or data-checked and data-source on its component (rule 25)")
 
 
-def faq_items(root):
-    """(container, [(question, answer)]) for the page's FAQ: the block with 3+ <details>."""
-    m = domx.main(root)
-    for sec in find_all(m, "section") + [m]:
-        ds = find_all(sec, "details")
-        if len(ds) >= 3:
-            items = []
-            for d in ds:
-                s = find(d, "summary")
-                h = find(s, "h3") if s is not None else None
-                q = domx.text(h if h is not None else s)
-                a = " ".join(domx.text(c) for c in d.elements() if c.tag != "summary")
-                items.append((q.strip(), a.strip()))
-            return sec, items
-    return None, []
+def faq_items(ctx, root=None):
+    """(container, [(question, answer)]) for the page's FAQ, found by design.py: the questions under the FAQ heading or
+    the FAQPage microdata, else growth.json design.faq_question; never a contents list or a fold."""
+    qs = design.find(ctx, "faq_question", root)
+    box = None
+    if qs:   # the smallest element that holds every question (the FAQ's own section or box)
+        box = next((a for a in qs[0].ancestors() if all(a in list(q.ancestors()) for q in qs[1:])), None)
+        sec = next((a for a in ([box] if box is not None else []) + list(box.ancestors() if box is not None else [])
+                    if a.tag == "section"), None)
+        box = sec if sec is not None and sum(1 for d in find_all(sec, "details")) == len(qs) else box
+    return box, design.faq_items(ctx, root)
 
 
 def faq_schema(root):
@@ -167,7 +169,7 @@ def norm(s):
 @check("faq.box", "139", types=("money", "hub", "post", "core"), what="one numbered FAQ box: 'N questions', Expand all, Collapse all, each question an <h3> in <summary>", needs="live")
 def faq_box(ctx):
     root = ctx.root()
-    sec, items = faq_items(root)
+    sec, items = faq_items(ctx, root)
     if sec is None:
         if ctx.ptype == "money":
             ctx.fail("no FAQ box on a money page", "add the shared FAQ box with FAQPage markup (house features, rule 139)")
@@ -192,7 +194,7 @@ def faq_box(ctx):
 @check("faq.schema-equal", "96", types=("money", "hub", "post", "core"), what="FAQPage markup equals the visible FAQ word for word, in order; no repeated question", needs="live")
 def faq_equal(ctx):
     root = ctx.root()
-    _, items = faq_items(root)
+    _, items = faq_items(ctx, root)
     sch = faq_schema(root)
     if not items and sch is None:
         if ctx.ptype == "money":
@@ -224,7 +226,7 @@ def faq_equal(ctx):
 
 @check("faq.answer-first", "36b", types=("money", "hub", "post", "core"), what="every FAQ answer opens with a one-sentence direct answer (3-30 words, no 'This/It' opener)", needs="live")
 def faq_first(ctx):
-    _, items = faq_items(ctx.root())
+    _, items = faq_items(ctx)
     if not items:
         if ctx.ptype == "money":
             ctx.fail("no FAQ on a money page", "add the FAQ box (rule 139)")
@@ -248,7 +250,7 @@ def faq_first(ctx):
 @check("faq.ask-card", "135", types=("money", "hub", "post", "core"), what="after the FAQ: one ask card with 'Ask your question'", needs="live")
 def ask_card(ctx):
     root = ctx.root()
-    sec, items = faq_items(root)
+    sec, items = faq_items(ctx, root)
     if sec is None:
         if ctx.ptype == "money":
             ctx.fail("no FAQ, so no ask card", "add the FAQ box and the ask card after it (rules 135, 139)")
@@ -295,7 +297,7 @@ def house_types(ctx):
     money = "|".join(main_types((ctx.cfg.get("schema_types") or {}).get("money")))   # never Organization: every page has it
     need = {"money": [money, "BreadcrumbList"], "post": ["Article|BlogPosting", "BreadcrumbList"],
             "hub": ["CollectionPage|WebPage", "BreadcrumbList"], "core": ["WebPage|AboutPage|ContactPage"]}[ctx.ptype]
-    if faq_items(root)[1]:
+    if faq_items(ctx, root)[1]:
         need.append("FAQPage")
     miss = [n for n in need if not set(n.split("|")) & have]
     ctx.verdict(miss, f"markup types present: {', '.join(sorted(have))}", "add the missing node built from what the page shows (rule 95)")
@@ -327,9 +329,14 @@ def gsc_top(ctx, n=2):
     c = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     rows = c.execute("select query, impressions from search_queries where path=? and snapshot="
                      "(select max(snapshot) from search_queries where path=?) order by impressions desc limit ?",
-                     (paths.key(ctx.need_path()), paths.key(ctx.path), n)).fetchall()   # the tracker stores paths without the slash
+                     (paths.key(ctx.need_path()), paths.key(ctx.path), n * 4)).fetchall()   # the tracker stores paths without the slash
     c.close()
-    return rows
+    # the '[us] ' tag marks the same search on a second copy of the page (page_tracker.path_variants): one search
+    merged = {}
+    for q, imp in rows:
+        k = q[5:] if q.startswith("[us] ") else q
+        merged[k] = merged.get(k, 0) + (imp or 0)
+    return sorted(merged.items(), key=lambda kv: -kv[1])[:n]
 
 
 @check("seo.title-query", "81", types=("money", "hub", "post"), what="the title holds one of the page's top-2 Search Console queries and fits 60 characters", needs="live")
@@ -383,9 +390,9 @@ def crumbs(ctx):
 @check("layout.shared-frame", "43", what="one shared header, one <main>, one shared footer", needs="live")
 def frame(ctx):
     root = ctx.root()
-    hdr = [n for n in root.iter() if domx.has_cls(n, r"site-header")]
-    ftr = [n for n in root.iter() if domx.has_cls(n, r"site-footer")]
-    mains = find_all(root, "main")
+    hdr = design.find(ctx, "site_header")     # <header>/role=banner outside main, else growth.json design.site_header
+    ftr = design.find(ctx, "site_footer")
+    mains = design.find(ctx, "main")
     probs = []
     for name, got in (("site header", hdr), ("main", mains), ("site footer", ftr)):
         if len(got) != 1:
@@ -471,7 +478,8 @@ def hero_split(ctx):
 @check("claims.box-numbers", "10", what="every number in a takeaway, stat or side box also appears in the page text", needs="live")
 def box_numbers(ctx):
     m = domx.main(ctx.root())
-    boxes = [n for n in m.iter() if n.tag == "aside" or domx.has_cls(n, r".*(takeaway|stat|sidenote|side-note|callout|highlight).*")]
+    boxes = [n for n in m.iter() if (n.tag == "aside" or domx.has_cls(n, r".*(takeaway|stat|sidenote|side-note|callout|highlight).*"))
+             and not design.ignored(ctx, n)]   # computed (data-calculator) or shared components (growth.json box_ignore)
     if not boxes:
         ctx.ok("no takeaway, stat or side boxes")
         return

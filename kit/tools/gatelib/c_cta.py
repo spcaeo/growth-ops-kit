@@ -139,6 +139,9 @@ def no_bare(ctx):
     probs = []
     for a in domx.booking_links(ctx, root):
         lab = domx.label(a).strip().rstrip("→↗ ").strip()
+        own = (cta(ctx).get("label") or "").strip().lower()
+        if own and lab.lower() == own and reason_for(a, reason_words(ctx)):
+            continue                               # the site's own label, with its reason line beside it (rule 32a)
         if re.fullmatch(r"(?i)" + BARE_LABELS + r"[.!]?", lab):
             where = "footer" if any(domx.has_cls(x, r"site-footer") or x.tag == "footer" for x in a.ancestors()) else "page"
             probs.append(f"'{lab}' in the {where}")
