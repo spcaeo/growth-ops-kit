@@ -90,3 +90,31 @@ def test_a8_before_go_live_needs_mapped_pages_not_changes(demo_project, tmp_path
     (demo_project / "growth.json").write_text(json.dumps(cfg))
     line = doctor(demo_project, agents)
     assert line.startswith("FAIL") and "waiting for go-live" not in line
+
+
+def test_our_own_dashboard_on_the_tracker_port_is_recognised_whatever_the_case():
+    """The tracker's start page says "Page Change Tracker"; doctor must not call our own dashboard a foreign program."""
+    import ast
+    import http.server
+    import threading
+    import urllib.request
+    src = DOCTOR.read_text()
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "port_is_our_tracker")
+    ns = {"urllib": urllib}
+    exec(compile(ast.Module([fn], []), "doctor", "exec"), ns)
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<!doctype html><title>Page Change Tracker</title>")
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        assert ns["port_is_our_tracker"](srv.server_address[1])
+    finally:
+        srv.shutdown()

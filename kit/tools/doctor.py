@@ -42,7 +42,7 @@ def port_in_use(port):
 def port_is_our_tracker(port):
     """True when what answers on the port is a page tracker dashboard."""
     try:
-        return b"page change tracker" in urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2).read(200_000)
+        return b"page change tracker" in urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2).read(200_000).lower()
     except Exception:  # noqa: BLE001
         return False
 
