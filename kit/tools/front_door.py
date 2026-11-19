@@ -129,17 +129,18 @@ def no_page_message() -> None:
 def plain_fail(line: str) -> str:
     """One gate line ('FAIL 36h [ev.x] what -> fix') as a plain sentence."""
     m = re.match(r"^(?:NOT READY|FAIL)\s+(?:\S+\s+)?(?:\[[^\]]+\]\s*)?(.*)$", line.strip())
-    text = (m.group(1) if m else line).split(" -> ")[0].strip()
-    return text[:160].rstrip(".") + "."
+    text = re.sub(r"^\d+ problem\(s\): ", "", (m.group(1) if m else line).split(" -> ")[0].strip())
+    return text if len(text) <= 200 else text[:200].rsplit(" ", 1)[0] + "…"
+
 
 
 def summary(n_problems: int, lines: list[str], what: str) -> None:
     if not n_problems:
         say(f"No problems found {what}.")
         return
-    say(f"{n_problems} problem{'s' if n_problems != 1 else ''} {what}. The first {min(3, n_problems)}:")
+    say(f"{n_problems} problem{'s' if n_problems != 1 else ''} {what}. " + ("Here it is:" if n_problems == 1 else "Here they are:" if n_problems <= 3 else "The first 3:"))
     for l in lines[:3]:
-        say(f"  - {plain_fail(l)}")
+        say(f"  - {plain_fail(l).rstrip('.')}.")
 
 
 def split_flags(argv: list[str], names: tuple[str, ...]) -> tuple[list[str], dict]:
@@ -331,6 +332,7 @@ def playbook_lines(name: str) -> list[str]:
     text = pb.read_text()
     m = re.search(r"(?ms)^## Part 2\..*?(?=^---|\Z)", text) or re.search(r"(?ms)^## .*?(?=^---|\Z)", text)
     body = (m.group(0) if m else text).splitlines()
+    body = [l.replace("**", "") for l in body]
     numbered = [re.sub(r"\s+", " ", l).strip() for l in body if re.match(r"^\s*\d+[a-z]?\. ", l)]
     return (numbered or [re.sub(r"\s+", " ", l).strip() for l in body if re.match(r"^\s*- ", l)])[:40]
 
@@ -457,7 +459,7 @@ def cmd_ready(argv: list[str]) -> int:
         say(f"{page['path']} is not ready yet.")
         summary(len(fails), fails, "still open")
     else:
-        say(f"I could not decide: {lines[-1] if lines else 'no output'}")
+        say(f"I cannot say yet whether {page['path']} is ready: {lines[-1] if lines else 'no output'}")
     say("")
     say(text)
     return r.returncode
