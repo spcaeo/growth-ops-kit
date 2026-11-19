@@ -141,6 +141,12 @@ def page_sentences(root, domx) -> list[tuple[str, bool]]:
         if any(c is not n and c.tag in BLOCKS for c in n.iter()):
             continue                        # an outer block (a list item that holds paragraphs): its inner blocks are read instead
         t = domx.text(n)
+        # a list or table item's own counter ("01 monday.com support ...", "12 Curia ..."): a numbered item, not a stat
+        first = next((c for c in n.children if not isinstance(c, str) or c.strip()), None)
+        if (n.tag == "li" or (first is not None and not isinstance(first, str) and re.fullmatch(r"\s*\d{1,3}[.)]?\s*", domx.text(first) or ""))):
+            t = re.sub(r"^\s*\d{1,3}[.)]?\s+(?=\D)", "", t)
+        # two inline cells written with no space between them ("500 MB" + "Listed" -> "500 MBListed"): split after a unit
+        t = re.sub(r"(?<=\b[A-Z]{2})(?=[A-Z][a-z])", " ", t)
         for a in n.iter():
             if a.tag == "a" and (a.get("href") or "").strip().lower().startswith("tel:") and domx.text(a):
                 t = t.replace(domx.text(a), " ")          # a phone link is no stat
@@ -220,8 +226,15 @@ def own_claims_text(project, rec=None, cfg=None) -> str:
     growth.json research.own_claims, and the record's other_numbers rows (a number listed there with a why)."""
     parts = []
     try:
+        # leave out what BRAND says must never be claimed: lines under a "never ..." heading, and lines that open with a
+        # never-word. A claim that only mentions "never" in its own wording ("never rotates IP addresses") stays ours.
+        in_never = False
         for ln in (project / "BRAND.md").read_text().splitlines():
-            if ln.strip() and not NEVER_LINE.search(ln):
+            if re.match(r"\s*#", ln):
+                in_never = bool(NEVER_LINE.search(ln))
+                continue
+            opens_never = re.match(r"[\s>*_`|\-\d.)]*(?:\*\*)?\s*(never|do not|don'?t|no claims?|may not|not allowed|banned|forbidden)\b", ln, re.I)
+            if ln.strip() and not in_never and not opens_never:
                 parts.append(ln)
     except (OSError, AttributeError):
         pass
