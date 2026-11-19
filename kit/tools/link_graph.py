@@ -38,6 +38,7 @@ from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import sitemaps  # noqa: E402
 from config import CFG, PROJECT, SITE_URL, TZ, UA  # noqa: E402
 
 DB = PROJECT / "inventory" / "link-graph.db"
@@ -263,17 +264,12 @@ def resolve_target(origin, path, hosts, delay):
     return first, cur, status
 
 
-def read_sitemap(url, depth=0):
-    status, _, body = fetch(url, "GET")
-    if status != 200:
-        raise SystemExit(f"cannot read sitemap {url}: status {status}")
-    locs = [html.unescape(x) for x in re.findall(r"<loc>\s*([^<]+?)\s*</loc>", body)]
-    if "<sitemapindex" in body and depth < 2:
-        out = []
-        for sub in locs:
-            out += read_sitemap(sub, depth + 1)
-        return out
-    return locs
+def read_sitemap(url):
+    """Every page address in the sitemap (an index is followed), through the shared reader."""
+    try:
+        return [loc for loc, _ in sitemaps.read(url, get=lambda u: fetch(u, "GET")[::2])]
+    except sitemaps.SitemapError as e:
+        raise SystemExit(str(e))
 
 
 def robots_for(origin):

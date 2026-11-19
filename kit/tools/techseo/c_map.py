@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import urllib.parse
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 
 from .dom import find_all, parse
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sitemaps  # noqa: E402  (the kit's one sitemap reader)
 
 NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -21,6 +25,15 @@ def read_sitemap(p):
         root = ET.fromstring(r.body)
     except ET.ParseError:
         return r, None
+    if root.tag == NS + "sitemapindex":
+        # an index: read each child sitemap from the same origin as this check (a preview reads its own build's files)
+        def get(u):
+            c = p.f.get(p.origin + (urllib.parse.urlsplit(u).path or "/"))
+            return c.status, c.text() if c.status == 200 else ""
+        try:
+            return r, [(loc, lm or "") for loc, lm in sitemaps.read(p.origin + "/sitemap.xml", get=get)]
+        except sitemaps.SitemapError:
+            return r, None
     out = []
     for u in root.iter(NS + "url"):
         loc = u.find(NS + "loc")

@@ -3,8 +3,11 @@ site repo's own content. One plain GET, at most once a day (kept in sitemap-cach
 Each page: path (no trailing slash, "/" for the home page) and its <lastmod> when the sitemap gives one.
   python3 sitepaths.py [--force]
 """
-import json, os, re, sys, urllib.request, datetime as dt
+import json, os, re, sys, urllib.error, urllib.request, datetime as dt
 import config, repo_meta
+
+sys.path.insert(0, os.path.join(os.path.dirname(config.CODE_DIR), "tools"))
+import sitemaps  # noqa: E402  (the kit's one sitemap reader)
 
 HERE = config.HERE
 CACHE = os.path.join(HERE, "sitemap-cache.json")
@@ -17,14 +20,11 @@ def _get(url):
         return r.read().decode("utf-8", errors="replace")
 
 
-def _locs(xml):
-    out = []
-    for block in re.findall(r"<(?:url|sitemap)>(.*?)</(?:url|sitemap)>", xml, flags=re.S):
-        loc = re.search(r"<loc>\s*(?:<!\[CDATA\[)?([^<\]]+)", block)
-        lm = re.search(r"<lastmod>\s*([^<]+)", block)
-        if loc:
-            out.append((loc.group(1).strip(), lm.group(1).strip() if lm else None))
-    return out
+def _status_get(url):
+    try:
+        return 200, _get(url)
+    except urllib.error.HTTPError as e:
+        return e.code, ""
 
 
 def to_path(loc):
@@ -67,9 +67,8 @@ def fetch(force=False):
         if cached and not force and cached.get("source") == "sitemap" and cached.get("fetched", "")[:10] == today and cached.get("pages"):
             return cached
         try:
-            xml = _get(config.SITEMAP_URL)
             pages, seen = [], set()
-            for loc, lm in _locs(xml):
+            for loc, lm in sitemaps.read(config.SITEMAP_URL, get=_status_get):   # follows a sitemap index
                 p = to_path(loc)
                 if p and p not in seen:
                     seen.add(p); pages.append(dict(path=p, lastmod=lm))
