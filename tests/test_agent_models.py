@@ -35,3 +35,25 @@ def test_a_reviewer_is_compared_with_its_own_jobs_builder_only():
                     builders=lambda who: builders_for(who, built))
     assert builders_for("independent review", built) == {"sonnet"}            # no job named: the latest builder
     assert builders_for("independent review", []) is None
+
+
+def test_a_helper_stopped_with_taskstop_is_not_judged(tmp_path):
+    # friction 51: a wrong-model helper that the session stopped kept failing every stop
+    import json as _j
+    from agent_models import agent_calls
+    def asst(blocks):
+        return {"type": "assistant", "message": {"model": "claude-opus-5-5", "content": blocks}}
+    def res(uid, aid):
+        return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": uid,
+                "content": [{"type": "text", "text": f"Async agent launched successfully.\\nagentId: {aid} (internal ID)"}]}]}}
+    rows = [{"type": "user", "message": {"content": "go"}},
+            asst([{"type": "tool_use", "id": "u1", "name": "Agent", "input": {"description": "Curia check", "model": "opus"}}]),
+            res("u1", "a111"),
+            asst([{"type": "tool_use", "id": "u2", "name": "TaskStop", "input": {"task_id": "a111"}}]),
+            asst([{"type": "tool_use", "id": "u3", "name": "Agent", "input": {"description": "page 1 researcher: Curia", "model": "sonnet"}}]),
+            res("u3", "a222")]
+    t = tmp_path / "t.jsonl"
+    t.write_text("".join(_j.dumps(r) + "\n" for r in rows))
+    calls = agent_calls(t)
+    assert [c["description"] for c, _ in calls] == ["page 1 researcher: Curia"]
+    assert problems(calls) == []
