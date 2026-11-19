@@ -55,6 +55,9 @@ page work starts before every step is OK.**
 | A10 | Agent guards installed | `growth new-project` writes `.claude/settings.json` with the Stop hook (`kit/hooks/stop_hook.sh`), which blocks an unlogged owner message, a preview address shown before READY, and a helper agent on the wrong model. | `.claude/settings.json` holds the Stop hook |
 | A11 | Preview address set | Set `preview_url` in `growth.json` to the one address every review happens on. Without it the golden rule (no address to the owner before READY) is off. | `preview_url` is set |
 | A12 | Hook commands find the kit | The Stop hook and status line in `.claude/settings.json` run through the `growth` command on the PATH (`bash setup.sh` links it), with the kit's folder only as the fallback. If the kit moved or the project came from a teammate, fix the link or set `GROWTH_KIT`. | every hook command resolves |
+| A13 | Agent harness complete | The Stop hook (with a status message), the `hook stage` workflow guard, the status line, the permissions block, the skills, the project `CLAUDE.md` "before you act" lines and (if the owner said yes) the git hooks are all installed. `growth wizard --repair` installs what is missing and never overwrites the owner's own settings. | every piece OK or n/a |
+| A14 | Research browser connected, market region set | The research browser (Claude in Chrome) is connected, and Google's Results region, read from its settings page, is the target country, confirmed by the owner. A FAIL, not a TODO: no job with a research step starts before it is OK. `growth wizard` walks through it. | `setup-state.json` holds the browser and the confirmed region |
+| A15 | Work is tracked in a task | No file in the project or the site repo has changed without an open task. | no unticked work |
 
 ## B. Choose the work
 

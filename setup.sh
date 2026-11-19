@@ -70,7 +70,23 @@ if mkdir -p "$BIN" 2>/dev/null && ln -sf "$ROOT/growth" "$BIN/growth" 2>/dev/nul
   ok "growth command linked: $BIN/growth"
   case ":$PATH:" in
     *":$BIN:"*) ;;
-    *) warn "$BIN is not on your PATH. Add this line to your shell profile (~/.zshrc or ~/.bashrc): export PATH=\"$BIN:\$PATH\"" ;;
+    *)
+      LINE="export PATH=\"$BIN:\$PATH\""
+      PROFILE="${GROWTH_KIT_PROFILE:-}"
+      if [ -z "$PROFILE" ]; then case "${SHELL:-}" in */zsh) PROFILE="$HOME/.zshrc" ;; *) PROFILE="$HOME/.bashrc" ;; esac; fi
+      YES="${GROWTH_KIT_PROFILE_YES:-}"   # 1 = add it without asking (for scripts); a terminal run asks once
+      if [ -z "$YES" ] && [ -t 0 ] && [ -t 1 ]; then
+        printf '%s is not on your PATH. Add this line to %s now? [y/N] ' "$BIN" "$PROFILE"
+        read -r ANS || ANS=""
+        case "$ANS" in y|Y|yes|YES) YES=1 ;; esac
+      fi
+      if [ "$YES" = 1 ]; then
+        if grep -qsF "$LINE" "$PROFILE" 2>/dev/null; then ok "PATH line already in $PROFILE (open a new terminal)"
+        elif printf '\n# growth-ops-kit\n%s\n' "$LINE" >> "$PROFILE" 2>/dev/null; then ok "PATH line added to $PROFILE (open a new terminal)"
+        else warn "could not write $PROFILE. Add this line yourself: $LINE"; fi
+      else
+        warn "$BIN is not on your PATH. Add this line to your shell profile ($PROFILE): $LINE"
+      fi ;;
   esac
 else
   warn "could not link growth into $BIN. Use the full path $ROOT/growth, or: export PATH=\"$ROOT:\$PATH\""
@@ -114,7 +130,7 @@ fi
 echo
 if [ ${#FAILS[@]} -eq 0 ]; then
   echo "${G}SETUP DONE${N}"
-  echo "Next: growth help    |    growth new-project ~/my-site --site https://example.com    |    read book/README.md"
+  echo "Next: growth wizard ~/my-site-growth --site https://example.com   (the guided setup)    |    growth help    |    read book/README.md"
   echo "(If \`growth\` is not found, open a new terminal after adding the PATH line above, or use ./growth from this folder.)"
   exit 0
 fi
