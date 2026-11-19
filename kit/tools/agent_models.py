@@ -64,6 +64,7 @@ def agent_calls(transcript, all_turns=False):
     """Agent tool calls made after the owner's last message (all of them with all_turns), each with the model of the
     session that made it: [(input, lead_model_at_that_time)]."""
     calls, lead = [], ""
+    use_to_agent, stopped = {}, set()       # Agent tool_use id -> launched agent id; agent ids stopped with TaskStop
     for e in transcripts.entries(transcript):
         if transcripts.owner_text(e) is not None and not all_turns:
             calls = []
@@ -73,8 +74,17 @@ def agent_calls(transcript, all_turns=False):
                 lead = family(m)
         for b in transcripts.assistant_blocks(e):
             if b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task"):
-                calls.append((b.get("input") or {}, lead))
-    return calls
+                calls.append((b.get("input") or {}, lead, b.get("id")))
+            elif b.get("type") == "tool_use" and b.get("name") == "TaskStop":
+                stopped.add(str((b.get("input") or {}).get("task_id") or ""))
+        content = (e.get("message") or {}).get("content") if e.get("type") == "user" else None
+        for b in content if isinstance(content, list) else []:
+            if isinstance(b, dict) and b.get("type") == "tool_result":
+                m = re.search(r"agentId:\s*([\w-]+)", json.dumps(b.get("content")))
+                if m:
+                    use_to_agent[b.get("tool_use_id")] = m.group(1)
+    # a helper the session stopped (TaskStop) is gone: it is not judged (friction 51)
+    return [(c, ld) for c, ld, uid in calls if use_to_agent.get(uid) not in stopped or not use_to_agent.get(uid)]
 
 
 def problems(calls, lead=None, roles=None, builders=None, exempt=None):
