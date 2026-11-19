@@ -48,6 +48,19 @@ Then, in your agent (Claude Code), open the project folder and run `/onboard`. I
 time, fills `growth.json`, `BRAND.md` and `SETUP.md`, and stops when `growth doctor` says every step is OK. After that, pick a job
 from [book/playbooks/](book/playbooks/README.md).
 
+## What you get per stack
+
+Checks that read the live page (the gate's page, SEO, link and speed checks, the page tracker, the link graph, the owner
+journal) work on every stack, from the web address alone. Checks that read a site's code need an adapter.
+
+| Stack (`growth.json` `stack`) | Live-page checks | Code checks | Notes |
+| --- | --- | --- | --- |
+| `nextjs` | all | all (Next.js adapter) | the only adapter today |
+| `static` (Astro, Hugo, Eleventy, plain HTML, anything else) | all | none: each prints "SKIP: no adapter for static", never a fake OK | set `"stack": "static"`; check the code rules by hand |
+
+Roadmap: an Astro adapter (content collections in `src/content/`, build and redirect checks), then Hugo. Want another
+stack? Open an issue and say which code checks you need first.
+
 ## What is where
 
 ```
