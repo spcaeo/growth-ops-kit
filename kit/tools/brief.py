@@ -109,9 +109,15 @@ def main():
             f"- the book: {BOOK / '03-page-rulebook.md'} (rule set version {reg.get('rulebook_version')})",
             f"- the book: {pb}"]
     out += [f"- project: {r}" for r in research]
+    import research as research_record  # noqa: E402  kit/tools/research.py
+    rec = research_record.load(PROJECT, key)
     cp = PROJECT / "research" / f"{key}-checkpoints.md"
     out += [f"- project: research/{cp.name} (the checkpoint list from growth preflight; "
             + ("tick every box)" if cp.exists() else "MISSING: the lead runs growth preflight first)")] + [""]
+    if rec:   # the research section is written FROM the record, so what the helper is told is what the gate checks
+        out += [research_record.plan_markdown(rec)]
+    else:
+        out += [f"## 2b. Research record: MISSING (growth research init {a.path} --key {key}); the gate fails until it exists", ""]
     out += ["## 3. Every playbook step (none skipped; raise a step with the lead before skipping it)", ""] + pb_steps + [""]
     out += ["Task steps so far:"] + [f"- {s['n']}. [{s['status']}] {s.get('what', '')[:150]}" for s in task.get("steps", [])] + [""]
     scoped = [r for r in reg["rules"] if a.type in r.get("scope", [])]

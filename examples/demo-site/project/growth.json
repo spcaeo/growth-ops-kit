@@ -19,7 +19,7 @@
   "old_hosts": [],
   "_old_hosts": "Retired host names and old server addresses that must never appear in a page, its markup, links or sitemap (rule 78; technical SEO URL-11 and LNK-08).",
   "spelling": "en-US",
-  "_spelling": "The one spelling the whole site uses (rule 93). Only en-US has a word list; any other value makes that check SKIP.",
+  "_spelling": "The one spelling the whole site uses (rule 93). Word lists: en-US, en-CA, en-GB. A different locale per path: {\"/\": \"en-CA\", \"/en-us/\": \"en-US\"}; \"html_lang\" reads each page's own lang. Brand and trade words go in spelling_allow (or spelling_allow_file). Any other locale makes that check SKIP.",
   "keys_file": "",
   "_keys_file": "Path of the keys file, outside git (for example ~/.config/growth/<site>.env, mode 600). Never put a key in this file.",
   "connectors": {

@@ -8,7 +8,7 @@ import paths  # kit/tools/paths.py: one form of a site path
 
 from techseo.dom import find, find_all
 
-from . import design, domx
+from . import design, domx, spelling
 from .core import Skip, check, short
 
 # The words a page may not use about its own offer, the claims it may never make and the customers it may not name are the
@@ -184,21 +184,18 @@ def call_length(ctx):
     ctx.verdict(probs, f"the call is always {want} minutes", f"say '{want}-minute call' (rule 4; BRAND.md)")
 
 
-@check("words.us-spelling", "93", what="US spelling in the title, description, alt text and body", needs="live")
+@check("words.us-spelling", "93", what="the chosen spelling (en-US, en-CA or en-GB, per path) in the title, description, alt text and body", needs="live")
 def us_spelling(ctx):
-    chosen = ctx.cfg.get("spelling") or (ctx.cfg.get("market") or {}).get("language") or "en-US"
-    if not str(chosen).lower().startswith("en-us"):
-        raise Skip(f"the site's chosen spelling is {chosen}, not en-US (growth.json spelling); only US spelling has a word list")
+    loc, why = spelling.choose(ctx.cfg, ctx.need_path(), ctx.html)
+    if loc is None:
+        raise Skip(why)
     root = ctx.root()
     parts = [page_text(ctx)] + [i.get("alt") for i in find_all(root, "img")]
     parts += [m.get("content") for m in find_all(root, "meta") if m.get("name") in ("description",)]
     t = " ".join(parts)
-    probs = []
-    for uk, us in UK_US.items():
-        n = len(re.findall(r"(?i)\b" + uk + r"\b", t))
-        if n:
-            probs.append(f"'{uk}' x{n} (US: {us})")
-    ctx.verdict(probs, "US spelling throughout", "change to the US spelling shown (rule 93)")
+    probs = spelling.problems(t, loc, spelling.allowlist(ctx.cfg, ctx.project))
+    ctx.verdict(probs, f"{loc} spelling throughout ({why})",
+                f"change to the {loc} spelling shown, or add a reviewed brand or trade word to growth.json spelling_allow (rule 93)")
 
 
 @check("words.review-promise", "14", what="a title that promises reviews, ratings or quotes shows them", needs="live")

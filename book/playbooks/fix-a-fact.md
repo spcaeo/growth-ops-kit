@@ -17,7 +17,10 @@ license: CC BY 4.0
 
 ## Before you start
 
-- **A fact about another company:** open its official page today. Copy the exact wording and the URL (rule 5).
+- **A fact about another company:** open its official page today. Copy the exact wording and the URL (rule 5). Confirm
+  the number on the page itself, in its raw text or a real browser (`growth vendor_page <url> --find "<plan>"`), never
+  from a summary tool alone, and read every view the page offers (monthly and yearly, regions, cloud and self-hosted):
+  file one row per view in the page's research record with `growth research fact` (rule 7).
 - **A fact about the business:** the only wording allowed is in `BRAND.md`. If it is not there, stop and ask the owner
   through the lead (rules 1, 3, 9). Never grow a capability claim, and never bring back a price the owner removed.
 - **Find every place, not only the one reported.** The fact may sit in posts, pages, shared page text and components:

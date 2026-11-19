@@ -259,7 +259,7 @@ def pull_search(c, full=False):
             c.execute("INSERT OR REPLACE INTO search VALUES(?,?,?,?,?,?,?)", (path, day, m["clicks"], m["impressions"], ctr, pos, int(bool(m["final"]))))
     if config.target_markets():
         import market
-        c.execute("INSERT OR REPLACE INTO market_definition VALUES(?,?)", (snap, market.definition(config.target_markets())))
+        c.execute("INSERT OR REPLACE INTO market_definition VALUES(?,?)", (snap, market.definition(config.target_markets(), config.query_noise())))
     c.commit()
 
 def bounce_plan(c, newest):

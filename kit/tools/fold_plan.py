@@ -37,11 +37,15 @@ def main():
     f = PROJECT / "research" / "plans" / f"{a.key}.json"
     folds = page_folds(fetch(a.url)) if a.url else []
     if a.cmd == "init":
-        if f.exists():
+        old = load(f) if f.exists() else None
+        if f.exists() and (old or {}).get("folds"):
             sys.exit(f"{f} exists; edit it instead")
         plan = {"page": a.path, "goal": "", "folds": [dict(fold=n, **{k: "" for k in FOLD_FIELDS}) for n in folds],
                 "shared": {s: {k: "" for k in SHARED_FIELDS} for s in SHARED},
                 "_fields": FOLD_FIELDS, "_shared_fields": SHARED_FIELDS}
+        for k in ("goal", "target_searches", "research_paa"):   # what `growth research plan` wrote from the research record stays
+            if (old or {}).get(k):
+                plan[k] = old[k]
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(json.dumps(plan, indent=1, ensure_ascii=False) + "\n")
         print(f"wrote {f.relative_to(PROJECT)}: {len(folds)} folds x {len(FOLD_FIELDS)} fields, {len(SHARED)} shared elements")

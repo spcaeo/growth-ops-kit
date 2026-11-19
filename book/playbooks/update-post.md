@@ -24,6 +24,28 @@ alone is [fix-a-fact](fix-a-fact.md).
 - Run `growth link_map inbound <path> --repo <worktree>` so you know who links in and with which words. Keep those
   words working.
 
+## Step 0a: the research record (rules 5, 7)
+
+Research is data the gate reads, not a file that only has to exist. Before the first edit, fill the page's record,
+`research/<key>-record.json`, with `growth research` (`growth research init <path> --key <key>`):
+
+- `search`: `growth research search` copies the page's own Search Console numbers from the tracker with the date window,
+  the top searches and the definition. The site-wide numbers go in `site_search`, never in `search`. `growth research
+  baseline` freezes them; `growth measure` compares the released page with these same numbers.
+- `paa`: each People-also-ask question, `chosen` (the page must answer it) or `declined` with a reason.
+- `ai_answers`: each AI answer seen (engine, market, query, date, what it said).
+- `vendor_facts`: every number about another product: the vendor, the fact, the value, **the view it was read in**
+  (Monthly or Yearly, region, cloud or self-hosted), the vendor's own quote, the address, the date, and how it was read.
+  Read it with `growth vendor_page <url> --find "<plan>"` (raw text, no summariser) or a real browser. **A summary tool
+  is never the source** (a summary once turned a "5 minimum users" plan into 25, and a Yearly default hid a correct Monthly
+  price). Read every view the page offers and file one row per view.
+- A section with no rows says why: `growth research none <path> --key <key> paa "no People also ask box"`.
+
+`growth research plan <path> --key <key>` writes the plan's target searches from the record, and `growth brief` puts the
+record in the helper's brief. The gate then reads it: `ev.research-record` (complete, dated, no summary-only number),
+`ev.vendor-numbers` (every amount of money on the page is a row read within 30 days; `growth.json` `research.fact_days`
+changes the 30) and `ev.paa-answered` (every chosen question is answered on the page).
+
 ## Step 0b: pre-flight, then check as you go (rule 0a)
 
 Before the first edit, `growth preflight <path> --type post --key <key>` must say PASS: shared site problems that

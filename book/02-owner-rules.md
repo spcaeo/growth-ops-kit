@@ -57,7 +57,7 @@ checks it; `[judgment]` means a person or reviewer decides it.
 | **Inventory first** | Work is chosen from the full inventory (`growth inventory`), never from a guess. [code: ev.inventory] |
 | **Money pages first, always** | The project's money pages (`money_core` and the inventory's `money_page` flag): its main service pages, the home page, pricing, the booking page. Posts when they feed a money page. [judgment] |
 | **Snapshot every page we touch** | Before and after: `growth page_snapshot`. "Search Console data" means every query with its impressions, clicks, click rate and position, plus daily figures and countries; and the analytics with it. Each touch is logged against the inventory. [code: ev.snapshot] |
-| **Measure every release** | Day 7, 14, 28, 56 (flow stage E); one change at a time, each dated. [code: ev.rechecks] |
+| **Measure every release** | Day 7, 14, 28, 56 after the release date (flow stage E, `growth measure schedule` and `growth measure run`); one change at a time, each dated. [code: ev.rechecks, ev.rechecks-release] |
 
 ## 3. Building pages
 
