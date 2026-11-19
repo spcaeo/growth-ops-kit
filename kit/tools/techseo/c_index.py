@@ -187,8 +187,11 @@ def run_url(p):
         rep.warn("URL-06", "canonical is streamed into <body> (Next dev behaviour); a script moves it to <head>",
                  "confirm on a production build with --mode prod; Google renders JS, but other crawlers may not")
     # URL-05 trailing slash style: same style as the sitemap
-    sm = p.f.get(p.origin + "/sitemap.xml")
-    locs = re.findall(r"<loc>([^<]+)</loc>", sm.text()) if sm.status == 200 else []
+    from .c_map import read_sitemap   # follows a sitemap index (the shared reader), same origin as this check
+    try:
+        locs = [loc for loc, _ in (read_sitemap(p)[1] or [])]
+    except Exception:  # noqa: BLE001
+        locs = []
     inner = [urllib.parse.urlsplit(x).path for x in locs if urllib.parse.urlsplit(x).path not in ("", "/")]
     if inner:
         slash = sum(1 for x in inner if x.endswith("/"))

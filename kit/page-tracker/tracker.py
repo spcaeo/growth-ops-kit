@@ -229,7 +229,7 @@ def pull_search(c, full=False):
             except Exception as e:
                 print(f"search: no Search Console data for {variant or path} from {frm}: {str(e)[:120]}"); continue
             if to == snap or to == gsc_windows(False)[-1][1]:
-                tag = "" if variant in (None, path) else "[us] "
+                tag = "" if variant is None or variant.rstrip("/") == path.rstrip("/") else "[us] "   # the page itself, with or without its slash
                 for q in (s.get("top_queries") or [])[:10]:
                     c.execute("INSERT OR REPLACE INTO search_queries VALUES(?,?,?,?,?,?)",
                               (path, snap, tag + q.get("query", ""), q.get("clicks"), q.get("impressions"), q.get("position")))

@@ -373,6 +373,18 @@ def run_check(ctx: Ctx, c: Check):
         ctx.fail(f"check crashed: {type(e).__name__}: {str(e)[:160]}", f"fix the check ({c.file})")
     if len(ctx.lines) == n:
         ctx.fail("check printed no result", f"fix {c.file}: every check must call ok() or fail()")
+    # growth.json design_exceptions: a check that does not fit this site's design, or a site-wide fault tracked as its
+    # own task, prints a WARN with its reason in every run, never a silent pass; it FAILs again when the task is done or
+    # its "until" date has passed (design.exception).
+    fails = [ln for ln in ctx.lines[n:] if ln.level == "FAIL"]
+    if fails:
+        from .design import exception
+        exc = exception(ctx, c.cid)
+        if exc:
+            why, task = exc
+            for ln in fails:
+                ln.level = "WARN"
+                ln.what = f"design exception ({why}{'; task ' + task if task else ''}): {ln.what}"
     ctx._cur = None
 
 

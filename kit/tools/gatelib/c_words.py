@@ -4,9 +4,11 @@ from __future__ import annotations
 import json
 import re
 
+import paths  # kit/tools/paths.py: one form of a site path
+
 from techseo.dom import find, find_all
 
-from . import domx
+from . import design, domx
 from .core import Skip, check, short
 
 # The words a page may not use about its own offer, the claims it may never make and the customers it may not name are the
@@ -228,7 +230,9 @@ def disclosure(ctx):
         return
     m = domx.main(root)
     first = " ".join(domx.text(p) for p in find_all(m, "p")[:4])
-    if re.search(r"(?i)\b(we (make|build|sell)|" + re.escape(product(ctx)) + r" (makes|is|sells)|our (own )?product)\b", first):
+    if design.find(ctx, "disclosure"):                 # growth.json disclosure_pattern (a partner, reseller ...)
+        ctx.ok("the disclosure line (growth.json disclosure_pattern) comes before the comparison")
+    elif re.search(r"(?i)\b(we (make|build|sell)|" + re.escape(product(ctx)) + r" (makes|is|sells)|our (own )?product)\b", first):
         ctx.ok("the disclosure line comes before the comparison")
     else:
         ctx.fail("a review/comparison page does not say who we are in its first paragraphs",
@@ -290,12 +294,11 @@ def named_author(ctx):
     a = ctx.cfg.get("default_author") or {}
     if not a.get("path"):
         raise Skip("no default author in growth.json (default_author)")
-    if ctx.need_path().rstrip("/") == a["path"]:
+    if paths.key(ctx.need_path()) == paths.key(a["path"]):
         ctx.ok("this is the author page itself")
         return
     root, probs = ctx.root(), []
-    links = [x for x in find_all(root, "a") if (ctx.internal_path(x.get("href")) or "").rstrip("/") == a["path"]
-             and a["name"].split()[0].lower() in domx.text(x).lower()]
+    links = [x for x in design.find(ctx, "byline") if a["name"].split()[0].lower() in domx.text(x).lower()]
     if not links:
         probs.append(f"no byline link '{a['name']}' to {a['path']}")
     t = page_text(ctx)
