@@ -25,6 +25,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 - The booking paths (`conversion_path`, `cta.contact_path`) are compared without a trailing slash: a site whose
   addresses end in "/" (for example "/contact/") was told "no link to the booking path at all" on every page.
 
+- Doctor A2: once `old_brand_words` was filled it could never pass, because the brand sheet's "never say" line and the
+  steps log (which quotes the owner) counted as leftovers. Lines that ban the words, `growth.json` and the steps log no
+  longer count; a real mention in any other project file still FAILs. New `build_dir` (the site's production build):
+  A2 also searches its pages (html, txt, xml, md, json), so a leftover on the site itself fails too.
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.

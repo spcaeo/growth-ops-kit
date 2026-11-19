@@ -96,7 +96,9 @@
   "trust_paths": ["/about"],
   "agent_cap": 4,
   "old_brand_words": "",
-  "_old_brand_words": "Words of a previous brand or site, as 'one|two'. Doctor A2 and the word check fail while any is left.",
+  "_old_brand_words": "Words of a previous brand or site, as 'one|two'. Doctor A2 and the word check fail while any is left in the project folder or the built site (build_dir). Lines that ban the words (BRAND.md 'never ...') and the steps log, which quotes the owner, do not count.",
+  "build_dir": "",
+  "_build_dir": "The folder of the site's production build (for example dist or out), relative to site_repo or absolute. Doctor A2 searches its pages for old_brand_words. Empty = the site is not searched (site_dir is used for a static site with no checkout).",
   "market": {
     "_about": "Asked first in onboarding. Every search, AI-answer check and keyword volume uses the primary market unless a check says otherwise.",
     "primary_country": "US",
