@@ -266,3 +266,16 @@ def test_wizard_indexing_step_is_skippable_and_sets_config(tmp_path):
     r = wizard.step_indexing(wizard.Session(tmp_path, {"indexing": {"provider": "indexnow", "indexnow_key": "k"}}))
     cfg = json.loads((tmp_path / "growth.json").read_text())
     assert cfg["indexing"]["provider"] == "indexnow" and "indexnow" in r
+
+
+def test_job_urls_reads_the_providers_real_shape():
+    """The provider's list_job_urls replies {items: [...]} with indexed as 1/0/None (shape from a real reply, 19 Nov 2026)."""
+    import importlib, sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parent.parent / "kit" / "tools"))
+    ip = importlib.import_module("index_pages")
+    out = {"items": [{"url": "https://example.com/a/", "indexed": 1, "state": "completed"},
+                     {"url": "https://example.com/b/", "indexed": 0, "state": "completed"},
+                     {"url": "https://example.com/c/", "indexed": None, "state": "pending"}], "total": 3, "page": 1, "page_size": 200}
+    rows = {u: seen for u, seen, _ in ip.job_urls(out)}
+    assert rows == {"https://example.com/a/": True, "https://example.com/b/": False, "https://example.com/c/": False}

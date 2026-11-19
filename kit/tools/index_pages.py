@@ -256,7 +256,7 @@ def job_urls(out):
             rows.append((it, False, ""))
         elif isinstance(it, dict) and it.get("url"):
             status = str(it.get("status") or it.get("state") or "").lower()
-            seen = it.get("indexed") is True or it.get("google_indexed") is True or status in SEEN
+            seen = it.get("indexed") in (True, 1) or it.get("google_indexed") in (True, 1) or status in SEEN   # the provider sends 1/0
             rows.append((it["url"], seen, status))
     return rows
 
