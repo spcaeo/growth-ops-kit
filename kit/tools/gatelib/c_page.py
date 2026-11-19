@@ -486,6 +486,18 @@ def hero_split(ctx):
                  "set the H1 and answer on the left, the page's own picture or tool on the right at 1280-1920 px (rule 147)")
 
 
+def text_without_node(ctx, index):
+    """The main text of the page with the index-th element of main (in document order) cut out, on a private copy of the tree."""
+    from techseo.dom import parse
+    m2 = domx.main(parse(ctx.need_html()))
+    nodes = list(m2.iter())
+    target = nodes[index]
+    if target is m2:
+        return ""
+    target.parent.children = [c for c in target.parent.children if c is not target]
+    return domx.text(m2)
+
+
 @check("claims.box-numbers", "10", what="every number in a takeaway, stat or side box also appears in the page text", needs="live")
 def box_numbers(ctx):
     m = domx.main(ctx.root())
@@ -494,12 +506,12 @@ def box_numbers(ctx):
     if not boxes:
         ctx.ok("no takeaway, stat or side boxes")
         return
-    body_txt = domx.text(m)
+    order = list(m.iter())
     probs = []
     for b in boxes:
         bt = domx.text(b)
-        rest = body_txt.replace(bt, " ")
-        for num in set(re.findall(r"\b\d[\d,.]*%?", bt)):
+        rest = text_without_node(ctx, order.index(b))          # the page's text without THIS box only: a copy of its number in the prose still counts
+        for num in {x.rstrip(".,") if not x.endswith("%") else x for x in re.findall(r"\b\d[\d,.]*%?", bt)}:
             if num not in rest:
                 probs.append(f"'{num}' only in a box")
     ctx.verdict(sorted(set(probs)), "box numbers are all in the text", "state the number in the text with its source, or drop it from the box (rule 10)")
@@ -591,7 +603,13 @@ def bot_guard(ctx):
     def sends(f):
         return bool(f.get("action")) or f.get("method").lower() == "post" or any(
             n.tag == "textarea" or (n.tag == "input" and n.get("type").lower() in ("email", "tel")) for n in f.iter())
-    forms = [f for f in find_all(domx.main(ctx.root()), "form") if sends(f)]
+    def prefill_only(f):
+        """A GET form whose action is an in-page anchor or the conversion path only prefills the real lead form."""
+        act = f.get("action").strip()
+        if (f.get("method") or "get").lower() != "get" or not act:
+            return False
+        return act.startswith("#") or (ctx.internal_path(act) or "").rstrip("/") in ctx.booking_paths()
+    forms = [f for f in find_all(domx.main(ctx.root()), "form") if sends(f) and not prefill_only(f)]
     probs = []
     for f in forms:
         hidden = [i for i in find_all(f, "input") if i.get("tabindex") == "-1" or i.get("aria-hidden") == "true"
