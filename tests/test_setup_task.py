@@ -64,12 +64,13 @@ def test_a15_flags_changed_files_with_no_open_task(tmp_path):
     folder, _ = new_project.make(tmp_path / "p", "https://shop.example")
     e = env(tmp_path)
     subprocess.run(["git", "init", "-q", str(folder)], check=True, env=e)
-    (folder / "notes.txt").write_text("work")
     a15 = next(l for l in growth(tmp_path, "doctor", cwd=folder).stdout.splitlines() if "A15" in l)
-    assert a15.startswith("OK")                                 # the setup task is open: the work belongs to it
+    assert a15.startswith("OK")                                 # the setup task is open: the setup files belong to it
+    (folder / "notes.txt").write_text("work")                   # a page-like file needs a page task, not the setup task
+    assert next(l for l in growth(tmp_path, "doctor", cwd=folder).stdout.splitlines() if "A15" in l).startswith("TODO")
     growth(tmp_path, "tasks", "status", "T1", "done", cwd=folder)
     out = growth(tmp_path, "doctor", cwd=folder).stdout
     a15 = next(l for l in out.splitlines() if "A15" in l)
-    assert a15.startswith("TODO") and "no task is open" in a15 and "growth tasks add" in out
+    assert a15.startswith("TODO") and ("no task is open" in a15 or "no file changes" in a15 or "page task" in a15) and "growth tasks add" in out
     growth(tmp_path, "tasks", "add", "Chat: x", "", "--type", "chat", cwd=folder)
-    assert next(l for l in growth(tmp_path, "doctor", cwd=folder).stdout.splitlines() if "A15" in l).startswith("OK")
+    assert next(l for l in growth(tmp_path, "doctor", cwd=folder).stdout.splitlines() if "A15" in l).startswith("TODO")   # a chat task covers no file changes
