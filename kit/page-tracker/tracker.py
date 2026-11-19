@@ -36,6 +36,8 @@ def db():
         position REAL, PRIMARY KEY(path, snapshot, query));
     CREATE TABLE IF NOT EXISTS search_countries(path TEXT, snapshot TEXT, country TEXT, clicks INTEGER, impressions INTEGER,
         position REAL, PRIMARY KEY(path, snapshot, country));
+    CREATE TABLE IF NOT EXISTS search_split(path TEXT, snapshot TEXT, address TEXT, clicks INTEGER, impressions INTEGER,
+        frm TEXT, til TEXT, PRIMARY KEY(path, snapshot, address));
     CREATE TABLE IF NOT EXISTS search_index(path TEXT, inspected_at TEXT, status TEXT, verdict TEXT, coverage TEXT,
         last_crawl TEXT, PRIMARY KEY(path, inspected_at));
     CREATE TABLE IF NOT EXISTS bounce(path TEXT, snapshot TEXT, first TEXT, last TEXT, landed INTEGER, went_on INTEGER,
@@ -219,7 +221,7 @@ def pull_search(c, full=False):
     paths = [p for (p,) in c.execute("SELECT path FROM pages").fetchall()] + ["*"]
     for path in paths:
         merged = {}
-        variants = [None] if path == "*" else config.variants(path)
+        variants = [None] if path == "*" else config.variants(path) + [a for a in config.aliases(path) if a not in config.variants(path)]
         for variant in variants:
           for frm, to in gsc_windows(full):
             args = {"from": frm, "to": to}
@@ -236,6 +238,10 @@ def pull_search(c, full=False):
                 for k in (s.get("countries") or [])[:10]:
                     c.execute("INSERT OR REPLACE INTO search_countries VALUES(?,?,?,?,?,?)",
                               (path, snap, tag + (k.get("country") or ""), k.get("clicks"), k.get("impressions"), k.get("position")))
+            if variant and to == gsc_windows(False)[-1][1]:   # the split by address, for the page view
+                days = s.get("days", [])
+                c.execute("INSERT OR REPLACE INTO search_split VALUES(?,?,?,?,?,?,?)",
+                          (path, snap, variant, sum(d.get("clicks") or 0 for d in days), sum(d.get("impressions") or 0 for d in days), frm, to))
             for d in s.get("days", []):
                 m = merged.setdefault(d["day"], {"clicks": 0, "impressions": 0, "pw": 0.0, "final": d.get("final")})
                 m["clicks"] += d.get("clicks") or 0

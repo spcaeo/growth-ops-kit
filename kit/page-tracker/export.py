@@ -37,6 +37,14 @@ def _top(c, table, col, path):
     return snap, _merge_top(rows)
 
 
+def _split(c, path):
+    """Google's figures per address of a page (its own and its old ones), latest snapshot: [[address, clicks, impressions]]."""
+    snap = c.execute("SELECT max(snapshot) FROM search_split WHERE path=?", (path,)).fetchone()[0]
+    rows = c.execute("SELECT address, clicks, impressions FROM search_split WHERE path=? AND snapshot=? ORDER BY impressions DESC",
+                     (path, snap)).fetchall() if snap else []
+    return [list(r) for r in rows] if len(rows) > 1 else []
+
+
 def write(c):
     pages = []
     for path, slug, kind, title in c.execute("SELECT path, slug, kind, title FROM pages ORDER BY slug").fetchall():
@@ -63,6 +71,7 @@ def write(c):
         pages.append(dict(path=path, slug=slug, kind=kind, title=title, main=main and main["live_at"], changes=changes,
                           days=days, milestones=ms, bounce=bounce, bw=bw, gs=_search(c, path), gq=queries[:15], gc=countries[:15],
                           gsnap=qsnap or csnap, top=timeonpage.export(c, path), edits=diffs.export_saves(c, path),
+                          split=_split(c, path),
                           diff_file="diffs/" + diffs.page_file_name(path),
                           jw=[dict(change_at=r[0], win=r[1], side=r[2], frm=r[3], to=r[4], **json.loads(r[5] or "{}"))
                               for r in c.execute("SELECT change_at, win, side, frm, til, data FROM journey_window WHERE path=?", (path,))],
