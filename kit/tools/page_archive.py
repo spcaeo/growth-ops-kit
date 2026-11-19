@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fetch_rule  # noqa: E402
 import paths  # noqa: E402
 from config import PROJECT, SITE_URL, TZ  # noqa: E402
 
@@ -46,8 +47,9 @@ def folder(path, stage, day=None):
 
 
 def capture(path, stage, base):
-    from playwright.sync_api import sync_playwright
     url = base.rstrip("/") + "/" + path.lstrip("/")
+    fetch_rule.assert_may_fetch(url)         # growth.json live_site_rule: no-crawl keeps every tool off the live host
+    from playwright.sync_api import sync_playwright
     out = folder(path, stage)
     out.mkdir(parents=True, exist_ok=True)
     blocked, meta = [], {"url": url, "stage": stage, "captured": dt.datetime.now(TZ).isoformat(timespec="seconds")}

@@ -24,6 +24,7 @@ from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fetch_rule  # noqa: E402
 import paths  # noqa: E402
 from config import CFG, PROJECT as ROOT, SITE_URL, HOST, TZ, UA, connector_on, keys, note_missing_key  # noqa: E402
 
@@ -57,7 +58,9 @@ def skald(name, args):
 
 def elements(path, base=""):
     """The page's own elements, read from `base` (a preview or a local build of the live release) or the live site."""
-    raw = urllib.request.urlopen(urllib.request.Request((base or SITE_URL).rstrip("/") + path, headers=UA), timeout=30).read().decode()
+    url = (base or SITE_URL).rstrip("/") + path
+    fetch_rule.assert_may_fetch(url)         # growth.json live_site_rule: no-crawl keeps every tool off the live host
+    raw = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30).read().decode()
     clean = lambda x: re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", x))).strip()
     body = re.search(r"<body[^>]*>(.*)</body>", raw, re.S).group(1)
     main = re.sub(r"<script.*?</script>|<style.*?</style>|<svg.*?</svg>|<nav.*?</nav>|<footer.*?</footer>|<header class=.site-header.*?</header>",
