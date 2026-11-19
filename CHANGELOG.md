@@ -37,6 +37,11 @@ The kit and the book share one version number. Dates are written year-month-day.
   overrides) and sends that form. The inventory matches sitemap paths, tracker numbers and growth.json lists
   (money_core, core_pages, new_pages) with or without the slash.
 
+- `growth page_snapshot --base <url>` reads the page from a preview or a local build instead of the live site, and the
+  snapshot records the address it read (`base`). The page is matched to its inventory row with or without a trailing
+  slash, and its own address form is used for the page and for analytics (before: a trailing-slash site was "not a
+  live page", and analytics answered 0).
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.
