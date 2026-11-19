@@ -3,7 +3,7 @@
 "when you start a new page the planning and preparation should be done in depth and all checkpoints clear set
 as part of the playbook and workflow", after four pages spent hours being fixed at the end).
 
-  growth preflight <path> --type money|core|hub|post --key <key> [--repo <worktree>]
+  growth preflight <path> --type money|core|hub|post --key <key> [--repo <worktree>] [--extra-rules <file>]
 
 It does three things, before the first line of page code:
   1. Site health: the shared problems that would otherwise fail every page at the end are found now, across the whole
@@ -87,7 +87,7 @@ def checks_in_scope(ptype):
     return [c for c in CHECKS.values() if ptype in c.types]
 
 
-def write_plan(path, ptype, key, checks, stack=None):
+def write_plan(path, ptype, key, checks, stack=None, extra_rules=None):
     """The checkpoint plan. A check that reads a Next.js site's code is marked "SKIP on this stack" when growth.json stack is
     something else, so nobody plans around a FAIL that cannot happen."""
     stack = (stack if stack is not None else CFG.get("stack") or "static").lower()
@@ -112,6 +112,8 @@ def write_plan(path, ptype, key, checks, stack=None):
         if not ef.is_file():
             sys.exit(f"growth.json checkpoints_extra points at {extra_file}, which does not exist")
         extra = checkpoints.extra_items(ef)
+    for rf in extra_rules or []:          # a site's own rules for this page (--extra-rules, or research/<key>-site-rules.md)
+        extra += [t for t in checkpoints.extra_items(rf) if t not in extra]
     p = PROJECT / "research" / f"{key}-checkpoints.md"
     p.parent.mkdir(parents=True, exist_ok=True)
     old = p.read_text() if p.exists() else ""
@@ -128,7 +130,16 @@ def main():
     given = CFG.get("preview_repo") or CFG.get("site_repo") or ""
     ap.add_argument("--repo", default=str((PROJECT / given).expanduser().resolve()) if given else "",
                     help="the site checkout (default: growth.json preview_repo; site_repo only when no preview_repo is needed)")
+    ap.add_argument("--extra-rules", action="append", default=[], metavar="FILE",
+                    help="a file with one site rule per bullet, merged into this page's manual checks (research/<key>-site-rules.md is read too)")
     a = ap.parse_args()
+    extra_files = [Path(f).expanduser() for f in a.extra_rules]
+    for f in extra_files:
+        if not f.is_file():
+            sys.exit(f"--extra-rules {f}: no such file")
+    site_rules = PROJECT / "research" / f"{a.key}-site-rules.md"
+    if site_rules.is_file() and site_rules not in extra_files:
+        extra_files.append(site_rules)
     if preview_repo_problem() and not any(x.startswith("--repo") for x in sys.argv[1:]):
         sys.exit(preview_repo_problem())     # an explicit --repo is the worktree; otherwise it must be in growth.json
     repo, path = (Path(a.repo).resolve() if a.repo else None), a.path.rstrip("/") or "/"
@@ -143,7 +154,7 @@ def main():
                         "--type", a.type, "--key", a.key, "--no-link-status", "--only", ",".join(c for c in PLAN if c not in PLAN_ONLY)],
                        capture_output=True, text=True, cwd=PROJECT)
     plan_fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")] + plan_files(path, a.key, a.type)
-    plan_file, counts = write_plan(path, a.type, a.key, checks_in_scope(a.type))
+    plan_file, counts = write_plan(path, a.type, a.key, checks_in_scope(a.type), extra_rules=extra_files)
 
     print(f"Checkpoint plan: {plan_file.relative_to(PROJECT)} ({counts['before']} before the build, {counts['fold']} after "
           f"every fold, {counts['finish']} before READY, {counts['release']} after publishing; "

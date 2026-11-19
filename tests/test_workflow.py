@@ -81,3 +81,17 @@ def test_stage_hook_prints_the_open_manual_checkpoints(tmp_path):
     out = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
     assert "rule 530" in out and "rule 531" not in out and "pricing-checkpoints.md" in out
     assert tick("ls").stdout == "" and tick('growth tasks tick T1 9 --output "x"').stdout == ""   # not a stage step
+
+
+def test_preflight_merges_site_rules_and_a_rerun_keeps_them(demo_project, monkeypatch):
+    monkeypatch.setenv("GROWTH_PROJECT", str(demo_project))
+    import preflight
+    monkeypatch.setattr(preflight, "PROJECT", demo_project)
+    rules = demo_project / "site-rules.md"
+    rules.write_text("- site rule 7: logo on every tool\n- site rule 8: no stock photos\n")
+    args = ("/x", "money", "x", preflight.checks_in_scope("money"))
+    p, counts = preflight.write_plan(*args, extra_rules=[rules])
+    assert "- [ ] site rule 7: logo on every tool" in p.read_text() and counts["manual"] >= 2
+    p.write_text(p.read_text().replace("- [ ] site rule 7: logo on every tool", "- [x] site rule 7: logo on every tool -- checked J1"))
+    preflight.write_plan(*args)          # a run without the file does not drop the rule or its proof
+    assert "- [x] site rule 7: logo on every tool -- checked J1" in p.read_text()
