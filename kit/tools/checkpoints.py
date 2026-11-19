@@ -35,7 +35,7 @@ WEAK = {"", "proof", "todo", "tbd", "done", "ok", "..."}
 PROOF_MIN = 4
 URL_RE = re.compile(r"https?://[^\s)>\]]+")
 JOURNAL_RE = re.compile(r"\bJ-?\d{1,6}\b")
-COMMIT_RE = re.compile(r"(?<![\w/.-])(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}(?![\w/.-])")
+COMMIT_RE = re.compile(r"(?<![\w/.-])[0-9a-f]{7,40}(?![\w/.-])")
 FILE_RE = re.compile(r"(?<![\w:/])(?:~?/|\./)?(?:[\w.@+-]+/)*[\w@+-][\w.@+-]*\.[A-Za-z0-9]{1,8}(?![\w/])")
 CMD_RE = re.compile(r"(?:`[^`]{3,}`|\b(?:growth|git|npm|npx|pnpm|yarn|pytest|python3?|node|curl|make|lighthouse|playwright)\s+\S[^\n]*?)"
                     r"\s*(?:->|=>|→|:|\bgave\b|\bprints?\b|\breturned\b)\s*\S")
@@ -70,7 +70,9 @@ def proof_refs(text, project=None, repos=()):
         if jids is None or j in jids:
             out["journal"].append(j)
     for sha in COMMIT_RE.findall(bare):
-        if not roots or any(_git_has(r, sha) for r in roots):
+        if roots and any(_git_has(r, sha) for r in roots):
+            out["commit"].append(sha)
+        elif not roots and re.search(r"\d", sha) and re.search(r"[a-f]", sha):   # by shape: digits and letters
             out["commit"].append(sha)
     for f in FILE_RE.findall(bare):
         if re.fullmatch(r"\d+(\.\d+)+", f):          # 1.5, 53.0: a number, not a file
