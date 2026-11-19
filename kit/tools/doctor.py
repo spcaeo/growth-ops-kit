@@ -25,6 +25,26 @@ def row(step, ok, what, fix=""):
     rows.append((step, "OK  " if ok is True else ("TODO" if ok is None else "FAIL"), what, "" if ok is True else fix))
 
 
+def a5_state(setup_text, repo=None):
+    """(ok, what) for the 'Control check' row of SETUP.md: the status cell (the last one) says done, and the row names at
+    least one commit id. With a site repo, every id must exist in it (git cat-file), so a made-up id does not pass."""
+    line = next((l for l in setup_text.splitlines() if "Control check" in l and "|" in l), None)
+    if line is None:
+        return None, "SETUP.md has no 'Control check' row"
+    cells = [c.strip() for c in line.strip().strip("|").split("|")]
+    status = re.sub(r"<[^>]*>", "", cells[-1])           # a template placeholder such as <fill in: done or not> is not an answer
+    ids = [m for m in re.findall(r"\b[0-9a-f]{7,40}\b", " ".join(cells[1:])) if re.search(r"\d", m)]
+    if not re.search(r"\bdone\b", status, re.I):
+        return None, "SETUP.md 'Control check' row does not say done in its status cell"
+    if not ids:
+        return None, "SETUP.md 'Control check' row says done but names no commit id (the release and the rollback)"
+    if repo is not None:
+        bad = [i for i in ids if subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{i}^{{commit}}"], capture_output=True).returncode]
+        if bad:
+            return None, f"SETUP.md 'Control check' row names commit ids not found in the site repo: {', '.join(bad)}"
+    return True, "SETUP.md 'Control check' row says done, with commit ids" + (" found in the site repo" if repo is not None else "")
+
+
 LAUNCHD_DIRS = ["~/Library/LaunchAgents", "/Library/LaunchAgents", "/Library/LaunchDaemons"]
 
 
@@ -153,8 +173,9 @@ else:
 # A5 control check
 setup_f = PROJECT / "SETUP.md"
 setup = setup_f.read_text() if setup_f.exists() else ""
-row("A5 Control of the live site proven", bool(re.search(r"Control check[^\n]*\| *done", setup)) or None,
-    "SETUP.md 'Control check' row says done", "book/01-flow.md A5: tiny visible edit, owner checks, roll back")
+_a5_ok, _a5_what = a5_state(setup, SITE_REPO if CFG.get("site_repo") and (SITE_REPO / ".git").exists() else None)
+row("A5 Control of the live site proven", _a5_ok, _a5_what,
+    "book/01-flow.md A5: tiny visible edit, owner checks, roll back; then fill the row: the commit ids and 'done'")
 # A6 task tracker
 try:
     t = json.loads((DOCS / "tasks.json").read_text())
