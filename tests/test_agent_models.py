@@ -13,6 +13,8 @@ CASES = [
     ("r", "Independent review", "sonnet", 1),
     ("x", "Count log lines", None, 1),
     ("e", "Final evidence shots", "sonnet", 0),
+    ("rs", "Researcher: AU region vendor pages, verify facts", "sonnet", 0),  # a researcher is known (friction 45)
+    ("rs", "Researcher: AU region vendor pages", "opus", 1),
 ]
 
 
