@@ -48,6 +48,7 @@ QUESTIONS = {
     "detect": 'Confirm what was detected (stack, sitemap, trailing slash, languages, redirects, content folders)? answer: {"confirm": true}',
     "browser": 'Connect the research browser: in Claude Code type /chrome, choose the browser, check "By default: on". Then: growth wizard confirm browser --name "<its name>", and the owner runs growth approve browser in their own terminal',
     "region": 'Set Google to the target country in that browser (Search settings > Other settings > Language & region > Results region), read the region Google reports, then: growth wizard confirm region --seen "<what Google says>", and the owner runs growth approve region in their own terminal',
+    "indexing": 'Optional: get new pages indexed after they go live. answer: {"provider": "freshlycited"|"indexnow"|"manual", "keys_file": "~/.config/growth/site.env", "sitemap": "https://example.com/sitemap.xml", "indexnow_key": "<key>", "verify": true} or "later" (skip). FreshlyCited (freshlycited.com) is the built-in option; indexnow and manual are free',
 }
 
 
@@ -156,6 +157,34 @@ def step_analytics(s: Session) -> str:
     ws.record(s.project, "analytics", "answered", answer={"keys_file": str(path)}, source=src,
               test={"command": f"stat {path}", "result": "file not there yet: put the one-time-code keys there"})
     return "keys file named, not there yet"
+
+
+def step_indexing(s: Session) -> str:
+    """Optional, skippable, and not part of ORDER: `growth wizard indexing`. Writes growth.json "indexing"; with "verify" it adds the
+    sitemap and the IndexNow site at FreshlyCited and checks the IndexNow key (free calls, the key is never printed)."""
+    v, src = s.answer("indexing", "later")
+    if v in ("later", "none", "", None) or (isinstance(v, dict) and not v.get("provider")):
+        ws.record(s.project, "indexing", "declined", answer="later", source=src)
+        return "indexing skipped (growth index stays off until growth.json \"indexing\" is set)"
+    if isinstance(v, str):
+        v = {"provider": v}
+    prov = str(v["provider"]).lower()
+    if prov not in ("freshlycited", "indexnow", "manual"):
+        raise SystemExit('indexing: provider is "freshlycited", "indexnow" or "manual"')
+    cfg = cfg_of(s.project)
+    ix = cfg.setdefault("indexing", {})
+    ix["provider"] = prov
+    for k in ("keys_file", "sitemap", "indexnow_key", "indexnow_key_location", "max_pages_per_day"):
+        if v.get(k):
+            ix[k] = v[k]
+    save_cfg(s.project, cfg)
+    result = f"provider {prov}"
+    if prov == "freshlycited" and v.get("verify"):
+        import index_pages
+        index_pages.cmd_setup(s.project, cfg, say=say)
+        result += "; sitemap and IndexNow set up"
+    ws.record(s.project, "indexing", "done", answer={"provider": prov}, source=src, test={"command": "growth index report", "result": result})
+    return result
 
 
 def step_live_rule(s: Session) -> str:
@@ -534,7 +563,7 @@ def cmd_research_check(project: Path, connected: str | None, task: str, step: in
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    sub = argv.pop(0) if argv and argv[0] in ("status", "answer", "confirm", "research-check") else None
+    sub = argv.pop(0) if argv and argv[0] in ("status", "answer", "confirm", "research-check", "indexing") else None
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", nargs="*", help="folder (wizard), or: step value (answer), or: browser|region (confirm)")
     ap.add_argument("--site", default="")
@@ -567,9 +596,19 @@ def main(argv=None) -> int:
         sys.exit("No project here: growth wizard <folder> --site https://example.com (or run it inside a project folder)")
     if sub == "status":
         return cmd_status(project)
+    if sub == "indexing":
+        answers = {}
+        for f in (project / "setup-answers.json", Path(a.answers) if a.answers else None):
+            if f and f.is_file():
+                answers.update(json.loads(f.read_text()))
+        try:
+            say(f"[    done] indexing: {step_indexing(Session(project, answers, sys.stdin.isatty() and sys.stdout.isatty() and not a.answers, a.yes))}")
+        except Waiting:
+            return WAIT
+        return 0
     if sub == "answer":
-        if len(a.what) < 2 or a.what[0] not in ORDER:
-            sys.exit(f"growth wizard answer <{'|'.join(ORDER)}> <value>")
+        if len(a.what) < 2 or a.what[0] not in ORDER + ['indexing']:
+            sys.exit(f"growth wizard answer <{'|'.join(ORDER + ['indexing'])}> <value>")
         path = project / "setup-answers.json"
         data = json.loads(path.read_text()) if path.is_file() else {}
         data[a.what[0]] = parse_value(" ".join(a.what[1:]))
