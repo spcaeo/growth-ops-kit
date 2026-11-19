@@ -25,10 +25,16 @@ def reason_words(ctx):
     return r"(?i)\b(" + cta(ctx)["reason_words"] + r")\b" if cta(ctx).get("reason_words") else REASON_WORDS
 
 
+def dialog_class(ctx):
+    """The call dialog's class: growth.json features.call_dialog.class, else the kit's 'call-dialog'."""
+    f = (ctx.cfg.get("features") or {}).get("call_dialog")
+    return (f.get("class") if isinstance(f, dict) else None) or "call-dialog"
+
+
 def primaries(ctx, root, include_header=True):
     out = []
     for a in domx.booking_links(ctx, root):
-        if not domx.is_primary(a) or domx.in_call_dialog(a):
+        if not domx.is_primary(a) or domx.in_call_dialog(a, dialog_class(ctx)):
             continue
         if not include_header and any(x.tag in ("header", "nav") or domx.has_cls(x, r"site-header") for x in a.ancestors()):
             continue
