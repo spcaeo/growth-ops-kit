@@ -139,12 +139,12 @@ def test_the_tech_seo_sitemap_check_follows_an_index(demo_project, index_server)
 
 def test_doctor_points_the_inventory_at_the_preview_never_the_live_site(demo_project):
     cfg = json.loads((demo_project / "growth.json").read_text())
-    cfg["preview_url"] = "http://127.0.0.1:18321"
+    cfg["preview_url"] = "http://127.0.0.1:4321"
     (demo_project / "growth.json").write_text(json.dumps(cfg))
     shutil.rmtree(demo_project / "inventory", ignore_errors=True)
     r = subprocess.run([sys.executable, str(ROOT / "kit" / "tools" / "doctor.py")], capture_output=True, text=True, cwd=demo_project,
                        env={**os.environ, "GROWTH_PROJECT": str(demo_project)})
-    assert "growth inventory --base http://127.0.0.1:18321" in r.stdout, r.stdout
+    assert "growth inventory --base http://127.0.0.1:4321" in r.stdout, r.stdout
 
 
 def test_a_plain_urlset_is_returned_without_duplicates():
