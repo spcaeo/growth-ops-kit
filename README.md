@@ -25,40 +25,61 @@ service in between) is **not yet** built.
 You need Python 3.10 or newer and git. Node 18 or newer is needed only for a Next.js site's own checks (the Next.js
 adapter), not for the demo site or any other stack.
 
+**1. Install**
+
 ```
 git clone <this repository> growth-ops-kit
 cd growth-ops-kit
-./setup.sh                                   # checks your tools, installs the add-ons, links `growth`, runs the tests on the demo site
-growth wizard ~/Projects/my-site-growth --site https://example.com     # the guided setup (resumes where it stopped)
+./setup.sh              # checks your tools, installs the add-ons, links `growth`, runs the tests on the demo site
 ```
-
-Any folder works; the paths above are only examples. Keep three separate folders: the kit (this repository), the
-project folder `growth new-project` makes, and your site's own repository. Do not put the project folder inside the site
-repository: it holds your notes, research and the task list, which are not part of the site.
 
 `setup.sh` links the `growth` command into `~/.local/bin`. If it says that folder is not on your PATH, add the line it
 prints to your shell profile (for example `export PATH="$HOME/.local/bin:$PATH"`) and open a new terminal; or run
-`./growth ...` from the kit folder.
+`./growth ...` from the kit folder. It offers to add the PATH line for you (it asks first).
 
-If the PATH line is missing, `setup.sh` offers to add it to your shell profile itself (it asks first).
+**2. Set up once**
 
-`growth wizard` is the one guided setup. It starts by asking the target country and language, then, once, for all access:
-the site repo, analytics keys, the live-site rule and preview address, who approves releases, and one yes for the whole
-agent harness (Stop hook, status bar, permissions, skills, `CLAUDE.md` lines; git hooks are asked separately). It detects
-the stack, sitemap shape, trailing-slash form, language copies, redirects and content folders instead of asking, opens the
-task "Project setup" (one step per `growth doctor` step, ticked as doctor turns each OK), and keeps `setup-state.json` so a
-stopped run resumes at the first open step (`growth wizard --check` re-tests everything; `--repair` installs what is
-missing). It never calls setup done until the research browser (Claude in Chrome, `/chrome`) is connected and Google's
-results region is set to the target country and confirmed by you; the code cannot do those two itself, so they are guided
-steps it waits on. `growth new-project` alone makes the folder and the harness without the questions.
+```
+growth setup --site https://your-site.example
+```
+
+It asks a few plain questions, one at a time: your website, the country you want to rank in, who approves a page, whether it
+may read your live site page by page (the safe answer is no), and one yes for the agent's safety helpers. It works out the rest
+itself (what your site is built with, its sitemap, redirects, where your pages live). Then it walks you through the two steps
+no program can do for you: connect Chrome for research (`/chrome` in Claude Code), and check that Google's Results region
+matches your country. It ends with one line: setup done, and the next command. If you stop halfway, run it again: it
+picks up where it stopped.
+
+**3. Work on a page**
+
+```
+growth page /pricing    # opens the job with the playbook's steps, checks you are ready, writes the brief for your agent
+growth check            # is the page right? a plain summary first (how many problems, the top three), the details after
+growth ready            # may you look at it? Only when every check passes on the one preview address
+growth measure          # did it help? compares the days after release with the numbers before (day 7, 14, 28, 56)
+```
+
+`growth status` shows what is open, how far along it is and what comes next. `growth` alone prints the short menu.
+Every safety check runs behind these commands; `growth help --all` lists every tool (there are over fifty) if you want one
+directly, and `growth doctor --verbose` lists every setup step with its result.
+
+Any folder works. Keep three separate folders: the kit (this repository), the project folder `growth setup` makes (it holds your
+notes, research and the task list), and your site's own repository. Run `growth setup` from your site's folder and it finds the
+code; do not put the project folder inside the site repository.
+
+For an agent or a script (no terminal), `growth setup` keeps the older question-and-answer way: it prints
+`QUESTION <step>: ...` and stops with exit code 3; record the answer with `growth wizard answer <step> <value>` and run it
+again. `growth wizard`, `growth new-project`, `growth doctor` and every other tool work exactly as before. The wizard never calls
+setup done until the research browser (Claude in Chrome) is connected and Google's results region is set to your target
+country and confirmed by you; `growth wizard --check` re-tests everything and `--repair` installs what is missing.
 
 `setup.sh` ends with a green test run on the demo site (Brightline Lawn Care, a made-up lawn-care company in
-`examples/demo-site/`). `growth new-project` makes a project folder from `templates/project/` with your site address
+`examples/demo-site/`). `growth setup` makes a project folder from `templates/project/` with your site address
 in `growth.json`, the `/onboard` skill, and the Stop hook that makes the agent follow the rules (`.claude/`).
 
-Then, in your agent (Claude Code), open the project folder and run `/onboard` (it runs the same wizard, then does the work steps). It asks the owner one question at a
-time, fills `growth.json`, `BRAND.md` and `SETUP.md`, and stops when `growth doctor` says every step is OK. After that, pick a job
-from [book/playbooks/](book/playbooks/README.md).
+Then, in your agent (Claude Code), open the project folder and type `/onboard`: it runs `growth setup`, then does the work steps
+(it asks one question at a time, fills `growth.json`, `BRAND.md` and `SETUP.md`, and stops when `growth doctor` says every step
+is OK). After that, pick a job from [book/playbooks/](book/playbooks/README.md).
 
 ## What you get per stack
 

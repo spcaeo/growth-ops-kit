@@ -86,6 +86,25 @@ def problems(project, cfg: dict) -> list[str]:
     return out
 
 
+def plain_problems(project, cfg: dict) -> list[str]:
+    """The same problems as `problems`, each as one plain sentence with no command in it (the commands come second)."""
+    if not required(cfg):
+        return []
+    market = cfg.get("market") or {}
+    if not market.get("primary_country"):
+        return ["I do not know your target country yet."]
+    out = []
+    if wizard_state.get(project, "browser").get("status") != "done":
+        out.append("The research browser is not connected yet.")
+    region = wizard_state.get(project, "region")
+    want = country_name(market)
+    seen = (region.get("answer") or {}).get("seen") if isinstance(region.get("answer"), dict) else None
+    if region.get("status") != "done" or not region_matches(seen, market):
+        out.append(f"Google shows \"{seen}\", not {want}." if seen and not region_matches(seen, market)
+                   else f"Google's results region is not confirmed as {want} yet.")
+    return out
+
+
 def problem(project, cfg: dict) -> str | None:
     p = problems(project, cfg)
     return "; ".join(p) if p else None

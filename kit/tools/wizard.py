@@ -281,6 +281,7 @@ def step_browser(s: Session) -> str:
         confirm_browser(s.project, (s.answers["browser"] or {}).get("name", "") if isinstance(s.answers["browser"], dict) else str(s.answers["browser"]), "answers-file")
         return "research browser confirmed"
     ws.record(s.project, "browser", "asked")
+    say("The research browser is not connected yet. Open Chrome, type /chrome in Claude Code and pick your browser.")
     say(f"WAITING browser: {QUESTIONS['browser']}")
     raise Waiting("browser")
 
@@ -320,6 +321,8 @@ def step_region(s: Session) -> str:
         say(msg)
         raise Waiting("region")
     ws.record(s.project, "region", "asked")
+    want = gate.country_name(cfg_of(s.project).get("market") or {}) or "your target country"
+    say(f"Google's results region is not confirmed as {want} yet. Open Google's search settings, read the Results region, tell me what it says.")
     say(f"WAITING region: {QUESTIONS['region']}")
     raise Waiting("region")
 
@@ -360,24 +363,30 @@ def write_setup_md(project: Path) -> None:
     f.write_text(text)
 
 
-def run_doctor(project: Path) -> tuple[str, int]:
-    r = subprocess.run([sys.executable, str(KIT_DIR / "tools" / "doctor.py")], capture_output=True, text=True, cwd=project,
+def run_doctor(project: Path, summary: bool = False) -> tuple[str, int]:
+    """doctor's output (every step by default; summary=True: the 4-stage view for a person)."""
+    r = subprocess.run([sys.executable, str(KIT_DIR / "tools" / "doctor.py"), *(["--summary"] if summary else [])], capture_output=True, text=True, cwd=project,
                        env={**os.environ, "GROWTH_PROJECT": str(project)})
     return r.stdout, r.returncode
 
 
-def finish(project: Path) -> int:
+def finish(project: Path, human: bool = False) -> int:
     write_setup_md(project)
-    out, _ = run_doctor(project)
+    out, _ = run_doctor(project, summary=human)
     cfg = cfg_of(project)
     say("\n" + out)
     stuck = gate.problems(project, cfg)
-    open_steps = [l for l in out.splitlines() if l[:4] in ("TODO", "FAIL")]
+    open_steps = [l for l in out.splitlines() if l[:4] in ("TODO", "FAIL") or (human and l.startswith("- "))]
     if stuck:
-        say("SETUP NOT DONE: the research browser and the Google region are not confirmed yet:")
+        for p in gate.plain_problems(project, cfg):
+            say(p)
+        say("SETUP NOT DONE: the research browser and the Google region are not confirmed yet. Exact steps:")
         for p in stuck:
             say(f"  - {p}")
         return WAIT
+    if open_steps and human:
+        say(f"The setup questions are done. {len(open_steps)} thing(s) are left for your agent: open Claude Code in this folder and type /onboard.")
+        return 0
     if open_steps:
         say(f"WIZARD DONE. {len(open_steps)} doctor step(s) still open: they are work for the agent (type /onboard in Claude Code), "
             "not questions for the wizard. Setup is done when doctor says every step OK.")
@@ -386,7 +395,7 @@ def finish(project: Path) -> int:
     return 0
 
 
-def run(project: Path, session: Session) -> int:
+def run(project: Path, session: Session, human: bool = False) -> int:
     say(f"Setup wizard for {cfg_of(project).get('name')} ({cfg_of(project).get('site_url')})")
     say("What to expect: market, site repo, analytics access, live-site rule, approver, the harness (one yes), detection, then two guided steps "
         "(research browser, Google region). It never pushes, merges, deploys, changes DNS, reads the live site page by page or prints a key.\n")
@@ -405,7 +414,7 @@ def run(project: Path, session: Session) -> int:
         say(f"[    done] {step}: {msg}")
         write_setup_md(project)
         run_doctor(project)
-    return finish(project)
+    return finish(project, human)
 
 
 # ---- other commands ----------------------------------------------------------------------------------------------------
