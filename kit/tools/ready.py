@@ -30,6 +30,16 @@ def preview_repo():
     return (PROJECT / given).expanduser().resolve() if given else None
 
 
+def preview_repo_problem():
+    """A site with a checkout must name the worktree the page is built in: with preview_repo empty, READY and the evidence
+    dates would read the main site folder, so commits in the worktree would never make READY stale (#51)."""
+    if CFG.get("site_repo") and not CFG.get("preview_repo"):
+        return ("growth.json has site_repo but no preview_repo: READY and the screenshot dates would read the main site "
+                "folder, not the worktree the page is built in. Set preview_repo to that worktree "
+                "(to the site_repo folder itself only if you build there).")
+    return ""
+
+
 def head(repo):
     """The commit a page was checked at. A site with no git checkout has none: READY then cannot go stale by itself."""
     if repo is None or not (repo / ".git").exists():
@@ -57,6 +67,8 @@ def main():
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
     repo = preview_repo()
+    if not a.list and a.path and preview_repo_problem():
+        sys.exit(preview_repo_problem())
     if a.list or not a.path:
         cur = head(repo)
         for p, e in sorted(ledger().items()):

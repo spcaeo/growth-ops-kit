@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, KIT_DIR, PROJECT, TZ  # noqa: E402
+from ready import preview_repo_problem  # noqa: E402
 
 LEDGER = PROJECT / "journal" / "preflight.json"
 PLAN = ["proc.doctor", "proc.owner-messages", "proc.rulebook-current", "ev.inventory", "ev.snapshot", "ev.dossier",
@@ -111,8 +112,10 @@ def main():
     ap.add_argument("--key", required=True)
     given = CFG.get("preview_repo") or CFG.get("site_repo") or ""
     ap.add_argument("--repo", default=str((PROJECT / given).expanduser().resolve()) if given else "",
-                    help="the site checkout (default: growth.json preview_repo or site_repo)")
+                    help="the site checkout (default: growth.json preview_repo; site_repo only when no preview_repo is needed)")
     a = ap.parse_args()
+    if preview_repo_problem() and not any(x.startswith("--repo") for x in sys.argv[1:]):
+        sys.exit(preview_repo_problem())     # an explicit --repo is the worktree; otherwise it must be in growth.json
     repo, path = (Path(a.repo).resolve() if a.repo else None), a.path.rstrip("/") or "/"
     if not CFG.get("preview_url"):
         sys.exit("growth.json has no preview_url: set the address pages are previewed on")

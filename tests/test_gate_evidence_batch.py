@@ -90,3 +90,29 @@ def test_a_dated_audit_or_review_file_passes(tmp_path):
 
 def test_an_undated_review_name_fails(tmp_path):
     assert run_review(review_ctx(tmp_path, "lawn", ["lawn-review.md"])) == "FAIL"
+
+
+# ---- #51
+
+def set_cfg(project, **kw):
+    f = project / "growth.json"
+    d = json.loads(f.read_text())
+    d.update(kw)
+    f.write_text(json.dumps(d))
+
+
+def test_ready_and_preflight_refuse_a_site_checkout_without_preview_repo(demo_project):
+    set_cfg(demo_project, site_repo="../site-main", preview_repo="", preview_url="http://127.0.0.1:9")
+    for script, args in (("ready.py", ["/x", "--type", "post", "--key", "x"]), ("preflight.py", ["/x", "--type", "post", "--key", "x"])):
+        r = tool(demo_project, script, *args)
+        assert r.returncode != 0 and "preview_repo" in r.stderr, (script, r.stderr)
+
+
+def test_the_preview_repo_problem_clears_when_it_is_set_or_there_is_no_checkout(demo_project, monkeypatch):
+    monkeypatch.setenv("GROWTH_PROJECT", str(demo_project))
+    sys.path.insert(0, str(TOOLS))
+    import ready
+    for cfg, bad in (({"site_repo": "../s", "preview_repo": ""}, True), ({"site_repo": "../s", "preview_repo": "../wt"}, False),
+                     ({"site_repo": "", "preview_repo": ""}, False)):
+        monkeypatch.setattr(ready, "CFG", cfg, raising=False)
+        assert bool(ready.preview_repo_problem()) is bad, cfg
