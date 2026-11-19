@@ -34,7 +34,7 @@ def test_no_open_task_with_changed_files_blocks_and_chat_task_clears(tmp_path):
     r = run(p, "workflow", "check")
     assert r.returncode == 2 and "no task is open" in r.stderr and "--type chat" in r.stderr
     assert run(p, "tasks", "add", "Chat: setup talk", "", "--type", "chat").stdout.strip() == "T1"
-    assert run(p, "workflow", "check").returncode == 0           # a chat task needs no steps
+    assert run(p, "workflow", "check").returncode == 2           # a chat task needs no steps, but covers no file changes
     run(p, "tasks", "status", "T1", "done")
     assert run(p, "workflow", "check").returncode == 2
     # bookkeeping files alone are not work
