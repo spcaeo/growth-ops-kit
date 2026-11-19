@@ -1,0 +1,203 @@
+"""Next.js adapter: the checks of gatelib/c_links.py that read the site's code (CSS, components, sources).
+They run only when growth.json "stack" is "nextjs"; on any other stack the gate prints SKIP for each."""
+from __future__ import annotations
+
+from gatelib.c_links import *  # noqa: F401,F403
+from gatelib.core import check  # noqa: F401
+
+
+@check("links.blue", "36c", what="in-text links and their '+' use one link-blue token (#1a5fd0 / #6ea8ff), underlined, never the brand or CTA colour, contrast 4.5:1 or more", needs="nextjs")
+def blue(ctx):
+    from .c_page import prose_links
+    from gatelib import domx
+    root = ctx.root()
+    main = domx.main(root)
+    links = prose_links(ctx, main) if main is not None else []
+    css = ctx.css_text()
+    probs = []
+    if not links:
+        probs.append("no in-text links in <main> to check")
+    styled = [a.get("href") for a in links if re.search(r"color\s*:", a.get("style") or "")]
+    if styled:
+        probs.append(f"inline colour on {len(styled)} link(s), e.g. {styled[0]}")
+    name, lv, dv, bg = token(css)
+    if not name:
+        probs.append(f"no link-blue token (a --*link* custom property set to {LIGHT})")
+    else:
+        if lv != LIGHT:
+            probs.append(f"{name} is {lv} in light mode ({LIGHT} required)")
+        if dv != DARK:
+            probs.append(f"{name} is {dv or 'not set'} in dark mode ({DARK} required)")
+        if lv and contrast(lv, "#ffffff") < 4.5:
+            probs.append(f"{name} {lv} on white is {contrast(lv, '#ffffff'):.1f}:1 (4.5:1 needed)")
+        if dv and contrast(dv, bg) < 4.5:
+            probs.append(f"{name} {dv} on the dark background {bg} is {contrast(dv, bg):.1f}:1 (4.5:1 needed)")
+    rules = prose_link_rules(css)
+    if not rules:
+        probs.append("no CSS rule styles in-text links (e.g. '.article-body a', 'main p a')")
+    use = f"var({name})" if name else "var(--link-blue)"
+    colours = [(s, c.strip()) for s, b in rules for c in re.findall(r"(?<![\w-])color\s*:\s*([^;]+)", b)]
+    if rules and not any(use in c for _, c in colours):
+        probs.append(f"no in-text link rule sets color: {use}")
+    bad = [f"{s[-40:]} color: {c}" for s, c in colours if brandish(ctx).search(c) or (use not in c and c not in ("inherit", "currentColor"))]
+    probs += [f"in-text link in another colour: {b}" for b in bad[:3]]
+    if rules and not any(re.search(r"text-decoration(-line)?\s*:[^;]*underline", b) for _, b in rules):
+        probs.append("in-text links are not underlined")
+    off = [s[-40:] for s, b in rules if ":hover" not in s and ":focus" not in s and re.search(r"text-decoration(-line)?\s*:\s*none", b)]
+    if off:
+        probs.append(f"underline removed: {off[0]}")
+    plus = [(s, b) for s, b in RULE.findall(css) if re.search(r"\.[\w-]*-plus(?![\w-])", s)]
+    if not plus:
+        probs.append("no CSS for the '+' marker")
+    elif not any(use in b for s, b in plus if re.search(r"(?<![\w-])color\s*:", b)):
+        probs.append(f"the '+' marker does not use color: {use}")
+    ctx.verdict(probs, f"{len(links)} in-text links in {use} ({lv} / {dv}), underlined; the '+' matches",
+                f"define {name or '--link-blue'}: {LIGHT} (dark {DARK}); give in-text links and the '+' color: {use} and an underline (rule 36c)")
+
+
+@check("links.card-glow", "36c", what="the open link preview card glows in link blue: a 1-2 px blue ring plus a blue blur of 24 px or more", needs="nextjs")
+def card_glow(ctx):
+    css = ctx.css_text()
+    name = token(css)[0] or "--link-blue"
+    blue_re = re.compile(r"var\(" + re.escape(name) + r"|" + LIGHT + "|" + DARK + r"|rgba?\(\s*(26[\s,]+95[\s,]+208|110[\s,]+168[\s,]+255)", re.I)
+    cards = [(s.strip(), b) for s, b in RULE.findall(css)
+             if re.search(r"\.(lcx-card|[\w-]*link-?card)(?![\w-])", s.split(",")[-1]) and "box-shadow" in b]
+    if not cards:
+        ctx.fail("no box-shadow on the link preview card (.lcx-card or .link-card)", "add the blue ring and glow to the card (rule 36c)")
+        return
+    ring = glow = False
+    for _, b in cards:
+        for val in re.findall(r"box-shadow\s*:\s*([^;]+)", b):
+            for sh in shadows(val):
+                if not blue_re.search(sh):
+                    continue
+                flat = sh
+                while re.search(r"\([^()]*\)", flat):
+                    flat = re.sub(r"\([^()]*\)", "", flat)
+                nums = [px(n, u) for n, u in re.findall(r"(?<![\w.(-])(-?\d*\.?\d+)(px|rem|em)?(?![\w.%])", flat)]
+                if len(nums) >= 4 and nums[2] == 0 and 1 <= nums[3] <= 2:
+                    ring = True
+                if len(nums) >= 3 and nums[2] >= 24:
+                    glow = True
+    probs = ([] if ring else ["no 1-2 px blue ring (box-shadow: 0 0 0 1px var(--link-blue))"]) + \
+            ([] if glow else ["no blue blur of 24 px or more"])
+    ctx.verdict(probs, "the preview card has a blue ring and a soft blue glow",
+                f"box-shadow: 0 0 0 1px var({name}), 0 12px 32px -8px color-mix(in srgb, var({name}) 35%, transparent) (rule 36c)")
+
+
+@check("links.spacing", "36c", what="no word is glued to an in-text link: a space before and after every link in the rendered page and in the JSX source", needs="nextjs")
+def spacing(ctx):
+    """From a real project: 'your new "+" logic removes the space, which is required sometimes; it should be properly
+    checked internally'. JSX drops a line break between text and a <Link>, so 'and\\n<Link>not in' renders 'andnot in'."""
+    probs = []
+    html = ctx.need_html()
+    m = re.search(r"<main\b.*?</main>", html, re.S)
+    body = m.group(0) if m else html
+    for rx, side in ((GLUE_BEFORE, "before"), (GLUE_AFTER, "after")):
+        for hit in rx.finditer(body):
+            pre = re.sub(r"^[^<]*>|<[^>]*>", "", body[max(0, hit.start() - 80):hit.start() + 1])
+            post = re.sub(r"<[^>]*>|<[^>]*$", "", re.sub(r"^[^>]*>", "", body[hit.start() + 1:hit.end() + 160]))
+            probs.append(f"page: no space {side} a link: '…{pre[-30:]}|{post[:30]}…'")
+    if ctx.repo:
+        for f in ctx.repo_files(("app/**/*.tsx", "components/**/*.tsx")):
+            lines = f.read_text(errors="replace").splitlines()
+            for i in range(len(lines) - 1):
+                a, b = lines[i], lines[i + 1]
+                if a.strip().startswith(("//", "*", "{/*", "import")):
+                    continue
+                if (SRC_TEXT_END.search(a) and SRC_LINK_START.search(b) and "=" not in a.split()[-1]) or \
+                   (SRC_LINK_END.search(a) and SRC_TEXT_START.search(b)):
+                    probs.append(f"{f.relative_to(ctx.repo)}:{i + 2}: JSX line break next to a link drops the space (add {{\" \"}})")
+    ctx.verdict(probs, "every in-text link has a space before and after it",
+                "put {\" \"} between text and a <Link> that sit on separate JSX lines (rule 36c)")
+
+
+@check("links.punct", "36c", what="punctuation right after a link sits after the '+' with no space, and link words + '+' + punctuation never split across lines", needs="nextjs")
+def punct(ctx):
+    """From a real project: 'how should that "," be handled, before the + or after the +?' Answer: words, then '+', then
+    the comma, one unbreakable group. Checked in the shared link-card code (it must pull a leading punctuation mark of
+    the next text node into the '+' slot) and by a site test that names this case."""
+    repo = ctx.need_repo()
+    probs = []
+    comp = [f for f in ctx.repo_files(("components/**/*.tsx",)) if "lcx-plus" in f.read_text(errors="replace")]
+    if not comp:
+        probs.append("no shared link-card component (class lcx-plus) found")
+    for f in comp:
+        if not PUNCT_HANDLING.search(f.read_text(errors="replace")):
+            probs.append(f"{f.relative_to(repo)} adds the '+' but does not move trailing punctuation into its slot")
+    tests = [f for g in ("tests/**/*.ts", "tests/**/*.tsx", "**/*.test.ts", "**/*.test.tsx")
+             for f in repo.glob(g) if "node_modules" not in f.parts]
+    if not any("lcx" in (t := f.read_text(errors="replace")) and re.search(r"punctuation|comma", t, re.I) for f in tests):
+        probs.append("no site test covers a link followed by a comma or full stop")
+    css = ctx.css_text()
+    if not re.search(r"\.lcx-slot[^{]*\{[^}]*white-space\s*:\s*nowrap", css):
+        probs.append(".lcx-slot is not white-space: nowrap")
+    ctx.verdict(probs, "the '+' keeps the following punctuation with it, no space, no line break",
+                "in the link-card code move a leading , . ; : ! ? ) of the next text node into .lcx-slot after the '+'; nowrap the slot; add a test (rule 36c)")
+
+
+@check("icons.check-circle", "36e", what="list ticks are a tick inside a circle, one shared component, in the green 'yes' colour", needs="nextjs")
+def check_circle(ctx):
+    repo = ctx.need_repo()
+    probs = []
+    shared = [f for f in ctx.repo_files(("components/**/*.tsx",)) if re.search(r"export\s+(default\s+)?function\s+Tick\b", f.read_text(errors="replace"))]
+    if not shared:
+        probs.append("no shared Tick component (export function Tick) in components/")
+    for f in ctx.repo_files(("app/**/*.tsx", "components/**/*.tsx")):
+        if f.name in TICK_OK or f in shared:
+            continue
+        t = f.read_text(errors="replace")
+        if re.search(r"import\s*\{[^}]*\b(Check|CheckIcon)\b[^}]*\}\s*from\s*[\"']lucide-react", t) or re.search(r"[✓✔]", t):
+            probs.append(f"{f.relative_to(repo)}: bare tick (use the shared Tick)")
+    for f in shared:
+        t = f.read_text(errors="replace")
+        if not re.search(r"Circle", t):
+            probs.append(f"{f.relative_to(repo)}: Tick has no circle (CircleCheck / CircleCheckBig or an SVG circle)")
+    css = ctx.css_text()
+    if not re.search(r"--[\w-]*(yes|tick|success|ok)[\w-]*\s*:\s*#", css):
+        probs.append("no green 'yes' colour token (e.g. --color-yes)")
+    ctx.verdict(probs, "every list tick is the shared circled Tick in the 'yes' colour",
+                "make components/tick.tsx (export function Tick: a tick inside a circle, var(--color-yes)) and use it for every list tick (rule 36e)")
+
+
+@check("page.surfaces", "36f", what="every fold has its own surface (plain, tint, warm, light geometry, dark) chosen by its job in the reader's journey; no two folds in a row share one", needs="nextjs")
+def surfaces(ctx):
+    html = ctx.need_html()
+    m = re.search(r"<main\b.*?</main>", html, re.S)
+    tags = re.findall(r"<section\b[^>]*\bdata-fold=[^>]*>", m.group(0) if m else html)
+    probs = []
+    if len(tags) < 3:
+        probs.append(f"only {len(tags)} folds found (sections with data-fold)")
+    seq = []
+    for t in tags:
+        stop = (re.search(r'data-fold="([^"]*)"', t) or [None, "?"])[1]
+        sf = (re.search(r'data-surface="([^"]*)"', t) or [None, ""])[1]
+        job = (re.search(r'data-job="([^"]*)"', t) or [None, ""])[1]
+        if sf not in SURFACES:
+            probs.append(f"fold '{stop}': data-surface '{sf or 'missing'}' (one of {', '.join(sorted(SURFACES))})")
+        if job not in JOBS:
+            probs.append(f"fold '{stop}': data-job '{job or 'missing'}' (one of {', '.join(sorted(JOBS))})")
+        seq.append((stop, sf, job))
+    for (a, sa, _), (b, sb, _) in zip(seq, seq[1:]):
+        if sa and sa == sb:
+            probs.append(f"folds '{a}' and '{b}' share the surface '{sa}'")
+    kinds = {s for _, s, _ in seq if s}
+    if seq and len(kinds) < 3:
+        probs.append(f"only {len(kinds)} surface kinds on the page (3 or more)")
+    darks = [i for i, (_, s, _) in enumerate(seq) if s == "dark"]
+    if len(darks) > 2:
+        probs.append(f"{len(darks)} dark folds (2 at most)")
+    if seq and not any(j == "act" for _, _, j in seq):
+        probs.append("no fold has the job 'act' (the call to action)")
+    css = ctx.css_text() if ctx.repo else ""
+    geo = [s for s in kinds if s.startswith("geo-")]
+    for g in geo:
+        if not re.search(rf'\[data-surface="{g}"\]', css):
+            probs.append(f"no CSS for data-surface=\"{g}\"")
+    for sel, body in RULE.findall(css):
+        if "data-surface" in sel and "geo-" in sel:
+            for o in re.findall(r"opacity\s*:\s*([0-9.]+)", body):
+                if float(o) > 0.08:
+                    probs.append(f"{sel.strip()[-40:]}: pattern opacity {o} (0.08 at most, keep it faint)")
+    ctx.verdict(probs, f"{len(seq)} folds, {len(kinds)} surface kinds, no repeats in a row: " + " / ".join(f"{s}:{j}" for _, s, j in seq),
+                "give each fold data-surface and data-job from the shared set, alternate them, keep patterns faint (rule 36f)")

@@ -1,0 +1,22 @@
+The Growth Ops book (everything in the book/ folder, and the Markdown templates in templates/project/) is licensed
+under the Creative Commons Attribution 4.0 International License (CC BY 4.0).
+
+You are free to:
+  - Share: copy and redistribute the material in any medium or format, for any purpose, even commercially.
+  - Adapt: remix, transform, and build upon the material, for any purpose, even commercially.
+
+Under these terms:
+  - Attribution: you must give appropriate credit, provide a link to the license, and indicate if changes were made.
+    You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
+  - No additional restrictions: you may not apply legal terms or technological measures that legally restrict others
+    from doing anything the license permits.
+
+The license is provided without warranty. The full legal code is at:
+
+  https://creativecommons.org/licenses/by/4.0/legalcode
+
+A human-readable summary is at https://creativecommons.org/licenses/by/4.0/
+
+The code in this repository (kit/, tests/, examples/, setup.sh, the growth command, and the settings files
+templates/project/growth.json and templates/project/docs/tasks.json) is licensed separately under the
+MIT License: see the LICENSE file.

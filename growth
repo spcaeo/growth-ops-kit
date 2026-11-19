@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""growth: the one command for the Growth Ops Kit.
+
+  growth help                 list every tool with one line each
+  growth <tool> [args]        run kit/tools/<tool>.py (adapters and hooks too); hyphens and underscores both work
+  growth gate page /x --url http://127.0.0.1:3801/x --type money
+  growth new-project <folder> --site https://example.com
+
+Tools find the project from $GROWTH_PROJECT, else the nearest folder at or above the current one holding growth.json.
+"""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+KIT = ROOT / "kit"
+
+
+def python():
+    """The kit's own virtual environment (made by setup.sh, in $GROWTH_VENV or ~/.growth-ops-kit/venv) when it exists, else this Python."""
+    venv = Path(os.environ.get("GROWTH_VENV") or Path.home() / ".growth-ops-kit" / "venv")
+    for cand in (venv / "bin" / "python", venv / "Scripts" / "python.exe"):
+        if cand.is_file():
+            return str(cand)
+    return sys.executable
+
+def project_stack():
+    """The stack named in the project's growth.json, or "" when there is no project (a tool may run inside a bare checkout)."""
+    sys.path.insert(0, str(KIT / "tools"))
+    try:
+        import config
+        proj = config.find_project()
+        return (config.load_cfg(proj).get("stack") or "static").lower() if proj else ""
+    except Exception:  # noqa: BLE001  a broken growth.json is reported by the tool itself
+        return ""
+
+
+# tool -> (where it lives under kit/, one line)
+TOOLS = {
+    "gate": ("tools/gate.py", "run every check of the page rulebook on one page (growth gate page /x --url ...), or process, engine, coverage"),
+    "ready": ("tools/ready.py", "the golden rule: a page is READY only when the full gate shows 0 FAIL on the one preview address"),
+    "preflight": ("tools/preflight.py", "before building a page: planning complete, site healthy, every checkpoint written down"),
+    "doctor": ("tools/doctor.py", "onboarding health check: is every setup step of stage A done?"),
+    "tasks": ("tools/tasks.py", "task and step tracker (docs/tasks.json): add, step, tick, status, ask, answer"),
+    "journal": ("tools/journal.py", "page journal: findings, decisions, runs and owner actions, with re-check dates"),
+    "owner_messages": ("tools/owner_messages.py", "every message the owner typed, and whether docs/steps-log.md logs it"),
+    "owner_journal": ("tools/owner_journal.py", "the owner's journal as one page to look at"),
+    "url_guard": ("tools/url_guard.py", "Stop-hook guard: no preview URL is shown to the owner before it is READY"),
+    "agent_models": ("tools/agent_models.py", "Stop-hook guard: every helper agent runs on the model its role calls for"),
+    "brief": ("tools/brief.py", "write the brief a helper agent gets for one page (rules, playbook steps, owner instructions)"),
+    "fold_plan": ("tools/fold_plan.py", "fold-by-fold detail plan for a page (rule 36h)"),
+    "inventory": ("tools/inventory.py", "full page inventory from the sitemap: every URL, section, stage, size, words, Search Console numbers"),
+    "link_graph": ("tools/link_graph.py", "crawl the site's internal links into a graph and report orphans, weak pages and clusters"),
+    "link_map": ("adapters/nextjs/link_map.py", "(Next.js adapter) internal link map and link planner read from the site's code"),
+    "page_archive": ("tools/page_archive.py", "before-and-after full-page screenshots and HTML of a page (rule 36i)"),
+    "page_snapshot": ("tools/page_snapshot.py", "snapshot a page's facts before touching it, and log the touch in the inventory work log"),
+    "phone_check": ("tools/phone_check.py", "phone readability in a real browser: small text, tap targets, sideways scroll"),
+    "contrast_check": ("tools/contrast_check.py", "contrast of every link, button and control at rest, hover and focus (rule 36j)"),
+    "techseo": ("tools/tech_seo_check.py", "same as tech-seo-check; `growth techseo selftest` runs the checker's own self-test"),
+    "tech_seo_check": ("tools/tech_seo_check.py", "technical SEO checker for one page (indexing, meta, links, images, schema, social, speed)"),
+    "registry_sync": ("tools/registry_sync.py", "keep rules/registry.json in step with the code (files, needs)"),
+    "leak_check": ("tools/leak_check.py", "fail on keys, .env files, personal emails, phone numbers and private words (--history: every commit)"),
+    "new_project": ("tools/new_project.py", "make a project folder from templates/project (growth new-project <folder> --site <url>)"),
+    "install_hooks": ("hooks/install_hooks.py", "install the git pre-commit hooks (kit, project, site)"),
+    "checks": ("adapters/nextjs/checks.sh", "(Next.js adapter) run only the tests and build a change touches"),
+    "page_tracker": ("page-tracker/tracker.py", "the page tracker: sync, report (did our page changes help?); also serve, ai-summary"),
+}
+ALIASES = {"new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
+
+
+def usage():
+    print(__doc__)
+    print("Tools:")
+    w = max(len(t) for t in TOOLS)
+    for name, (_, line) in sorted(TOOLS.items()):
+        print(f"  {name.replace('_', '-').ljust(w)}  {line}")
+    print("\nPage tracker extras: growth page-tracker serve | report | ai-summary (see kit/page-tracker/README.md)")
+
+
+def resolve(name):
+    name = ALIASES.get(name, name).replace("-", "_")
+    if name in TOOLS:
+        return KIT / TOOLS[name][0]
+    for sub in ("tools", "adapters/nextjs", "hooks"):
+        for ext in (".py", ".sh"):
+            if (KIT / sub / (name + ext)).is_file():
+                return KIT / sub / (name + ext)
+    return None
+
+
+def main(argv):
+    if not argv or argv[0] in ("help", "-h", "--help"):
+        usage()
+        return 0
+    name, rest = argv[0], argv[1:]
+    tool = resolve(name)
+    if tool is None:
+        print(f"growth: no tool '{name}'. Run: growth help", file=sys.stderr)
+        return 2
+    if tool.parent.name == "nextjs" and tool.parent.parent.name == "adapters":
+        stack = project_stack()
+        if stack and stack != "nextjs":
+            print(f"SKIP: no adapter for {stack} (growth {name} reads a Next.js site's code; growth.json stack is {stack}).")
+            return 0
+    if name == "techseo" and rest[:1] == ["selftest"]:
+        tool, rest = KIT / "tools" / "techseo" / "selftest.py", rest[1:]
+    if tool.parent.name == "page-tracker":
+        sub = {"serve": "serve.py", "report": "tracker.py", "ai-summary": "ai_summary.py", "ai_summary": "ai_summary.py"}
+        if rest[:1] and rest[0] in ("serve", "ai-summary", "ai_summary"):
+            tool, rest = tool.parent / sub[rest[0]], rest[1:]
+    cmd = ["bash", str(tool), *rest] if tool.suffix == ".sh" else [python(), str(tool), *rest]
+    env = dict(os.environ)
+    env.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+    return subprocess.call(cmd, env=env)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

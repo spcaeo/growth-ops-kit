@@ -1,0 +1,27 @@
+# keys and private data never enter git
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+.private-words
+# tool folders (session logs must never be committed)
+.claude/transcripts/
+**/.claude/transcripts/
+.claude/settings.local.json
+.playwright-mcp/
+# rebuildable
+node_modules/
+.next/
+.next-dev/
+__pycache__/
+.pytest_cache/
+test-results/
+playwright-report/
+*.db
+*.sqlite
+*.log
+.DS_Store
+# per-project working data (each project keeps its own, outside the kit or git-ignored)
+/project/

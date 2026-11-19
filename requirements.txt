@@ -1,0 +1,8 @@
+# Pinned to the versions the kit's tests were run with. Python 3.10 or newer.
+# playwright: the headless browser checks (contrast, phone) and the page archive; the browser itself is downloaded only with
+#             setup.sh --browsers (python3 -m playwright install chromium).
+# pyyaml:     the page tracker reads Markdown front matter.
+# pytest:     the kit's tests.
+playwright==1.58.0
+pyyaml==6.0.1
+pytest==7.4.3

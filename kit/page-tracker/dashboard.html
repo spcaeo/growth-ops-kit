@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Page tracker</title>
+<link rel="stylesheet" href="dashboard.css?v=20261114b">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="dashboard.html" data-home aria-label="Page tracker, home"><i aria-hidden="true"></i><span>Page tracker</span></a>
+    <nav class="seg" role="tablist" aria-label="Views">
+      <button class="tab" type="button" role="tab" id="tab-insights" data-view="insights" aria-controls="v-insights">Insights</button>
+      <button class="tab" type="button" role="tab" id="tab-clusters" data-view="clusters" aria-controls="v-clusters">Clusters</button>
+      <button class="tab" type="button" role="tab" id="tab-pages" data-view="pages" aria-controls="v-pages">Pages</button>
+      <button class="tab" type="button" role="tab" id="tab-google" data-view="google" aria-controls="v-google">Google</button>
+    </nav>
+    <div class="top-r">
+      <span class="sub" id="built"></span>
+      <button class="iconbtn" id="theme" type="button" aria-pressed="false" aria-label="Dark mode"></button>
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  <div class="subbar">
+    <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+    <div id="rangebar"></div>
+  </div>
+</div>
+<main class="wrap">
+  <section id="v-insights" role="tabpanel" aria-labelledby="tab-insights"></section>
+  <section id="v-clusters" role="tabpanel" aria-labelledby="tab-clusters" hidden></section>
+  <section id="v-pages" role="tabpanel" aria-labelledby="tab-pages" hidden>
+    <div class="cards" id="cards"></div>
+    <details class="note" id="about"><summary>About these numbers</summary>
+      <p>Readers come from Skald (our server logs): visits that read the page, an upper bound on people, whole verified days only. Skald calls a change clear only after 14 whole days.</p>
+      <p>Bounce = visits that landed on the page and read no other page, over Skald's rolling last 7 days; one snapshot is saved each morning, so a history builds up.</p>
+      <p>Google figures are Google Search Console's own (clicks, impressions, average position), since the date Search Console is connected (config.json). The last 2 to 3 days are provisional: Google still adds to them. Index status is Google's URL Inspection of the page.</p>
+    </details>
+    <div class="bar" role="toolbar" aria-label="Filters">
+      <span id="kinds" class="chips-seg" role="group" aria-label="Kind of page"></span>
+      <select id="cl" aria-label="Sitemap cluster"><option value="">All clusters</option></select>
+      <select id="country" aria-label="Readers from country"><option value="">All countries</option></select>
+      <input type="search" id="q" placeholder="Find a page" aria-label="Find a page">
+    </div>
+    <div class="box tall">
+    <table>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    </div>
+  </section>
+  <section id="v-google" role="tabpanel" aria-labelledby="tab-google" hidden></section>
+  <section id="v-page" aria-label="Page details" hidden></section>
+  <p class="sub" id="foot"></p>
+  <p class="sub" id="release" style="opacity:.7;font-size:.85em"></p>
+</main>
+<div class="tip" id="tip" role="presentation"></div>
+<script src="dashboard.js?v=20261114b"></script>
+<script src="dashboard-charts.js?v=20261114b"></script>
+<script src="dashboard-notes.js?v=20261114b"></script>
+<script src="dashboard-page.js?v=20261114b"></script>
+<script src="dashboard-cross.js?v=20261114b"></script>
+<script src="dashboard-skald.js?v=20261114b"></script>
+<script src="dashboard-more.js?v=20261114b"></script>
+<script src="dashboard-clusters.js?v=20261114b"></script>
+<script src="dashboard-impact.js?v=20261114b"></script>
+<script src="insights.js?v=20261114b"></script>
+<script src="dashboard-fresh.js?v=20261114b"></script>
+</body>
+</html>
