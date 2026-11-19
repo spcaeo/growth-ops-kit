@@ -57,8 +57,60 @@ def test_private_words_match_across_spaces_hyphens_underscores_and_nothing():
     assert lc.scan_name("pages/red-fox.md", ["red fox"])
 
 
-def test_allow_marker_skips_a_line():
-    assert kinds("AKIA" + "ABCDEFGHIJKLMNOP  # leak-check: allow") == []
+def test_allow_marker_skips_a_line_only_under_tests_fixtures():
+    line = "AKIA" + "ABCDEFGHIJKLMNOP  # leak-check: allow"
+    assert kinds(line) != []                                                       # default: the marker is ignored
+    assert [h for h in lc.scan_text(line, [], allow=lc.allow_marker_ok("tests/fixtures/a.txt"))] == []
+    assert lc.scan_text(line, [], allow=lc.allow_marker_ok("src/app.py"))
+    assert lc.scan_text(line, [], allow=lc.allow_marker_ok("docs/tests/fixtures-notes.md"))
+
+
+def test_audit_h7_more_live_secret_shapes_fail():
+    fake = "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+    cases = {
+        "Stripe-style key": "s" + "k_" + "live_" + fake[:24],
+        "Slack webhook": "https://hooks." + "slack.com/services/T00/B00/" + fake[:12],
+        "Discord webhook": "https://discord" + ".com/api/webhooks/123/" + fake[:12],
+        "GitLab token": "gl" + "pat-" + fake[:20],
+        "Hugging Face token": "h" + "f_" + fake[:34],
+        "npm token": "n" + "pm_" + fake[:36],
+        "Google OAuth secret": "GOC" + "SPX-" + fake[:24],
+        "SendGrid key": "S" + "G." + fake[:20] + "." + fake[10:30],
+        "password inside a web address": "postgres://app:" + "Zq8xPw27Lm" + "@db.internal.net/app",
+        "email address (written out)": "mail jane " + "[at]" + " gmail.com",
+    }
+    for kind, text in cases.items():
+        assert kind in kinds(text), (kind, text)
+    assert "email address (written out)" in kinds("jane" + "%40" + "gmail.com")
+    assert any(k.startswith("secret value") for k in kinds("api" + "-key: " + "q1w2e3r4t5y6u7i8o9p0"))
+    assert kinds("postgres://user:pass@localhost/db") == []
+    assert kinds("write [at] example.com") == []
+
+
+def test_audit_h7_unspaced_and_international_phone_numbers():
+    assert kinds("call " + "416" + "555" + "1234") == ["phone number"]
+    assert kinds("mobile +91 " + "98765 " + "43210") == ["phone number"]
+    assert kinds("order 4165551234 shipped") == []                                  # a bare number alone is not flagged
+
+
+def test_audit_h7_big_files_are_scanned_in_chunks_not_skipped(tmp_path):
+    filler = ("x" * 80 + "\n") * 40_000                                            # about 3.2 MB, over the old 2 MB limit
+    (tmp_path / "big.txt").write_text(filler + "write to " + "jane" + "@" + "gmail.com\n" + filler)
+    long_line = tmp_path / "oneline.json"
+    long_line.write_text("a " * 700_000 + "AKIA" + "ABCDEFGHIJKLMNOP" + " b" * 10)       # one line longer than a chunk
+    rep = lc.scan_files(tmp_path, ["big.txt", "oneline.json"], [])
+    assert ("big.txt", 40_001, "email address", "jane…") in rep
+    assert any(f == "oneline.json" and k == "AWS access key" for f, _n, k, _s in rep)
+
+
+def test_audit_h7_binary_files_are_listed_and_database_files_fail(tmp_path):
+    (tmp_path / "shot.png").write_bytes(b"\x89PNG\0\0\0data")
+    (tmp_path / "app.sqlite").write_bytes(b"SQLite\0")
+    warns = []
+    rep = lc.scan_files(tmp_path, ["shot.png", "app.sqlite"], [], warns=warns)
+    assert [w[0] for w in warns] == ["shot.png", "app.sqlite"]
+    assert any(f == "app.sqlite" and "by name" in k for f, _n, k, _s in rep)
+    assert not any(f == "shot.png" for f, *_ in rep)
 
 
 def test_file_names():
