@@ -4,6 +4,10 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.2.5 - 2026-11-19
+
+- ev.fact-sources: a page's own computed reading time ("11 min read", "N min left", "Reading time: N minutes") and its table of contents are not stats. Test: `tests/test_release_2_2_5_read_time.py`.
+
 ## 2.2.4 - 2026-11-19
 
 - `post.takeaways`: the box is the INNERMOST element that says "Key takeaways" and holds list items (or the one whose aria-label says it), not the page wrapper, so a guide with 130 list items elsewhere no longer counts them all.
