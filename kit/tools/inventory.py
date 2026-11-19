@@ -21,6 +21,7 @@ import re
 import sqlite3
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -136,9 +137,15 @@ def main(argv=None):
     ap.add_argument("--no-pages", action="store_true", help="the sitemap only: do not fetch each page")
     a = ap.parse_args(argv)
     base = (a.base or SITE_URL).rstrip("/")
-    source = a.offline or CFG.get("sitemap_url") or base + "/sitemap.xml"
+    sitemap_path = urllib.parse.urlsplit(CFG.get("sitemap_url") or "/sitemap.xml").path or "/sitemap.xml"
+    if a.offline:
+        source, get = a.offline, None
+    elif a.base:   # a preview: its own sitemap, and every child sitemap from it too (a new page exists only there)
+        source, get = base + sitemap_path, sitemaps.on_origin(base)
+    else:
+        source, get = CFG.get("sitemap_url") or base + sitemap_path, None
     try:
-        entries = sitemaps.read(source)   # follows a sitemap index; only sitemap files are read here
+        entries = sitemaps.read(source, get=get)   # follows a sitemap index; only sitemap files are read here
     except sitemaps.SitemapError as e:
         sys.exit(f"could not read the sitemap: {e}")
     sm = paths_of(entries, SITE_URL)

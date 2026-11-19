@@ -145,3 +145,51 @@ def test_doctor_points_the_inventory_at_the_preview_never_the_live_site(demo_pro
     r = subprocess.run([sys.executable, str(ROOT / "kit" / "tools" / "doctor.py")], capture_output=True, text=True, cwd=demo_project,
                        env={**os.environ, "GROWTH_PROJECT": str(demo_project)})
     assert "growth inventory --base http://127.0.0.1:18321" in r.stdout, r.stdout
+
+
+def test_a_plain_urlset_is_returned_without_duplicates():
+    got = sitemaps.read("x", get=lambda u: (200, BLOG.replace("</urlset>", "<url><loc>https://www.example.com/blog/a-post/</loc></url></urlset>")))
+    assert [loc for loc, _ in got] == ["https://www.example.com/blog/a-post/", "https://www.example.com/services/"]
+
+
+@pytest.fixture
+def prod_named_server(tmp_path):
+    """Like index_server, but the index names its children on the PRODUCTION host (as a real build does) and lives at
+    /sitemap_index.xml, named in robots.txt; there is no /sitemap.xml. The production host never resolves here, so any
+    request to it fails the test."""
+    sys.path.insert(0, str(DEMO))
+    import serve
+    site = _index_site(tmp_path, "https://brightline.example")
+    (site / "sitemap.xml").rename(site / "sitemap_index.xml")
+    (site / "robots.txt").write_text("User-agent: *\nAllow: /\n\nSitemap: https://brightline.example/sitemap_index.xml\n")
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(serve.Clean, directory=str(site)))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        yield site, f"http://127.0.0.1:{srv.server_address[1]}"
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_inventory_with_base_reads_every_sitemap_from_the_preview(demo_project, prod_named_server):
+    site, base = prod_named_server
+    cfg = json.loads((demo_project / "growth.json").read_text())
+    cfg["sitemap_url"] = "https://brightline.example/sitemap_index.xml"
+    (demo_project / "growth.json").write_text(json.dumps(cfg))
+    env = {**os.environ, "GROWTH_PROJECT": str(demo_project)}
+    r = subprocess.run([sys.executable, str(ROOT / "kit" / "tools" / "inventory.py"), "--base", base],
+                       capture_output=True, text=True, env=env, cwd=demo_project)
+    assert r.returncode == 0, r.stderr   # a request to brightline.example would fail: it does not resolve
+    inv = json.loads((demo_project / "inventory" / "inventory.json").read_text())
+    assert {p["path"] for p in inv["pages"]} == DEMO_PAGES and all(p["status"] == "live" for p in inv["pages"])
+    assert inv["meta"]["sitemap_source"] == base + "/sitemap_index.xml"
+
+
+def test_the_tech_seo_check_reads_the_index_robots_names(demo_project, prod_named_server):
+    _, base = prod_named_server
+    env = {**os.environ, "GROWTH_PROJECT": str(demo_project)}
+    r = subprocess.run([sys.executable, str(ROOT / "growth"), "tech_seo_check", base + "/lawn-mowing", "--site-origin",
+                        "https://brightline.example"], capture_output=True, text=True, env=env, cwd=demo_project, timeout=120)
+    out = r.stdout + r.stderr
+    assert "/sitemap_index.xml is valid XML, 6 URLs" in out, out[-2000:]
+    assert "is not in the sitemap" not in out

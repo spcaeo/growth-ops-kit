@@ -6,6 +6,7 @@ files as if they were pages.
 
   read(source)            -> [(loc, lastmod or None)], in sitemap order, no duplicates
   read(source, get=fn)    -> fn(url) returns (status, body); the default is one plain GET
+  read(url, get=on_origin(base))  -> every sitemap file is read from `base` (a preview), never from the host in <loc>
   source may be a URL or a saved file. For a saved index, each child is looked up first as a file of the same name in
   the index's folder (a local build's dist/ holds them all), then fetched.
 
@@ -37,6 +38,19 @@ def default_get(url: str):
         return e.code, ""
     except Exception:  # noqa: BLE001  (DNS, TLS, timeouts)
         return 0, ""
+
+
+def on_origin(origin: str, get=None):
+    """A get() that reads every sitemap address from `origin` instead (same path): a preview or local build serves its
+    own sitemaps, while their <loc> names the production host. Nothing goes to the production host."""
+    import urllib.parse
+    get = get or default_get
+    origin = origin.rstrip("/")
+
+    def g(url):
+        u = urllib.parse.urlsplit(url)
+        return get(origin + (u.path or "/") + (f"?{u.query}" if u.query else ""))
+    return g
 
 
 def parse(xml: str):
@@ -71,7 +85,8 @@ def read(source: str, get=None, _depth: int = 0, _folder: Path | None = None):
     body, folder = _load(str(source), get, _folder)
     is_index, entries = parse(body)
     if not is_index:
-        return entries
+        seen = set()
+        return [(loc, lm) for loc, lm in entries if not (loc in seen or seen.add(loc))]   # first of each loc, in order
     if _depth >= MAX_DEPTH:
         raise SitemapError(f"sitemap index nested deeper than {MAX_DEPTH} levels at {source}")
     out, seen = [], set()

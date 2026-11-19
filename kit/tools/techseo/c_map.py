@@ -17,8 +17,23 @@ NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
+def sitemap_path(p):
+    """The sitemap this site names in robots.txt (its path, read from this check's origin), else /sitemap.xml."""
+    rb = p.f.get(p.origin + "/robots.txt")
+    if rb.status == 200:
+        for line in rb.text().splitlines():
+            if line.lower().startswith("sitemap:"):
+                path = urllib.parse.urlsplit(line.split(":", 1)[1].strip()).path
+                if path:
+                    return path
+    return "/sitemap.xml"
+
+
 def read_sitemap(p):
-    r = p.f.get(p.origin + "/sitemap.xml")
+    """(response, [(loc, lastmod)]) of the sitemap; an index is followed. The response carries `.path`, the address read."""
+    path = sitemap_path(p)
+    r = p.f.get(p.origin + path)
+    r.path = path
     if r.status != 200:
         return r, []
     try:
@@ -26,12 +41,12 @@ def read_sitemap(p):
     except ET.ParseError:
         return r, None
     if root.tag == NS + "sitemapindex":
-        # an index: read each child sitemap from the same origin as this check (a preview reads its own build's files)
+        # an index: the same address this check read, and each child from the same origin (a preview reads its own build)
         def get(u):
-            c = p.f.get(p.origin + (urllib.parse.urlsplit(u).path or "/"))
+            c = r if urllib.parse.urlsplit(u).path == path else p.f.get(u)
             return c.status, c.text() if c.status == 200 else ""
         try:
-            return r, [(loc, lm or "") for loc, lm in sitemaps.read(p.origin + "/sitemap.xml", get=get)]
+            return r, [(loc, lm or "") for loc, lm in sitemaps.read(p.origin + path, get=sitemaps.on_origin(p.origin, get))]
         except sitemaps.SitemapError:
             return r, None
     out = []
@@ -46,13 +61,13 @@ def run_map(p, site_scan=False, max_scan=100):
     rep = p.rep
     r, entries = read_sitemap(p)
     if r.status != 200:
-        rep.fail("MAP-01", f"/sitemap.xml answers {r.status or r.error}", "serve a sitemap at /sitemap.xml")
+        rep.fail("MAP-01", f"{r.path} answers {r.status or r.error}", "serve a sitemap at /sitemap.xml or name it in robots.txt")
         return
     if entries is None:
-        rep.fail("MAP-01", "/sitemap.xml is not valid XML", "fix the generator")
+        rep.fail("MAP-01", f"{r.path} is not valid XML", "fix the generator")
         return
     ct = r.h("content-type")
-    (rep.ok if "xml" in ct else rep.warn)("MAP-01", f"sitemap.xml is valid XML, {len(entries)} URLs ({ct})", "serve application/xml")
+    (rep.ok if "xml" in ct else rep.warn)("MAP-01", f"{r.path} is valid XML, {len(entries)} URLs ({ct})", "serve application/xml")
     locs = [e[0] for e in entries]
     c = (p.canonicals() or [None])[0]
     cu = c.get("href").rstrip("/") if c else ""
