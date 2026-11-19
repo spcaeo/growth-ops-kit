@@ -201,10 +201,19 @@ if db.exists():
     except sqlite3.Error:
         lo = hi = None
     start = CFG.get("search_console_history_start")
-    ok8 = (lo == start or not start) and hi and hi >= (date.today() - timedelta(days=3)).isoformat() and not auto_jobs
-    row("A8 Page tracker running, history backfilled", ok8 or None,
-        f"Search Console {lo} to {hi} (history starts {start}); {jobs_note}",
-        "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job")
+    # with a site repo, the tracker must know which file each page is built from, or no change is ever measured
+    try:
+        n_files, n_changes = c.execute("select count(file), (select count(*) from changes) from pages").fetchone()
+    except sqlite3.Error:
+        n_files = n_changes = None
+    measured = not CFG.get("site_repo") or bool(n_changes)
+    ok8 = (lo == start or not start) and hi and hi >= (date.today() - timedelta(days=3)).isoformat() and not auto_jobs and measured
+    row("A8 Page tracker running, history backfilled", True if ok8 else (False if not measured else None),
+        f"Search Console {lo} to {hi} (history starts {start}); {jobs_note}"
+        + (f"; pages with a content file: {n_files}, changes tracked: {n_changes}" if CFG.get("site_repo") else ""),
+        ("set growth.json page_tracker.content_globs (or content_dirs / page_sources) so pages map to their files, then "
+         "growth page-tracker sync" if not measured else
+         "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job"))
 else:
     row("A8 Page tracker running, history backfilled", False, f"page-tracker/tracker.db missing; {jobs_note}",
         "growth page-tracker sync (book/01-flow.md A8)" + (" | remove any auto-start job" if auto_jobs else ""))

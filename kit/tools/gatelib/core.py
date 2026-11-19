@@ -197,8 +197,9 @@ class Ctx:
         return self.cache["journal"]
 
     def page_entries(self):
-        p = self.need_path()
-        return [e for e in self.journal() if p in (e.get("pages") or [])]
+        import paths
+        p = paths.key(self.need_path())
+        return [e for e in self.journal() if p in {paths.key(x) for x in (e.get("pages") or [])}]
 
     def last_commit_time(self):
         """Unix time of the newest commit in the worktree."""

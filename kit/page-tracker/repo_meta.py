@@ -6,6 +6,7 @@ How a Next.js site that keeps Markdown in content/ builds an address (growth.jso
   page  content/pages/<slug>.md   -> /<vertical>/<slug>        (or /<slug> when it has no vertical)
 Pages with no markdown file (home, pricing, topic pages) are built from files listed in growth.json page_tracker.page_sources, or
 `page_sources`. Frontmatter: title, slug, vertical, date, updated, excerpt, metaTitle, metaDescription, draft.
+Any other layout (Astro, Hugo, JSON pages): growth.json page_tracker.content_globs, see glob_docs().
 """
 import glob, json, os, subprocess
 import yaml
@@ -73,14 +74,52 @@ def docs():
     return out
 
 
+class _Missing(dict):
+    def __missing__(self, k):
+        raise KeyError(k)
+
+
+def glob_docs():
+    """Content files mapped by growth.json page_tracker.content_globs, for any stack: each entry is
+    {"glob": "src/content/blog/*.md", "address": "/{cluster}/{slug}/", "values": {"cluster": {"id": "folder"}}}; the
+    address is filled from the file's own
+    fields (Markdown front matter or the top level of a JSON file). A file missing a field, or marked draft, is skipped.
+    Addresses are kept without their trailing slash, as the tracker stores paths."""
+    out = []
+    for g in config.CONTENT_GLOBS:
+        pattern, template = g.get("glob"), g.get("address")
+        if not pattern or not template:
+            continue
+        for f in sorted(glob.glob(os.path.join(REPO, pattern))):
+            try:
+                text = open(f, encoding="utf-8").read()
+                fm = json.loads(text) if f.endswith(".json") else split_md(text)[0]
+            except (OSError, ValueError):
+                continue
+            if not isinstance(fm, dict) or fm.get("draft"):
+                continue
+            fields = dict(fm)
+            fields.setdefault("slug", os.path.splitext(os.path.basename(f))[0])
+            for k, m in (g.get("values") or {}).items():   # a field whose address part differs, e.g. cluster id -> folder
+                if fields.get(k) in m:
+                    fields[k] = m[fields[k]]
+            try:
+                url = template.format_map(_Missing({k: v for k, v in fields.items() if isinstance(v, (str, int))}))
+            except (KeyError, ValueError):
+                continue
+            url = "/" + url.strip("/") if url.strip("/") else "/"
+            out.append(dict(kind="posts" if f.endswith(".md") else "pages", rel=os.path.relpath(f, REPO), fm=fm, url=url))
+    return out
+
+
 def files():
     """path -> content file (relative to the repo) for every page the repo can tell us about."""
     out = {}
     for p, srcs in config.PAGE_SOURCES.items():
         if srcs:
             out[p] = srcs[0]
-    for d in docs():
-        out[d["url"]] = d["rel"]
+    for d in docs() + glob_docs():
+        out.setdefault(d["url"], d["rel"])
     return out
 
 

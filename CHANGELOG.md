@@ -50,6 +50,13 @@ The kit and the book share one version number. Dates are written year-month-day.
   (`inventory/pages/blog__post/`, it looked for `blog/post/`); a fresh task with no step done is no longer reported as
   "still todo while later steps are done".
 
+- Measuring any site layout: `growth.json` `page_tracker.content_globs` maps content files to addresses with a template
+  filled from each file's own fields (`{"glob": "src/content/blog/*.md", "address": "/{cluster}/{slug}/", "values":
+  {...}}`; JSON pages too), so an Astro-style site gets change dates (before: 0 changes, so no before/after). Doctor A8
+  fails when a site repo is set and no change is tracked. Task steps are ordered by their label ("Step 16a" after
+  "Step 16"), not by list position. Journal entries and the title check's Search Console queries match a page with
+  or without its trailing slash.
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.

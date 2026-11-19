@@ -35,6 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import PROJECT, TZ, CFG  # noqa: E402
+import paths  # noqa: E402  (one form of a site path)
 
 J = PROJECT / "journal"
 ENTRIES = J / "entries.jsonl"
@@ -94,7 +95,7 @@ def norm_pages(pages):
         p = p.strip()
         if p and not p.startswith("/") and p not in ("site", "off-site"):
             p = "/" + p
-        out.append(p)
+        out.append(paths.key(p) if p.startswith("/") else p)   # one form: /x/y, whatever the caller typed
     return out or ["site"]
 
 
@@ -177,7 +178,8 @@ def cmd_run(a):
 
 
 def page_entries(cur, page):
-    return [e for e in cur.values() if page in e["pages"]]
+    k = paths.key(page)
+    return [e for e in cur.values() if k in {paths.key(x) for x in e["pages"]}]
 
 
 def fmt(e):
@@ -217,7 +219,7 @@ def render():
 def _render_notes():
     cur = state()
     PAGES.mkdir(parents=True, exist_ok=True)
-    pages = sorted({p for e in cur.values() for p in e["pages"]})
+    pages = sorted({paths.key(p) if p.startswith("/") else p for e in cur.values() for p in e["pages"]})   # /x and /x/ are one page
     idx = ["# Page journal index", "", f"Rebuilt {now()} by `growth journal render`. Open `journal/` as an Obsidian vault.",
            "", "| Page | Entries | Open questions | Re-checks due | Last entry |", "| --- | --- | --- | --- | --- |"]
     for p in pages:

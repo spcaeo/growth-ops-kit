@@ -96,6 +96,7 @@ CHANGES_SINCE = CFG.get("changes_since")          # None = every change in the r
 VARIANTS = list(CFG.get("path_variants") or [""])  # page copies added together ("" = the page itself)
 CONTENT_DIRS = CFG.get("content_dirs", {})
 PAGE_SOURCES = CFG.get("page_sources", {})
+CONTENT_GLOBS = CFG.get("content_globs") or []   # [{"glob": "src/content/blog/*.md", "address": "/{cluster}/{slug}/"}]
 CLUSTERS = CFG.get("clusters", [])
 SOURCES = CFG.get("sources", {})
 AI = CFG.get("ai_summary", {})
