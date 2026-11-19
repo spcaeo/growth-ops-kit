@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -75,6 +76,47 @@ def manual_problems(path, key):
     return checkpoints.manual_status(plan.read_text())[2]
 
 
+GATE_LINE = re.compile(r"^Gate: (\d+) FAIL, (\d+) WARN, (\d+) OK, (\d+) SKIP", re.M)
+RESULT_LINE = re.compile(r"^(?:(?:FAIL|WARN|OK)\s+\S+\s+\[([\w.-]+)\]|(?:BLOCKED-)?SKIP ([\w.-]+):)", re.M)
+
+
+def run_gate(cmd):
+    """Run the gate; a gate that cannot even start is a result too (code 99), never an exception that skips the verdict."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT)
+    except OSError as e:
+        return subprocess.CompletedProcess(cmd, 99, "", f"{type(e).__name__}: {e}")
+
+
+def expected_checks(ptype):
+    """The check ids the gate must report for a page of this type at READY: the build stage, plus house.features."""
+    from gatelib import CHECKS
+    ids = {c.cid for c in CHECKS.values() if ptype in c.types and c.stage == "build"}
+    return ids | {"house.features"}
+
+
+def gate_problem(r, ptype):
+    """"" when the gate ran to the end and reported every check; else the plain reason it did not.
+    Fail closed: a non-zero exit, no summary line, no checks run or a check that did not report is never READY."""
+    out = r.stdout or ""
+    if r.returncode != 0 and not any(l.startswith("FAIL") for l in out.splitlines()):
+        why = ((r.stderr or "").strip().splitlines() or ["no message"])[-1][:160]
+        return f"gate did not complete (exit code {r.returncode}): {why}"
+    summ = GATE_LINE.findall(out)
+    if len(summ) != 1:
+        return f"gate did not complete: expected one 'Gate:' summary line, found {len(summ)}"
+    if not any(int(x) for x in summ[0]):
+        return "gate ran 0 checks"
+    try:
+        want = expected_checks(ptype)
+    except Exception as e:  # noqa: BLE001
+        return f"gate checks could not be loaded: {type(e).__name__}: {str(e)[:120]}"
+    got = {a or b for a, b in RESULT_LINE.findall(out)}
+    if want - got:
+        return f"gate did not report {len(want - got)} expected check(s): {', '.join(sorted(want - got)[:6])}"
+    return ""
+
+
 def held_proposals(key):
     """The page's held-field proposals with their status (growth held): listed so the owner sees them before a freeze lifts."""
     import held
@@ -111,8 +153,11 @@ def main():
     url = CFG["preview_url"].rstrip("/") + path
     cmd = [sys.executable, str(KIT_DIR / "tools" / "gate.py"), "page", path, "--url", url,
            "--type", a.type, "--key", a.key, "--no-link-status"] + (["--repo", str(repo)] if repo else [])
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT)
+    r = run_gate(cmd)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
+    broken = gate_problem(r, a.type)
+    if broken:
+        fails.insert(0, f"FAIL {broken}")
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     held_lines = held_proposals(a.key)
