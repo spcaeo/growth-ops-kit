@@ -24,7 +24,7 @@ def accessible_name(a):
     return a.get("title").strip()
 
 
-def run_links(p, max_links=80, check_status=True):
+def run_links(p, max_links=80, check_status=True, migration=None):
     rep = p.rep
     anchors = p.links()
     withhref = [a for a in anchors if "href" in a.attrs]
@@ -120,12 +120,20 @@ def run_links(p, max_links=80, check_status=True):
         res = list(ex.map(probe, targets))
     redirects = [(u, r) for u, r in res if 300 <= r.status < 400]
     broken = [(u, r) for u, r in res if r.status >= 400 or r.status == 0]
+    if migration:       # "not migrated yet": a 404 to a page the old live site has (its inventory) is a WARN, not a FAIL
+        import paths
+        parked = [(u, r) for u, r in broken if r.status == 404 and paths.normalize(urllib.parse.urlsplit(u).path) in migration["paths"]]
+        broken = [x for x in broken if x not in parked]
+        if parked:
+            rep.warn("LNK-02", f"{len(parked)} internal link(s) go to pages not migrated yet (migration task {migration['task']}): "
+                     + "; ".join(urllib.parse.urlsplit(u).path for u, r in parked[:5]),
+                     f"they are in the live site's inventory; they stop being a warning when task {migration['task']} moves them, or turn migration off in growth.json")
     if broken:
         rep.fail("LNK-02", f"{len(broken)} internal link(s) broken: " + "; ".join(f"{urllib.parse.urlsplit(u).path} -> {r.status or r.error[:30]}" for u, r in broken[:5]),
                  "fix or remove each link")
     if redirects:
         rep.warn("LNK-02", f"{len(redirects)} internal link(s) go through a redirect: " + "; ".join(f"{urllib.parse.urlsplit(u).path} -> {r.status} {r.h('location')}" for u, r in redirects[:5]),
                  "point the link at the final address")
-    if not broken and not redirects:
+    if not broken and not redirects and not (migration and parked):
         rep.ok("LNK-02", f"all {len(res)} unique internal targets answer 200 ({len(res)} of {len(all_targets)} unique internal targets checked"
                          + ("; raise growth.json link_check_cap to check the rest" if len(res) < len(all_targets) else "") + ")")

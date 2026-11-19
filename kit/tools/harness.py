@@ -94,7 +94,13 @@ def permissions_wanted(cfg: dict, kit_root: Path = KIT_ROOT) -> tuple[list[str],
     allow = ["Bash(growth *)", "Bash(growth)"]
     allow += [f"Bash(git {g}*)" for g in READ_ONLY_GIT]
     deny = list(DENY_ALWAYS)
+    delegate = (cfg.get("approvals") or {}).get("delegate_local") is True if isinstance(cfg.get("approvals"), dict) else False
     for cmd in OWNER_ONLY:
+        if delegate and cmd == "approve":      # delegated local approvals: allow only the --delegated form; the rest stays denied
+            for never in ("browser", "region", "pending", "key"):
+                deny += [f"Bash(growth approve {never}*)", f"Bash(*/growth approve {never}*)"]
+            allow += ["Bash(growth approve * --delegated)", "Bash(growth approve * --delegated *)"]
+            continue
         deny += [f"Bash(growth {cmd}*)", f"Bash(*/growth {cmd}*)"]
     for f in PROTECTED_FILES:
         deny += [f"Edit(**/{f})", f"Write(**/{f})"]

@@ -196,7 +196,7 @@ def run_url(p):
     if inner:
         slash = sum(1 for x in inner if x.endswith("/"))
         style_slash = slash > len(inner) / 2
-        if (href.endswith("/") and cu.path != "/") == style_slash:
+        if cu.path in ("", "/") or href.endswith("/") == style_slash:   # the root is "/" in either style (friction 48)
             rep.ok("URL-05", f"canonical trailing-slash style matches the sitemap ({'with' if style_slash else 'no'} slash)")
         else:
             rep.fail("URL-05", "canonical slash style differs from the sitemap's", "use one style everywhere")

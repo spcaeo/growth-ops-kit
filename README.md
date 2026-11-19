@@ -187,6 +187,16 @@ home folder (`~/.config/growth-ops-kit/approvals.key`). The gate fails when an a
 thing changed afterwards, or when the log was edited by hand. A design exception can never excuse evidence checks or a
 page that did not load.
 
+**Delegated approvals (off by default).** The owner may hand the lead agent the approval of local work only, by writing
+`"approvals": {"delegate_local": true, "delegated_to": "lead agent", "owner_words": "<the owner's own words>", "since": "<date>"}`
+in `growth.json`. Then `growth approve <decision|review|exception|answer|baseline> <id> --delegated` works with no
+terminal and no code. The log line is still signed and chained, but it says `"mode": "delegated"`, `"by": "lead agent
+(delegated by owner <date>)"` and quotes the owner's words, and `growth approve list` marks it `[delegated]`. It is never
+shown as the owner's own typed yes. The research browser, the Google region and any go-live or release act are never
+delegated (the kit has no release approval of its own: that stays outside this log). The gate and READY accept a delegated
+line only while `delegate_local` is on; turn it off and they fail again until the owner approves in their own terminal.
+The generated permissions then allow only the `--delegated` form of `growth approve`.
+
 **What it checks, it reads.** A task step needs a proof that names something real (a file, a commit, a journal entry, a
 command with its output, or a web address). Screenshots must be real images of the right width. AI answers need their
 saved text. Research rows need a source and a date that is not in the future.

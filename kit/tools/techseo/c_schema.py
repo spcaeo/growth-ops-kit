@@ -105,6 +105,8 @@ def run_schema(p, page_type="money", money_types=None):
     micro = len([n for n in p.root.iter() if "itemscope" in n.attrs])
     if not scripts:
         rep.fail("SCH-01", "no JSON-LD found", "add structured data (SoftwareApplication, FAQPage, BreadcrumbList)")
+        if (p.path or "/") == "/":
+            rep.skip("SCH-07", "home is the root: no breadcrumb trail")
         return
     if errors:
         rep.fail("SCH-01", f"{len(errors)} JSON-LD block(s) do not parse: {errors[0]}", "fix the JSON (the extension shows these as 'Parsing Error')")
@@ -212,6 +214,9 @@ def run_schema(p, page_type="money", money_types=None):
                 probs.append(f"{ts[0]} has no description")
     (rep.warn if probs else rep.ok)("SCH-06", "; ".join(probs[:3]) if probs else f"main node url equals the canonical; page H1: '{h1[:50]}'", "make url = canonical and fill name and description from the page")
     # SCH-07 breadcrumbs
+    if (p.path or "/") == "/":
+        rep.skip("SCH-07", "home is the root: no breadcrumb trail")
+        nodes = []
     for n in nodes:
         if "BreadcrumbList" in p.types(n):
             items = n.get("itemListElement", [])

@@ -10,7 +10,10 @@
   growth approve review <research/file.md>       sign off an independent review file
   growth approve baseline <key> --reason "..."   allow one re-freeze of a page's research baseline
   growth approve pending                         everything that waits for you, on one screen, one code
-  growth approve list | verify                   show the log; check nobody edited it by hand
+  growth approve <decision|review|exception|answer|baseline> <id> --delegated
+                                                 the lead agent approves LOCAL work itself, with no terminal and no code, but
+                                                 only while growth.json approvals.delegate_local is true (see DELEGABLE below)
+  growth approve list | verify                   show the log (delegated lines carry a [delegated] tag); check nobody edited it by hand
   growth approve key                             make the signing key (~/.config/growth-ops-kit/approvals.key)
 
 Each approval is typed by a person in a real terminal: the command shows what is approved and a 4-digit code, and runs
@@ -42,6 +45,10 @@ EXCUSE_MAX_DAYS = 30
 NEVER_EXCUSED = ("ev.", "proc.")
 NEVER_EXCUSED_LINES = ("input missing", "check crashed", "check printed no result")
 KINDS = ("exception", "decision", "browser", "region", "answer", "review", "baseline")
+# What the owner may hand to the lead agent (growth.json approvals.delegate_local). Never delegated: the research browser and
+# Google region (a person must see them), `pending` (it holds those) and any go-live or release act. The kit has NO release
+# approval kind of its own: a release or go-live stays the owner's own act, typed in their terminal, outside this log.
+DELEGABLE = ("decision", "review", "exception", "answer", "baseline")
 
 
 class NoTerminal(SystemExit):
@@ -130,14 +137,30 @@ def verify(docs) -> tuple[list[dict], list[str]]:
     return out, probs
 
 
-def record(docs, kind: str, ref: str, content, summary: str = "", by: str | None = None, via: str = "terminal") -> dict:
+def delegation(docs_or_project) -> dict | None:
+    """growth.json "approvals" when delegate_local is on, else None. `docs` is the project's docs folder (its parent holds growth.json)."""
+    p = Path(docs_or_project)
+    p = p.parent if p.name == "docs" else p
+    try:
+        a = json.loads((p / "growth.json").read_text()).get("approvals") or {}
+    except (OSError, ValueError, AttributeError):
+        return None
+    return a if isinstance(a, dict) and a.get("delegate_local") is True else None
+
+
+def delegated_by(a: dict) -> str:
+    return f"{a.get('delegated_to') or 'lead agent'} (delegated by owner {a.get('since') or 'since an unrecorded date'})"
+
+
+def record(docs, kind: str, ref: str, content, summary: str = "", by: str | None = None, via: str = "terminal",
+           extra: dict | None = None) -> dict:
     """Append one approval (library; `approve` is the owner's door to it)."""
     if kind not in KINDS:
         raise ValueError(f"unknown approval kind {kind}")
     lines = _lines(docs)
     entry = {"id": f"A{len(lines) + 1:04d}", "kind": kind, "ref": str(ref), "sha256": digest(content), "summary": summary[:200],
              "by": by or _who(), "at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "via": via,
-             "prev": hashlib.sha256(lines[-1].encode()).hexdigest() if lines else ""}
+             "prev": hashlib.sha256(lines[-1].encode()).hexdigest() if lines else "", **(extra or {})}
     key = read_key()
     if key:
         entry["sig"] = _sign(entry, key)
@@ -164,6 +187,8 @@ def status(docs, kind: str, ref: str, content) -> tuple[str, dict | str | None]:
     h = digest(content)
     good = [e for e in mine if e.get("sha256") == h]
     if good:
+        if good[-1].get("mode") == "delegated" and not delegation(docs):      # delegation was turned off: it no longer counts
+            return "delegation_off", good[-1]
         return "ok", good[-1]
     return ("changed", mine[-1]) if mine else ("missing", None)
 
@@ -172,6 +197,9 @@ def explain(state: str, info, what: str, fix: str) -> str:
     """One plain line for a state that is not ok."""
     if state == "tampered":
         return f"the approvals log cannot be trusted: {info}; the owner checks it with growth approve verify"
+    if state == "delegation_off":
+        return (f"{what} was approved by the lead agent under the owner's delegation ({info.get('id')}), and growth.json approvals.delegate_local "
+                f"is no longer on; the owner approves it in their own terminal: {fix}")
     if state == "changed":
         return f"{what} changed after the owner approved it ({info.get('id')}, {str(info.get('at'))[:10]}); the owner approves it again: {fix}"
     return f"{what} has no owner approval; the owner runs, in their own terminal: {fix}"
@@ -325,9 +353,33 @@ def approve(docs, kind: str, ref: str, content, summary: str, show: str = "", tt
     if got != f"approve {code}":
         raise SystemExit("not approved: the words typed did not match")
     ensure_key()
+    d = getattr(t, "delegated", None)
+    if d:
+        e = record(docs, kind, ref, content, summary, by=delegated_by(d), via="delegated",
+                   extra={"mode": "delegated", "owner_words": str(d.get("owner_words") or ""), "since": str(d.get("since") or "")})
+        t.write(f"approved (delegated): {e['id']}\n")
+        return e
     e = record(docs, kind, ref, content, summary, via=f"terminal {getattr(t, 'name', 'tty')}")
     t.write(f"approved: {e['id']}\n")
     return e
+
+
+class Delegated:
+    """Stands in for the owner's terminal when growth.json approvals.delegate_local is on and --delegated is given: it types the
+    code back itself. The log line it leads to says mode "delegated" and who delegated; it is never the owner's typed yes."""
+    name = "delegated"
+
+    def __init__(self, settings: dict):
+        self.delegated, self._code = settings, ""
+
+    def write(self, s):
+        import re as _re
+        m = _re.search(r"approve (\d{4})", s)
+        if m:
+            self._code = m.group(1)
+
+    def readline(self):
+        return f"approve {self._code}\n"
 
 
 def approve_many(docs, items, tty=None) -> list:
@@ -436,6 +488,11 @@ def main(argv=None, tty=None) -> int:
         print(__doc__)
         return 0
     what, rest = argv[0], argv[1:]
+    delegated = "--delegated" in rest
+    rest = [x for x in rest if x != "--delegated"]
+    if delegated and what not in DELEGABLE:
+        raise SystemExit(f"growth approve {what} is never delegated: the owner types it in their own terminal "
+                         "(the research browser, Google region and any go-live or release act stay with the owner)")
     flags = {}
     for flag in ("--reason", "--name", "--seen"):
         if flag in rest:
@@ -450,11 +507,18 @@ def main(argv=None, tty=None) -> int:
         return 0
     project = _project()
     docs = project / "docs"
+    if delegated:
+        d = delegation(project)
+        if not d:
+            raise SystemExit("--delegated is off: the owner has not delegated local approvals (growth.json approvals.delegate_local). "
+                             "The owner approves it in their own terminal.")
+        tty = Delegated(d)
     if what in ("list", "verify"):
         entries, probs = verify(docs)
         if what == "list":
             for e in entries:
-                print(f"{e.get('id')}  {str(e.get('at'))[:16]}  {e.get('kind'):<9} {e.get('ref')}  by {e.get('by')}  {e.get('summary', '')}")
+                tag = "  [delegated]" if e.get("mode") == "delegated" else ""
+                print(f"{e.get('id')}  {str(e.get('at'))[:16]}  {e.get('kind'):<9} {e.get('ref')}  by {e.get('by')}{tag}  {e.get('summary', '')}")
         for p in probs:
             print("PROBLEM " + p)
         if what == "verify" and not probs:

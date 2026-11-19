@@ -618,8 +618,8 @@ def service_links(ctx):
         ctx.ok("not About or Contact")
         return
     m = domx.main(ctx.root())
-    hrefs = {ctx.internal_path(a.get("href")) for a in find_all(m, "a")}
-    miss = [s for s in ctx.cfg.get("silos", {}) if "/" + s not in hrefs]
+    hrefs = {paths.normalize(h) for h in (ctx.internal_path(a.get("href")) for a in find_all(m, "a")) if h}     # "/x/" and "/x" are one page
+    miss = [s for s in ctx.cfg.get("silos", {}) if paths.normalize("/" + s) not in hrefs]
     ctx.verdict(miss, "every topic page linked in the main text", "link each topic page by name in the text (rule 146)")
 
 

@@ -35,9 +35,9 @@ def prod_build(ctx):
 
 
 # ---- the head's money figures must be backed by the body (#60) ------------------------------------------------------
-MONEY = re.compile(r"(?:(?:US|CA|AU|NZ|C|A)?\$|€|£)\s?(\d[\d,]*(?:\.\d+)?)(?:\s?(k|m|million|thousand)\b)?", re.I)
-NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
-MULT = {"k": 1000, "thousand": 1000, "m": 1_000_000, "million": 1_000_000}
+MONEY = re.compile(r"(?:(?:US|CA|AU|NZ|C|A)?\$|€|£)\s?(\d[\d,]*(?:\.\d+)?)(?:\s?(k|m|b|million|billion|thousand)\b)?", re.I)
+NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?(?:(k|m|b)\b|\s(million|billion|thousand)\b)?", re.I)
+MULT = {"k": 1000, "thousand": 1000, "m": 1_000_000, "million": 1_000_000, "b": 1_000_000_000, "billion": 1_000_000_000}
 VERDICT_CLASS = re.compile(r"(?i)\b(verdict|tldr|tl-dr|quick-answer|bottom-line)\b")
 
 
@@ -59,7 +59,9 @@ def money_figures(text):
 
 
 def number_values(text):
-    return {v.normalize() for v in (_value(m.group(0)) for m in NUMBER.finditer(text)) if v is not None}
+    """The value of every number in a text, read the way money_figures reads it: 40K, $40k, 1.5M, 2B and "3 million" count in full,
+    with or without a $ and a "+" after (friction 47)."""
+    return {v.normalize() for v in (_value(re.match(r"[\d,]*\.?\d+|\d[\d,]*", m.group(0)).group(0), m.group(1) or m.group(2)) for m in NUMBER.finditer(text)) if v is not None}
 
 
 def head_and_body(ctx):
