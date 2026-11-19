@@ -27,6 +27,7 @@ class Page:
         self.body = find(self.root, "body") or self.root
         self.main = find(self.root, "main") or self.body
         self.live = mode == "prod"
+        self.thin_ok = None              # growth.json thin_ok_paths: the why when this page is short by nature (WARN, not FAIL)
 
     # ---- small lookups -------------------------------------------------------------
     def metas(self, key, value):

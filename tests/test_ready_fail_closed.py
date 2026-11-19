@@ -180,3 +180,18 @@ def test_the_link_status_count_is_part_of_the_ok_line():
     from techseo.report import Result
     line = seo_all({"tseo": [Result("LNK-02", "OK", "all 3 unique internal targets answer 200 (3 of 3 unique internal targets checked)")]})
     assert line.level == "OK" and "3 of 3 unique internal targets checked" in line.what
+
+
+def test_ready_asks_a_trailing_slash_site_for_the_slash_form(rdy, monkeypatch):
+    import ready
+    seen = []
+    monkeypatch.setattr(ready, "run_gate", lambda cmd: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0, gate_out(), ""))
+    for cfg, typed, want in (({"trailing_slash": True}, "/x", "/x/"), ({}, "/x/", "/x/"), ({}, "/x", "/x"),
+                             ({"trailing_slash": False}, "/x/", "/x"), ({"trailing_slash": True}, "/feed.xml", "/feed.xml")):
+        monkeypatch.setattr(ready, "CFG", {"preview_url": "http://127.0.0.1:9", **cfg})
+        monkeypatch.setattr(sys, "argv", ["ready", typed, "--type", "post", "--key", "x"])
+        seen.clear()
+        ready.main()
+        cmd = seen[0]
+        assert cmd[cmd.index("--url") + 1] == "http://127.0.0.1:9" + want, (cfg, typed)
+        assert cmd[cmd.index("page") + 1] == typed.rstrip("/")          # the page key stays without the slash

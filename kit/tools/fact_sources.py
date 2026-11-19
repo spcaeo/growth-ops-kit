@@ -101,8 +101,12 @@ def _money():
     return MONEY_RE
 
 
-def page_sentences(root, domx) -> list[str]:
-    """The sentences of the page's main text: no nav, header or footer chrome, no byline, no copyright line, no hidden text."""
+SENTENCE_MIN_WORDS = 8          # "study", "survey" and "report" name a source only inside a sentence of at least this many words
+
+
+def page_sentences(root, domx) -> list[tuple[str, bool]]:
+    """[(sentence, is_prose)] of the page's main text: no nav, header or footer chrome, no breadcrumb, no byline, no copyright
+    line, no hidden text, and nothing that is only link text (a sitemap list, a menu). A heading is not prose."""
     main = domx.main(root)
     picked = []
     for n in main.iter():
@@ -113,16 +117,19 @@ def page_sentences(root, domx) -> list[str]:
         if any(c is not n and c.tag in BLOCKS for c in n.iter()):
             continue                        # an outer block (a list item that holds paragraphs): its inner blocks are read instead
         t = domx.text(n)
+        links = " ".join(domx.text(a) for a in n.iter() if a.tag == "a")
+        if links and re.sub(r"\W+", "", links) == re.sub(r"\W+", "", t):
+            continue                        # only link text: a menu or sitemap entry names a section, it states no fact
         if t and not (BYLINE_TEXT.match(t) and len(t) < 90):
-            picked.append(t)
+            picked.append((t, not n.tag.startswith("h") or len(n.tag) != 2))
     if not picked:
-        picked = [domx.text(main)]
+        picked = [(domx.text(main), True)]
     out = []
-    for t in picked:
+    for t, prose in picked:
         for s in re.split(r"(?<=[.!?])\s+(?=[A-Z\"“(])", t):
             s = s.strip()
             if s and not COPYRIGHT.search(s):
-                out.append(s)
+                out.append((s, prose))
     return out
 
 
@@ -143,7 +150,7 @@ def numbers_in(text: str) -> set[str]:
 DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? \d{1,2},? \d{4}\b|\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]* \d{4}\b")
 
 
-def stats_in(sentence: str) -> list[dict]:
+def stats_in(sentence: str, prose: bool = True) -> list[dict]:
     """[{text, num, kind}] for every stat in one sentence (a sentence with a stat word but no number has num None).
     A full date ("2026-11-10", "Nov 10, 2026") is a date, not a stat, and is left out."""
     out, spans = [], []
@@ -158,6 +165,8 @@ def stats_in(sentence: str) -> list[dict]:
         add("money", m, num_key(m.group(0)))
     for kind, rx in STAT_PATTERNS:
         for m in rx.finditer(sentence):
+            if kind == "source" and not (prose and len(sentence.split()) >= SENTENCE_MIN_WORDS):
+                continue                    # a label or heading that is just a name ("Case Studies") is not a claim
             if kind in ("regulation", "source"):
                 add(kind, m, num_key(m.group(0)) if kind == "regulation" else None)
             else:
@@ -168,8 +177,8 @@ def stats_in(sentence: str) -> list[dict]:
 def page_stats(root, domx) -> list[dict]:
     """[{sentence, stats}] for each sentence that holds at least one stat."""
     res = []
-    for s in page_sentences(root, domx):
-        st = stats_in(s)
+    for s, prose in page_sentences(root, domx):
+        st = stats_in(s, prose)
         if st:
             res.append({"sentence": s, "stats": st})
     return res

@@ -192,8 +192,11 @@ def run_js(p):
     # JSR-02 main copy in raw HTML
     h1 = [h for h in p.headings() if h.tag == "h1"]
     w = p.words()
-    (rep.ok if h1 and w >= 300 else rep.fail)("JSR-02", f"raw HTML holds the H1 and {w} words of main copy" if h1 and w >= 300 else f"raw HTML has {w} words and {len(h1)} H1: content depends on JavaScript",
-                                              "render the copy on the server")
+    if h1 and w < 300 and getattr(p, "thin_ok", None):
+        rep.warn("JSR-02", f"raw HTML holds the H1 and {w} words of main copy: short by nature ({p.thin_ok})", "growth.json thin_ok_paths allows this page to be short")
+    else:
+        (rep.ok if h1 and w >= 300 else rep.fail)("JSR-02", f"raw HTML holds the H1 and {w} words of main copy" if h1 and w >= 300 else f"raw HTML has {w} words and {len(h1)} H1: content depends on JavaScript",
+                                                  "render the copy on the server")
     # content hidden until JS swaps it in (Next streaming)
     swaps = [d for d in find_all(p.root, "div") if d.get("id", "").startswith("S:") and "hidden" in d.attrs]
     sw = sum(len(d.all_text().split()) for d in swaps)

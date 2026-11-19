@@ -119,7 +119,9 @@ def run_content(p):
     vis = p.visible_text()
     w = p.words(vis)
     body_w = p.words(p.body.all_text(visible=True))
-    if w < 300:
+    if w < 300 and getattr(p, "thin_ok", None):
+        rep.warn("CNT-01", f"{w} words in <main>: short by nature ({p.thin_ok})", "growth.json thin_ok_paths allows this page to be short; keep it useful")
+    elif w < 300:
         rep.fail("CNT-01", f"{w} words in <main> ({body_w} in the whole body)", "a money page needs at least 300 words of real copy")
     elif w < 600:
         rep.warn("CNT-01", f"{w} words in <main> ({body_w} in the whole body)", "thin for a money page: answer the buyer's questions fully")
