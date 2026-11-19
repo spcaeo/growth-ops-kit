@@ -31,9 +31,11 @@ def rec(**kw):
     r = dict(schema=1, page="/pm", key="pm",
              search=dict(scope="page", window={"from": d(30), "to": d(3)}, definition="page rows", totals=dict(clicks=5, impressions=900, position=6.1),
                          queries=[dict(query="board tools", clicks=3, impressions=500, position=5.0)]),
-             site_search={}, ai_answers=[dict(engine="chatbot", market="US", query="best board tools", summary="Acme named", seen_on=d(2))],
-             paa=[dict(question="Is Acme free?", status="chosen", reason="", answered_in=""),
-                  dict(question="Who invented boards?", status="declined", reason="off topic for buyers", answered_in="")],
+             site_search={}, ai_answers=[dict(engine="chatbot", market="US", query="best board tools", summary="Acme named", seen_on=d(2),
+                                              source="https://chat.example.com/share/abc")],     # audit H9: every row cites its source
+             paa=[dict(question="Is Acme free?", status="chosen", reason="", answered_in="", source="https://search.example.com/?q=acme"),
+                  dict(question="Who invented boards?", status="declined", reason="off topic for buyers", answered_in="",
+                       source="https://search.example.com/?q=acme")],
              vendor_facts=[fact()], other_numbers=[], baseline={})
     r.update(kw)
     return r

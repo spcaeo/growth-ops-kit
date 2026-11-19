@@ -133,6 +133,8 @@ def main(argv: list) -> None:
             if known is None:
                 sys.exit(f"no playbook '{playbook}' in the kit's book/playbooks/")
             research = research or known
+        # a job whose title or owner's words name research is a research job even without --playbook/--research (audit H9)
+        research = research or bool(research_gate.RESEARCH_WORDS.search(" ".join(args[:2])))
         blocked = research_gate.problem(PROJECT, CFG) if research else None
         if blocked:
             sys.exit("this job has a research step and may not start yet: " + blocked)
