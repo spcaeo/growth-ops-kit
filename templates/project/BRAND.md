@@ -22,12 +22,21 @@ Machine-readable words (the banned offer words, the words never to say, the old-
 
 | Field | Wording |
 | --- | --- |
-| Business name | <fill in: the name as written on pages> |
-| Category phrase | <fill in: what the business is, in the words buyers search, for example "Lawn care for homeowners"> |
-| One-line hook | <fill in: one sentence a buyer would feel> |
-| What it does | <fill in: two sentences, plain words> |
-| The author (rule 36l) | <fill in: the one named person every page shows in its byline: name, role, link to their author page> |
-| Origin story | <fill in: only facts the owner approves, or leave empty> |
+| Business name | <fill in> |
+| Category phrase | <fill in> |
+| One-line hook | <fill in> |
+| What it does | <fill in> |
+| The author (rule 36l) | <fill in> |
+| Origin story | <fill in> |
+
+<!-- What goes in each <fill in> cell above (delete this comment when done):
+  - Business name: the name as written on pages
+  - Category phrase: what the business is, in the words buyers search, for example "Lawn care for homeowners"
+  - One-line hook: one sentence a buyer would feel
+  - What it does: two sentences, plain words
+  - The author (rule 36l): the one named person every page shows in its byline: name, role, link to their author page
+  - Origin story: only facts the owner approves, or leave empty
+-->
 
 ## 2. What we sell
 
@@ -41,11 +50,19 @@ Machine-readable words (the banned offer words, the words never to say, the old-
 
 | Field | Wording |
 | --- | --- |
-| The one CTA label | <fill in: the exact button words, for example "Get a quote"> |
-| The one conversion path | <fill in: the booking page, quote form or contact form the CTA goes to> |
-| The reason line | <fill in: the one line beside the button that says what the reader gets (rule 32a)> |
-| Call or step length | <fill in: for example "15-minute quote call"; one length everywhere (rule 4)> |
-| The market (also in `growth.json`) | <fill in: country and language, for example US, English> |
+| The one CTA label | <fill in> |
+| The one conversion path | <fill in> |
+| The reason line | <fill in> |
+| Call or step length | <fill in> |
+| The market (also in `growth.json`) | <fill in> |
+
+<!-- What goes in each <fill in> cell above (delete this comment when done):
+  - The one CTA label: the exact button words, for example "Get a quote"
+  - The one conversion path: the booking page, quote form or contact form the CTA goes to
+  - The reason line: the one line beside the button that says what the reader gets (rule 32a)
+  - Call or step length: for example "15-minute quote call"; one length everywhere (rule 4)
+  - The market (also in `growth.json`): country and language, for example US, English
+-->
 
 ## 5. Pricing words (state exactly these, nothing more)
 
@@ -93,4 +110,8 @@ counts them as approved.>
 
 | Date | Version | What changed |
 | --- | --- | --- |
-| <fill in: date> | 0.1.0 | First sheet from the template. |
+| <fill in> | 0.1.0 | First sheet from the template. |
+
+<!-- What goes in each <fill in> cell above (delete this comment when done):
+  - <fill in: date>: date
+-->

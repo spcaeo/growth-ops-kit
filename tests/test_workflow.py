@@ -95,3 +95,4 @@ def test_preflight_merges_site_rules_and_a_rerun_keeps_them(demo_project, monkey
     p.write_text(p.read_text().replace("- [ ] site rule 7: logo on every tool", "- [x] site rule 7: logo on every tool -- checked J1"))
     preflight.write_plan(*args)          # a run without the file does not drop the rule or its proof
     assert "- [x] site rule 7: logo on every tool -- checked J1" in p.read_text()
+
