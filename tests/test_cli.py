@@ -8,6 +8,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GROWTH = ROOT / "growth"
+# Shared helper modules in kit/tools/ that other tools import and that are not commands. A new helper goes here; it does not
+# need a fake `growth <name>` command and help line. (A module that people run belongs in growth's TOOLS table instead.)
+INTERNAL_MODULES = {"config"}
 
 
 def growth(*args, cwd=None, env=None):
@@ -24,11 +27,19 @@ def test_help_lists_every_tool_with_one_line():
     for line in r.stdout.splitlines():
         pass
     listed = {l.split()[0] for l in r.stdout.split("Tools:")[1].splitlines() if l.startswith("  ")}
-    tools = {p.stem.replace("_", "-") for p in (ROOT / "kit" / "tools").glob("*.py") if p.stem not in ("config",)}
+    tools = {p.stem.replace("_", "-") for p in (ROOT / "kit" / "tools").glob("*.py") if p.stem not in INTERNAL_MODULES}
     quiet = {"owner-messages"}  # listed below as owner-messages
     missing = {t for t in tools if t.replace("-", "_") not in {x.replace("-", "_") for x in listed}}
     assert missing == set(), f"tools with no line in growth help: {sorted(missing)}"
     assert all(re.search(r"\S+\s{2,}\S", l) for l in r.stdout.split("Tools:")[1].splitlines() if l.startswith("  "))
+
+
+def test_internal_modules_are_real_and_not_also_commands():
+    ns = {}
+    exec(compile(GROWTH.read_text(), "growth", "exec"), {"__name__": "x", "__file__": str(GROWTH)}, ns)
+    for m in INTERNAL_MODULES:
+        assert (ROOT / "kit" / "tools" / f"{m}.py").is_file(), f"INTERNAL_MODULES names {m} but kit/tools/{m}.py is missing"
+        assert m not in ns["TOOLS"], f"{m} is listed as an internal module and as a growth command: pick one"
 
 
 def test_no_args_is_help():
