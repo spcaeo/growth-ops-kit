@@ -222,7 +222,8 @@ class Ctx:
             d = d if d.is_absolute() else (self.project / d)
             newest = max((os.stat(f).st_mtime for f in d.rglob("*") if f.is_file() and not any(x.startswith(".") for x in f.relative_to(d).parts)), default=0)
         if not newest:
-            slug = self.path.strip("/").replace("/", "-") or "home"
+            import paths
+            slug = paths.snapshot_slug(self.path)
             snaps = self.project / "archive" / "pages" / slug
             newest = max((os.stat(f).st_mtime for f in snaps.rglob("*") if f.is_file() and f.parent.name.endswith("-before")), default=0) if snaps.is_dir() else 0
         if not newest:
@@ -230,13 +231,22 @@ class Ctx:
         return int(newest)
 
     def research(self, pattern):
-        """Research files whose name contains the page key and matches pattern (a regex). The pattern is matched on the
-        name WITHOUT the page key, so a key such as "product-review" cannot satisfy a "review" check by itself; the
-        checkpoints file preflight writes is never evidence of anything."""
+        """Research files that belong to the page key and match pattern (a regex). A file belongs to the key when its name
+        starts with "<key>-" (never merely contains it: key "pricing" does not own "enterprise-pricing-review-...").
+        The pattern is matched on the name WITHOUT the page key, so a key such as "product-review" cannot satisfy a
+        "review" check by itself. A file that starts with the longer key of another pre-flighted page (key "pricing",
+        other page "pricing-guide": "pricing-guide-review-<date>.md") belongs to that page. The checkpoints file
+        preflight writes is never evidence of anything."""
         rdir = self.need_file(self.project / "research", "mkdir research (research files live there)")
         key = self.need_key()
-        return sorted(f for f in rdir.iterdir() if key in f.name and f.is_file() and not f.name.endswith("-checkpoints.md")
-                      and re.search(pattern, f.name.replace(key, "", 1)))
+        pre = key + "-"
+        try:
+            others = [k + "-" for k in (json.loads((self.project / "journal" / "preflight.json").read_text()) or {}).values()
+                      for k in [k.get("key", "")] if k.startswith(pre)]
+        except (OSError, ValueError, AttributeError):
+            others = []
+        return sorted(f for f in rdir.iterdir() if f.name.startswith(pre) and f.is_file() and not f.name.endswith("-checkpoints.md")
+                      and not any(f.name.startswith(o) for o in others) and re.search(pattern, f.name[len(key):]))
 
     def need_key(self):
         if not self.key:

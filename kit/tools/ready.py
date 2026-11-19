@@ -120,6 +120,22 @@ def gate_problem(r, ptype):
     return ""
 
 
+def key_problem(path, key):
+    """The key a page was pre-flighted with is its key for good: READY refuses another one (a page cannot borrow the
+    review, dossier and fact check of a different page by naming its key). "" when it matches."""
+    try:
+        e = json.loads((PROJECT / "journal" / "preflight.json").read_text()).get(path, {})
+    except (OSError, ValueError):
+        return ""                        # no pre-flight record: ev.preflight is the check that wants one
+    if not e:
+        return ""
+    if not e.get("key"):
+        return f"the pre-flight of {path} did not record a page key: run growth preflight {path} again with --key {key}"
+    if e["key"] != key:
+        return f"{path} was pre-flighted with key '{e['key']}', not '{key}': use --key {e['key']}"
+    return ""
+
+
 def held_proposals(key):
     """The page's held-field proposals with their status (growth held): listed so the owner sees them before a freeze lifts."""
     import held
@@ -158,7 +174,7 @@ def main():
            "--type", a.type, "--key", a.key, "--no-link-status"] + (["--repo", str(repo)] if repo else [])
     r = run_gate(cmd)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
-    broken = gate_problem(r, a.type)
+    broken = key_problem(path, a.key) or gate_problem(r, a.type)
     if broken:
         fails.insert(0, f"FAIL {broken}")
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]

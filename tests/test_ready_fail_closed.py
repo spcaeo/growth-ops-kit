@@ -100,3 +100,48 @@ def test_the_gate_prints_blocked_skips_apart_from_plain_skips(capsys):
     out = capsys.readouterr().out
     assert "BLOCKED-SKIP t.blocked: no headless" in out and "\nSKIP t.na: feature off" in out
     assert "0 FAIL, 0 WARN, 0 OK, 1 SKIP, 1 BLOCKED-SKIP" in out
+
+
+# ---- audit H3: the key is bound to the path, research files match exactly ----
+
+def test_two_different_paths_never_share_a_default_key():
+    import gate
+    import page_archive
+    assert gate.default_key("/blog/pricing-guide") != gate.default_key("/blog/pricing-tips")
+    assert gate.default_key("/a/b-c") != gate.default_key("/a-b/c")
+    assert page_archive.slug_of("/a/b-c") != page_archive.slug_of("/a-b/c")
+
+
+def research_ctx(tmp_path, key, names):
+    from gatelib.core import Ctx
+    (tmp_path / "research").mkdir()
+    for n in names:
+        (tmp_path / "research" / n).write_text("x\n")
+    return Ctx(project=tmp_path, key=key)
+
+
+def test_research_files_match_the_key_exactly_not_by_substring(tmp_path):
+    ctx = research_ctx(tmp_path, "pricing", ["enterprise-pricing-review-2026-11-19.md", "pricing-guide-review-2026-11-19.md",
+                                            "pricing-review-2026-11-19.md", "pricing-opus-review-2026-11-19.md"])
+    (tmp_path / "journal").mkdir()
+    (tmp_path / "journal" / "preflight.json").write_text(json.dumps({"/pricing": {"key": "pricing"}, "/pricing-guide": {"key": "pricing-guide"}}))
+    got = [f.name for f in ctx.research(r"-(audit|review)-.*\d{4}-\d\d-\d\d")]
+    assert got == ["pricing-opus-review-2026-11-19.md", "pricing-review-2026-11-19.md"]
+
+
+def test_ready_refuses_a_different_key_than_the_one_the_page_was_preflighted_with(rdy, demo_project, capsys):
+    (demo_project / "journal" / "preflight.json").write_text(json.dumps({"/x": {"ok": True, "key": "other-page"}}))
+    assert rdy(0, gate_out()) == 1
+    out = capsys.readouterr().out
+    assert "pre-flighted with key 'other-page', not 'x'" in out and rdy.ledger() == {}
+
+
+def test_ready_accepts_the_preflight_key(rdy, demo_project, capsys):
+    (demo_project / "journal" / "preflight.json").write_text(json.dumps({"/x": {"ok": True, "key": "x"}}))
+    assert rdy(0, gate_out()) == 0
+
+
+def test_a_preflight_record_with_no_key_is_refused(rdy, demo_project, capsys):
+    (demo_project / "journal" / "preflight.json").write_text(json.dumps({"/x": {"ok": True}}))
+    assert rdy(0, gate_out()) == 1
+    assert "did not record a page key" in capsys.readouterr().out

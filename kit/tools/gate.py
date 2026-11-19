@@ -85,8 +85,9 @@ def print_lines(ctx, title, md=None):
 
 
 def default_key(path):
-    """The page key when --key is not given: the first two words of the path, never containing a slash."""
-    return "-".join((path.strip("/").replace("/", "-") or "home").split("-")[:2])
+    """The page key when --key is not given: the path's snapshot slug (paths.default_key), never containing a slash."""
+    import paths
+    return paths.default_key(path)
 
 
 def cmd_page(a):
@@ -183,7 +184,7 @@ def main(argv=None):
     p.add_argument("--no-browser", action="store_true", help="skip the two checks that measure the page in a headless browser (contrast, phone)")
     p.add_argument("--needs", default="", help="only checks that read: live, project, nextjs (comma list)")
     p.add_argument("--type", choices=["money", "hub", "post", "core"], default="money")
-    p.add_argument("--key", default="", help="research file key (default: first two words of the slug)")
+    p.add_argument("--key", default="", help="research file key (default: the path as a slug, e.g. blog__my-post)")
     p.add_argument("--stage", choices=["build", "release"], default="build", help="release = after the merge")
     p.add_argument("--no-link-status", action="store_true", help="skip the status check of every internal link (faster)")
     p.add_argument("--only", default="", help="comma list of check ids to run (growth preflight uses it)")
