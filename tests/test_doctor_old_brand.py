@@ -18,7 +18,7 @@ def a2(project):
     return next(l for l in r.stdout.splitlines() if "A2 Project adapted" in l)
 
 
-def setup(project, site=None):
+def prepare(project, site=None):
     cfg = json.loads((project / "growth.json").read_text())
     cfg["old_brand_words"] = WORDS
     if site:
@@ -33,13 +33,13 @@ def test_the_defining_and_banning_files_do_not_count(demo_project, tmp_path):
     site = tmp_path / "dist"
     site.mkdir()
     (site / "index.html").write_text("<h1>Bright lawns</h1>")
-    setup(demo_project, site)
+    prepare(demo_project, site)
     line = a2(demo_project)
     assert line.startswith("OK") and "0 mention the old brand" in line
 
 
 def test_no_build_dir_is_never_ok(demo_project):
-    setup(demo_project)
+    prepare(demo_project)
     cfg = json.loads((demo_project / "growth.json").read_text())
     cfg["site_dir"] = ""   # no build_dir and no site_dir: nothing to search
     (demo_project / "growth.json").write_text(json.dumps(cfg))
@@ -48,7 +48,7 @@ def test_no_build_dir_is_never_ok(demo_project):
 
 
 def test_a_missing_or_empty_build_dir_is_never_ok(demo_project, tmp_path):
-    setup(demo_project, tmp_path / "not-built")
+    prepare(demo_project, tmp_path / "not-built")
     line = a2(demo_project)
     assert line.startswith("TODO") and f"{(tmp_path / 'not-built').resolve()} does not exist" in line
     (tmp_path / "not-built").mkdir()
@@ -58,7 +58,7 @@ def test_a_missing_or_empty_build_dir_is_never_ok(demo_project, tmp_path):
 
 
 def test_a_real_mention_in_a_project_doc_fails(demo_project):
-    setup(demo_project)
+    prepare(demo_project)
     (demo_project / "docs" / "02-site.md").write_text("The site was built by Old Brand Co in 2024.\n")
     line = a2(demo_project)
     assert line.startswith("FAIL") and "docs/02-site.md" in line and "1 mention the old brand" in line
@@ -69,7 +69,7 @@ def test_the_built_site_is_searched(demo_project, tmp_path):
     (site / "about").mkdir(parents=True)
     (site / "index.html").write_text("<h1>Bright lawns</h1>")
     (site / "logo-oldbrand.webp").write_bytes(b"\x00binary")   # a file NAME is not page text
-    setup(demo_project, site)
+    prepare(demo_project, site)
     line = a2(demo_project)
     assert line.startswith("OK") and f"built site {site.resolve()}: 1 files searched, 0 mention the old brand" in line
     (site / "about" / "index.html").write_text("<p>Formerly oldbrand.</p>")
