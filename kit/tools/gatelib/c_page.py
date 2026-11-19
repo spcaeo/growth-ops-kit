@@ -452,8 +452,12 @@ def reveal(ctx):
         return
     bad = []
     hero = domx.first_section(ctx.root())
+    # growth.json features.reveal_from: the first fold number that reveals (a site whose design keeps the first two
+    # folds still, for a calm first screen, sets 3); default: every fold after the first screen
+    rf = (ctx.cfg.get("features") or {}).get("reveal_from")
+    start = int(rf) if isinstance(rf, int) and rf > 1 else 0
     for i, s in enumerate(secs, 1):
-        if s is hero:
+        if s is hero or i < start:
             continue                                  # the first screen is on view at load: nothing to reveal
         marks = list(s.iter())                       # the fold itself or a block inside it reveals
         # an empty attribute (<div data-reveal>) counts: its presence is the marker, not its value
