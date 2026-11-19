@@ -32,6 +32,10 @@ cd growth-ops-kit
 growth new-project ~/Projects/my-site-growth --site https://example.com
 ```
 
+Any folder works; the paths above are only examples. Keep three separate folders: the kit (this repository), the
+project folder `growth new-project` makes, and your site's own repository. Do not put the project folder inside the site
+repository: it holds your notes, research and the task list, which are not part of the site.
+
 `setup.sh` links the `growth` command into `~/.local/bin`. If it says that folder is not on your PATH, add the line it
 prints to your shell profile (for example `export PATH="$HOME/.local/bin:$PATH"`) and open a new terminal; or run
 `./growth ...` from the kit folder.

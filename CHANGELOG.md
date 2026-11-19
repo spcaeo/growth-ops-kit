@@ -4,6 +4,7 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+- README, "Start in 10 minutes": any folder works; keep the kit, the project folder and the site repository as three separate folders, and the project folder outside the site repository. (#14)
 - `growth owner_messages` reads only the project folder's own agent transcripts by default; the folder above is read only when growth.json `transcripts_dir` says so (it may now be one folder or a list), so a general projects folder no longer floods the Stop hook with unrelated messages. (#21)
 - SETUP.md and BRAND.md templates: each table cell holds a short `<fill in>`; the long hint for each row moved to an HTML comment under the table, so a cell is filled without matching the hint text (delete the comment when done). (#23)
 - Rules are re-read at each stage: new hook `growth hook stage` (a PostToolUse hook on Bash): after a `growth tasks tick` or `step` whose step names a stage (research, edit, build, fold, test, gate, hand-over, ready, publish), it prints the page's open manual checkpoints so the agent re-reads them. `growth preflight --extra-rules <file>` (and `research/<key>-site-rules.md`, read automatically) merges a site's own rules into the checkpoints file; a run without the file keeps them and their proofs. Not done: a per-stage unchecked list from the gate (the gate is not touched here). (#25)
