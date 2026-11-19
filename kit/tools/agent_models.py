@@ -21,7 +21,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transcript as transcripts  # noqa: E402
 
-# Default roles (growth.json "agent_models": {"roles": [{"match": "<regex on name + description>", "models": ["sonnet"]}, ...],
+# Default roles: builders sonnet; the independent reviewer opus (the strongest model, and different from the builders);
+# log and count work haiku; screenshots and click-tests sonnet (they need sight). (growth.json "agent_models": {"roles": [{"match": "<regex on name + description>", "models": ["sonnet"]}, ...],
 # "lead": "<model>" used only when the transcript names none, "exempt_types": ["Explore", ...]} replaces them).
 # role pattern -> allowed models, first match wins
 DEFAULT_ROLES = [
@@ -95,7 +96,10 @@ def problems(calls, lead=None, roles=None, builders=None, exempt=None):
         ok = set(pat[1])
         if pat[0] == DEFAULT_ROLES[1][0]:            # an independent reviewer differs from the model its builder ran on
             if builders is not None:
-                ok = (ok | {"sonnet"}) - builders if builders else ok
+                if model in builders:      # the strongest model reviews, so a builder on it leaves no different model to review with
+                    out.append(f"helper '{who}' reviews on {model}, the same model a builder ran on. Builders run on sonnet "
+                               "(restart them there), so the independent reviewer can be opus, a different model.")
+                    continue
             elif DECLARED.search(who):               # builders not known: the description's own word, a self-declaration
                 ok = {"sonnet"}
         if not model:
