@@ -3,7 +3,8 @@
 doctor A13 lists each piece).
 
 Pieces: the Stop hook (with a status message), the workflow guard (when this kit has one), the status line (bars), the
-permissions block (allow the kit's own commands, deny pushes, deploys and a live crawl), the skills, the project CLAUDE.md
+permissions block (allow the kit's own commands and read-only git; deny pushes, deploys, a live crawl, ref and hook changes,
+owner-only commands and editing the protected files), the skills, the project CLAUDE.md
 "before you act" lines, and the git hooks. Installing never overwrites what the owner set: a missing entry is added, an
 existing one is left alone, a setting of the owner's own is never touched. Nothing here changes a global setting.
 """
@@ -34,9 +35,28 @@ Before you act (written by `growth wizard`; edit outside these markers):
 """
 STAGE_MESSAGE = "Re-reading the page checkpoints"
 STOP_MESSAGE = "Checking every owner message is logged and every rule has its check"
-READ_ONLY_GIT = ["status", "log", "diff", "show", "branch", "worktree list", "rev-parse", "remote -v"]
-DENY_ALWAYS = ["Bash(git push*)", "Bash(git merge* main*)", "Bash(git merge main*)", "Bash(rm -rf /*)", "Bash(rm -rf ~*)",
-               "Bash(rm -rf ..*)", "Bash(rm -rf $HOME*)"]
+# Read-only git only. `git branch*` was here once and allowed `git branch -f main <sha>` / `git branch -D main` (audit C4).
+READ_ONLY_GIT = ["status", "log", "diff", "show", "branch --list", "branch --show-current", "worktree list", "rev-parse", "remote -v"]
+# Owner-only acts: the agent may not run them (growth approve needs the owner's own terminal anyway).
+OWNER_ONLY = ["approve", "approvals", "wizard confirm", "tasks answer", "journal answer", "install_hooks remove", "install-hooks remove"]
+# Prefix rules are a speed bump, not a wall: they stop the plain forms an agent types; a determined agent with a shell can
+# find others. The `*` forms cover `git -C . push`, `env git push`, a kit path in front of growth, and flags anywhere.
+DENY_ALWAYS = ["Bash(git push*)", "Bash(git * push*)", "Bash(env git*)", "Bash(command git*)",
+               "Bash(git merge* main*)", "Bash(git merge main*)",
+               "Bash(git branch -f*)", "Bash(git branch -D*)", "Bash(git branch -d*)", "Bash(git branch -m*)", "Bash(git branch -M*)",
+               "Bash(git branch -c*)", "Bash(git branch -C*)", "Bash(git branch --force*)", "Bash(git branch --delete*)",
+               "Bash(git branch --move*)", "Bash(git update-ref*)", "Bash(git * update-ref*)", "Bash(git symbolic-ref*)",
+               "Bash(*core.hooksPath*)", "Bash(*core.hookspath*)", "Bash(*--no-verify*)", "Bash(git commit -n*)",
+               "Bash(git * --output*)", "Bash(git *--ext-diff*)",
+               "Bash(rm -rf /*)", "Bash(rm -rf ~*)", "Bash(rm -rf ..*)", "Bash(rm -rf $HOME*)", "Bash(rm -fr *)",
+               "Bash(rm *.git/hooks*)", "Bash(rm *.claude*)"]
+# Files only the owner (or the kit's own commands) change: the agent's settings, the project's settings and setup memory,
+# the approvals log, the task list and journal (written through growth tasks / growth journal), git hooks, the signing key.
+PROTECTED_FILES = [".claude/settings.json", ".claude/settings.local.json", "growth.json", "setup-state.json", "setup-answers.json",
+                   "approvals.jsonl", "docs/tasks.json", "journal/**", "research/*-record.json", ".git/hooks/**", ".githooks/**"]
+# Allow-list entries older kits wrote that hand the agent arbitrary code (any Python, any test file) or ref changes;
+# install() removes exactly these strings and check() reports them.
+OLD_UNSAFE_ALLOW = ["Bash(git branch*)", "Bash(python3 -m pytest*)", "Bash(pytest*)"]
 
 
 def run_growth() -> str:
@@ -47,10 +67,25 @@ def venv_python() -> str:
     return str(Path(os.environ.get("GROWTH_VENV") or Path.home() / ".growth-ops-kit" / "venv") / "bin" / "python")
 
 
-def permissions_wanted(cfg: dict) -> tuple[list[str], list[str]]:
-    allow = ["Bash(growth *)", "Bash(growth)", f"Bash({venv_python()} *)", "Bash(python3 -m pytest*)", "Bash(pytest*)"]
+def unsafe_allow(entry: str) -> bool:
+    """An allow entry this kit once wrote that lets the agent run any code or move a branch."""
+    return entry in OLD_UNSAFE_ALLOW or (entry.startswith("Bash(") and "/.growth-ops-kit/venv/bin/python" in entry) \
+        or entry == f"Bash({venv_python()} *)"
+
+
+def permissions_wanted(cfg: dict, kit_root: Path = KIT_ROOT) -> tuple[list[str], list[str]]:
+    """(allow, deny) for .claude/settings.json. Allowed: the growth command and read-only git, nothing that runs arbitrary
+    code (no bare Python or pytest: a test file the agent writes is code). Denied: pushes, merges to main, ref and hook
+    changes, owner-only commands, and editing the protected files or the kit itself."""
+    allow = ["Bash(growth *)", "Bash(growth)"]
     allow += [f"Bash(git {g}*)" for g in READ_ONLY_GIT]
     deny = list(DENY_ALWAYS)
+    for cmd in OWNER_ONLY:
+        deny += [f"Bash(growth {cmd}*)", f"Bash(*/growth {cmd}*)"]
+    for f in PROTECTED_FILES:
+        deny += [f"Edit(**/{f})", f"Write(**/{f})"]
+    deny += [f"Edit(/{kit_root}/**)", f"Write(/{kit_root}/**)",
+             "Read(~/.config/growth-ops-kit/**)", "Edit(~/.config/growth-ops-kit/**)", "Write(~/.config/growth-ops-kit/**)"]
     for cmd in cfg.get("deploy_commands") or []:
         deny.append(f"Bash({cmd}*)")
     host = urlsplit(cfg.get("site_url") or "").netloc
@@ -108,8 +143,10 @@ def install(folder: Path, name: str, site: str, kit_root: Path = KIT_ROOT, permi
     elif "${GROWTH_KIT:-" in str(cfg_s["statusLine"].get("command", "")) and "statusline.py" in cfg_s["statusLine"]["command"]:
         cfg_s["statusLine"]["command"] = status_command
     if permissions:
-        allow, deny = permissions_wanted(cfg or _project_cfg(folder))
+        allow, deny = permissions_wanted(cfg or _project_cfg(folder), kit_root)
         perm = cfg_s.setdefault("permissions", {})
+        if perm.get("allow"):
+            perm["allow"] = [a for a in perm["allow"] if not unsafe_allow(a)]     # our own older, unsafe entries only
         for key, wanted in (("allow", allow), ("deny", deny)):
             have = perm.setdefault(key, [])
             have.extend(w for w in wanted if w not in have)
@@ -190,10 +227,16 @@ def check(project: Path, cfg: dict) -> list[tuple[str, str, str, str]]:
         out.append(("Permissions block", "na", "the owner declined it (setup-state.json)", ""))
     else:
         allow, deny = permissions_wanted(cfg)
-        missing = [x for x in allow + deny if x != f"Bash({venv_python()} *)" and x not in (perm.get("allow") or []) + (perm.get("deny") or [])]
-        out.append(("Permissions block", "ok" if not missing else "todo",
-                    "allow and deny lists are in .claude/settings.json (see /permissions)" if not missing
-                    else f"{len(missing)} allow/deny entries missing, for example {missing[0]}", fix))
+        have_deny = perm.get("deny") or []
+        # the kit-folder entries name the kit's path at install time; any such entry counts
+        missing = [x for x in allow + deny if x not in (perm.get("allow") or []) + have_deny and not x.startswith(("Edit(//", "Write(//"))]
+        if not any(h.startswith("Edit(//") for h in have_deny):
+            missing.append("Edit(//<kit folder>/**)")
+        unsafe = [a for a in perm.get("allow") or [] if unsafe_allow(a)]
+        what = ("allow and deny lists are in .claude/settings.json (see /permissions)" if not missing and not unsafe
+                else (f"allow list has an entry that runs any code or moves a branch: {unsafe[0]}" if unsafe
+                      else f"{len(missing)} allow/deny entries missing (removed?), for example {missing[0]}"))
+        out.append(("Permissions block", "ok" if not missing and not unsafe else "todo", what, fix))
     skills = [p.parent.name for p in (KIT_DIR / "skills").glob("*/SKILL.md")]
     lost = [s for s in skills if not (project / ".claude" / "skills" / s / "SKILL.md").is_file()]
     out.append(("Skills", "ok" if not lost else "todo", f"skills present: {', '.join(skills)}" if not lost else f"missing skill: {', '.join(lost)}", fix))
@@ -211,5 +254,8 @@ def check(project: Path, cfg: dict) -> list[tuple[str, str, str, str]]:
             site = Path(project, cfg["site_repo"]).expanduser()
             if site.is_dir() and not hook_installed(site):
                 bad.append("site pre-commit")
-        out.append(("Git hooks", "ok" if not bad else "todo", "git pre-commit hooks installed" if not bad else f"not installed: {', '.join(bad)}", fix))
+        hp = subprocess.run(["git", "-C", str(project), "config", "--get", "core.hooksPath"], capture_output=True, text=True).stdout.strip()
+        if hp:
+            bad.append(f"core.hooksPath is set to {hp}, so git skips the installed hooks (git config --unset core.hooksPath)")
+        out.append(("Git hooks", "ok" if not bad else "todo", "git pre-commit hooks installed" if not bad else f"not installed or bypassed: {', '.join(bad)}", fix))
     return out

@@ -52,7 +52,19 @@ def required(cfg: dict) -> bool:
 
 def fix_browser(name: str = "") -> str:
     return (f"in Claude Code type /chrome, choose {name or 'the browser named in SETUP.md'}, check \"By default: on\"; then "
-            f"growth wizard confirm browser --name \"{name or 'Browser 1'}\"")
+            f"growth wizard confirm browser --name \"{name or 'Browser 1'}\", and the owner runs growth approve browser in their own terminal")
+
+
+def approval_problem(project, step: str, content) -> str | None:
+    """None when the owner approved exactly this confirmation (docs/approvals.jsonl); else the plain problem. A status of
+    "done" typed into setup-state.json by hand is not an approval."""
+    import approvals
+    from pathlib import Path
+    state, info = approvals.status(Path(project) / "docs", step, step, content)
+    if state == "ok":
+        return None
+    return approvals.explain(state, info, f"the {'research browser' if step == 'browser' else 'Google region'} confirmation",
+                             f"growth approve {step}")
 
 
 def problems(project, cfg: dict) -> list[str]:
@@ -63,10 +75,15 @@ def problems(project, cfg: dict) -> list[str]:
     out = []
     if not market.get("primary_country"):
         out.append("target market not set (growth.json market.primary_country): growth wizard answer market --country US --language en")
+    import approvals
     browser = wizard_state.get(project, "browser")
+    bname = (browser.get("answer") or {}).get("name", "") if isinstance(browser.get("answer"), dict) else ""
     if browser.get("status") != "done":
-        out.append("research browser not connected: " + fix_browser((browser.get("answer") or {}).get("name", "")
-                                                                        if isinstance(browser.get("answer"), dict) else ""))
+        out.append("research browser not connected: " + fix_browser(bname))
+    else:
+        p = approval_problem(project, "browser", approvals.browser_content(bname))
+        if p:
+            out.append(p)
     region = wizard_state.get(project, "region")
     seen = (region.get("answer") or {}).get("seen") if isinstance(region.get("answer"), dict) else None
     if market.get("primary_country"):
@@ -74,12 +91,16 @@ def problems(project, cfg: dict) -> list[str]:
         if region.get("status") != "done":
             if seen and not region_matches(seen, market):
                 out.append(f"Google's region reads \"{seen}\", not {want}: " + REGION_FIX.format(country=want)
-                           + "; then growth wizard confirm region --seen \"" + want + "\" --owner-confirmed")
+                           + "; then growth wizard confirm region --seen \"" + want + "\", and the owner runs growth approve region")
             else:
                 out.append(f"Google region for {want} not verified and confirmed by the owner: growth wizard confirm region --seen "
-                           f"\"<what Google's settings page says>\" --owner-confirmed")
+                           f"\"<what Google's settings page says>\", then the owner runs growth approve region in their own terminal")
         elif not region_matches(seen, market):
             out.append(f"recorded region \"{seen}\" is not the target market {want}: re-check it")
+        else:
+            p = approval_problem(project, "region", approvals.region_content(seen, want))
+            if p:
+                out.append(p)
         params = market.get("google_params", "")
         if "pws=0" not in params or f"gl={str(market['primary_country']).lower()}" not in params:
             out.append(f"market.google_params must carry gl={str(market['primary_country']).lower()} and pws=0 (now \"{params}\")")
@@ -102,6 +123,8 @@ def plain_problems(project, cfg: dict) -> list[str]:
     if region.get("status") != "done" or not region_matches(seen, market):
         out.append(f"Google shows \"{seen}\", not {want}." if seen and not region_matches(seen, market)
                    else f"Google's results region is not confirmed as {want} yet.")
+    if not out and problems(project, cfg):
+        out.append("You have not confirmed the research browser and Google's region in your own terminal yet (growth approve).")
     return out
 
 

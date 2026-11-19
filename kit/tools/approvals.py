@@ -4,8 +4,8 @@
   growth approve exception <check-id>            a growth.json design_exceptions entry (needs a why and an until date
                                                  at most 30 days ahead; evidence and process checks can never be excused)
   growth approve decision <journal-id>           an owner decision filed in the journal (growth journal add --kind decision)
-  growth approve browser                         the research browser the agent recorded (growth wizard confirm browser)
-  growth approve region                          Google's results region the agent read (growth wizard confirm region)
+  growth approve browser [--name "Browser 1"]     the research browser (named here, or as recorded by growth wizard confirm)
+  growth approve region [--seen "United States"] Google's results region (as read here, or as recorded by the wizard)
   growth approve answer <Q-id> "the answer"      answer an owner question in docs/tasks.json
   growth approve review <research/file.md>       sign off an independent review file
   growth approve baseline <key> --reason "..."   allow one re-freeze of a page's research baseline
@@ -354,11 +354,13 @@ def main(argv=None, tty=None) -> int:
         print(__doc__)
         return 0
     what, rest = argv[0], argv[1:]
-    reason = ""
-    if "--reason" in rest:
-        i = rest.index("--reason")
-        reason = " ".join(rest[i + 1:i + 2]).strip()
-        del rest[i:i + 2]
+    flags = {}
+    for flag in ("--reason", "--name", "--seen"):
+        if flag in rest:
+            i = rest.index(flag)
+            flags[flag] = " ".join(rest[i + 1:i + 2]).strip()
+            del rest[i:i + 2]
+    reason = flags.get("--reason", "")
     if what == "key":
         existed = read_key() is not None
         ensure_key()
@@ -402,6 +404,10 @@ def main(argv=None, tty=None) -> int:
     elif what in ("browser", "region"):
         import wizard_state as ws
         import research_gate as gate
+        if what == "browser" and flags.get("--name"):        # the owner names it here instead of the agent's record
+            ws.record(project, "browser", "tested", answer={"name": flags["--name"]}, source="owner")
+        if what == "region" and flags.get("--seen"):
+            ws.record(project, "region", "tested", answer={"seen": flags["--seen"], "owner_confirmed": False}, source="owner")
         st = ws.get(project, what)
         ans = st.get("answer") if isinstance(st.get("answer"), dict) else {}
         if what == "browser":

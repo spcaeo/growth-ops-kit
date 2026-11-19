@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from test_wizard import answers  # noqa: E402
-from wizard_helpers import ROOT, growth, make_site  # noqa: E402
+from wizard_helpers import ROOT, growth, make_site, owner_approve  # noqa: E402
 
 MAX_QUESTIONS = 8          # website, country, approver, live-site rule, safety helpers, browser done, region read, region right
 
@@ -17,7 +17,17 @@ def run_setup(tmp, port=18999, repo_answers=True):
     repo, index = make_site(tmp)
     f = answers(tmp, repo, live_rule={"rule": "no-crawl", "preview_url": f"http://127.0.0.1:{port}"},
                 browser={"name": "Browser 1"}, region={"seen": "United States", "owner_confirmed": True})
-    r = growth(tmp, "setup", str(tmp / "proj"), "--site", "https://shop.example", "--answers", str(f), "--sitemap", str(index))
+    args = ("setup", str(tmp / "proj"), "--site", "https://shop.example", "--answers", str(f), "--sitemap", str(index))
+    r = growth(tmp, *args)
+    # audit C4: an answers file (which an agent can write) no longer confirms the browser or the region; the owner approves
+    # both in their own terminal, then setup finishes
+    assert r.returncode == 3, r.stdout + r.stderr
+    for step in ("browser", "region"):
+        if step == "region":
+            growth(tmp, *args)                               # the run after the browser approval records the region it was told
+        rc, out = owner_approve(tmp, step, cwd=tmp / "proj")
+        assert rc == 0, out
+    r = growth(tmp, *args)
     return tmp / "proj", r, repo
 
 

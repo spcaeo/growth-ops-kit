@@ -106,3 +106,67 @@ def test_git_hooks_are_installed_only_with_a_yes_and_a13_checks_them(tmp_path):
     assert dict((r[0], r[1]) for r in harness.check(folder, cfg))["Git hooks"] == "todo"
     assert growth(tmp_path, "wizard", "--repair", cwd=folder).returncode == 0
     assert dict((r[0], r[1]) for r in harness.check(folder, cfg))["Git hooks"] == "ok"
+
+
+# ---- audit C4: the permissions hand the agent no arbitrary code, no ref or hook changes, no owner-only commands ----------
+
+def test_no_allow_entry_runs_arbitrary_code_or_moves_a_branch():
+    allow, deny = harness.permissions_wanted({"site_url": "https://shop.example"})
+    assert not any("python" in a or "pytest" in a for a in allow), allow
+    assert "Bash(git branch*)" not in allow and "Bash(git branch --list*)" in allow
+    for d in ("Bash(git branch -f*)", "Bash(git branch -D*)", "Bash(git update-ref*)", "Bash(*core.hooksPath*)", "Bash(*--no-verify*)",
+              "Bash(git * push*)", "Bash(env git*)"):
+        assert d in deny, d
+
+
+def test_owner_only_commands_and_protected_files_are_denied():
+    _, deny = harness.permissions_wanted({})
+    for cmd in ("approve", "wizard confirm", "tasks answer", "journal answer", "install_hooks remove"):
+        assert f"Bash(growth {cmd}*)" in deny and f"Bash(*/growth {cmd}*)" in deny, cmd
+    for f in (".claude/settings.json", "growth.json", "approvals.jsonl", ".git/hooks/**", "docs/tasks.json", "setup-state.json"):
+        assert f"Edit(**/{f})" in deny and f"Write(**/{f})" in deny, f
+    assert "Read(~/.config/growth-ops-kit/**)" in deny
+    assert any(d.startswith("Edit(//") and d.endswith("/**)") for d in deny)          # the kit folder itself
+
+
+def test_repair_removes_the_old_unsafe_allow_entries_and_doctor_flags_them(tmp_path):
+    folder, _ = new_project.make(tmp_path / "p", "https://shop.example")
+    p = folder / ".claude" / "settings.json"
+    cfg = settings(folder)
+    cfg["permissions"]["allow"] += ["Bash(/x/.growth-ops-kit/venv/bin/python *)", "Bash(git branch*)", "Bash(pytest*)", "Bash(ls)"]
+    p.write_text(json.dumps(cfg))
+    row = next(r for r in harness.check(folder, json.loads((folder / "growth.json").read_text())) if r[0] == "Permissions block")
+    assert row[1] == "todo" and "runs any code or moves a branch" in row[2]
+    harness.install(folder, "p", "https://shop.example")
+    allow = settings(folder)["permissions"]["allow"]
+    assert "Bash(ls)" in allow and not any(harness.unsafe_allow(a) for a in allow)
+
+
+def test_a_removed_deny_entry_or_a_bypassed_git_hook_is_noticed(tmp_path):
+    import subprocess
+    folder, _ = new_project.make(tmp_path / "p", "https://shop.example")
+    cfg = json.loads((folder / "growth.json").read_text())
+    p = folder / ".claude" / "settings.json"
+    s = settings(folder)
+    s["permissions"]["deny"].remove("Bash(growth approve*)")
+    p.write_text(json.dumps(s))
+    row = next(r for r in harness.check(folder, cfg) if r[0] == "Permissions block")
+    assert row[1] == "todo" and "missing" in row[2]
+    ws.record(folder, "harness", "done", answer={"permissions": True, "git_hooks": True})
+    subprocess.run(["git", "init", "-q", str(folder)], check=True)
+    subprocess.run(["git", "-C", str(folder), "config", "core.hooksPath", "/dev/null"], check=True)
+    row = next(r for r in harness.check(folder, cfg) if r[0] == "Git hooks")
+    assert row[1] == "todo" and "core.hooksPath" in row[2]
+
+
+def test_growth_runs_only_kit_tools_by_name_never_a_path(tmp_path):
+    import shutil
+    import tempfile
+    d = Path(tempfile.mkdtemp(prefix="gokevil"))           # the system temp folder: no hyphen, which growth would turn into _
+    try:
+        assert "-" not in str(d), d
+        (d / "evil.py").write_text("print('RAN')\n")
+        r = growth(tmp_path, "../" * 12 + str(d / "evil").lstrip("/"))
+        assert r.returncode == 2 and "RAN" not in r.stdout
+    finally:
+        shutil.rmtree(d)

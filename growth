@@ -11,6 +11,7 @@
 Tools find the project from $GROWTH_PROJECT, else the nearest folder at or above the current one holding growth.json.
 """
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -123,6 +124,8 @@ def usage():
 
 
 def resolve(name):
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name or ""):
+        return None                     # a tool is a name, never a path: growth ../../x must not run a file outside the kit
     name = ALIASES.get(name, name).replace("-", "_")
     if name in TOOLS:
         return KIT / TOOLS[name][0]

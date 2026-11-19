@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import wizard_state as ws  # noqa: E402
-from wizard_helpers import growth, make_site  # noqa: E402
+from wizard_helpers import growth, make_site, owner_approve  # noqa: E402
 
 
 def answers(tmp, repo, **over):
@@ -49,11 +49,15 @@ def test_setup_is_not_done_until_browser_and_region_are_confirmed(tmp_path):
     proj, _, _ = start(tmp_path)
     assert growth(tmp_path, "wizard", cwd=proj).returncode == 3                      # still waiting: resumes at browser
     growth(tmp_path, "wizard", "confirm", "browser", "--name", "Browser 1", cwd=proj)
+    assert growth(tmp_path, "wizard", cwd=proj).returncode == 3                      # recorded, not yet approved by the owner
+    assert owner_approve(tmp_path, "browser", cwd=proj)[0] == 0
     r = growth(tmp_path, "wizard", cwd=proj)
     assert r.returncode == 3 and "WAITING region" in r.stdout
-    bad = growth(tmp_path, "wizard", "confirm", "region", "--seen", "Current Region", "--owner-confirmed", cwd=proj)
+    bad = growth(tmp_path, "wizard", "confirm", "region", "--seen", "Current Region", cwd=proj)
     assert bad.returncode == 1 and growth(tmp_path, "wizard", cwd=proj).returncode == 3
-    assert growth(tmp_path, "wizard", "confirm", "region", "--seen", "United States", "--owner-confirmed", cwd=proj).returncode == 0
+    growth(tmp_path, "wizard", "confirm", "region", "--seen", "United States", cwd=proj)
+    assert growth(tmp_path, "wizard", cwd=proj).returncode == 3                      # audit C4: needs the owner, not a flag
+    assert owner_approve(tmp_path, "region", cwd=proj)[0] == 0
     r = growth(tmp_path, "wizard", cwd=proj)
     assert r.returncode == 0 and "SETUP NOT DONE" not in r.stdout
     out = growth(tmp_path, "doctor", cwd=proj).stdout
