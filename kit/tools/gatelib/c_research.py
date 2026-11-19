@@ -23,7 +23,7 @@ def record(ctx):
 def need_record(ctx):
     rec = record(ctx)
     if rec is None:
-        raise Skip(f"no research record yet (growth research init {ctx.path} --key {ctx.key}); ev.research-record fails until there is one")
+        raise Skip(f"no research record yet (growth research init {ctx.path} --key {ctx.key}); ev.research-record fails until there is one", blocked=True)
     return rec
 
 

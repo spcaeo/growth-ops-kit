@@ -173,7 +173,8 @@ def main():
     d = json.loads(LEDGER.read_text()) if LEDGER.exists() else {}
     ok = not health and not plan_fails
     d[path] = {"ok": ok, "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "site_problems": len(health),
-               "plan_missing": len(plan_fails), "plan": plan_file.relative_to(PROJECT).as_posix()}
+               "plan_missing": len(plan_fails), "plan": plan_file.relative_to(PROJECT).as_posix(),
+               "key": a.key}
     LEDGER.write_text(json.dumps(d, indent=1) + "\n")
     print(f"PRE-FLIGHT {'PASS' if ok else 'FAIL'} {path}: " + ("build may start." if ok else "do not start the build."))
     sys.exit(0 if ok else 1)

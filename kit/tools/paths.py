@@ -17,6 +17,12 @@ def snapshot_slug(path: str) -> str:
     return "home" if k == "/" else k.strip("/").replace("/", "__")
 
 
+def default_key(path: str) -> str:
+    """The page key when none is given: the page's whole snapshot slug, so two different paths never share a key
+    (the old "first two words" key gave /blog/pricing-guide and /blog/pricing-tips the same one)."""
+    return snapshot_slug(path)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):

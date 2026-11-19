@@ -86,7 +86,8 @@ def to_path(target: str, cfg: dict) -> str:
 
 
 def default_key(path: str) -> str:
-    return "-".join((path.strip("/").replace("/", "-") or "home").split("-")[:2])
+    import paths
+    return paths.default_key(path)
 
 
 def guess_type(path: str, cfg: dict) -> str:

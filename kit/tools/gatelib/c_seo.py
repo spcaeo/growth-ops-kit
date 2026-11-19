@@ -7,7 +7,7 @@ from techseo.net import Fetcher
 from techseo.page import Page
 from techseo.report import Report
 
-from .core import ALL, Missing, check
+from .core import ALL, Missing, Skip, check
 
 # check id -> (rule, technical SEO ids, what)
 BRIDGE = {
@@ -53,7 +53,7 @@ def techseo(ctx):
             c_index.run_url(p)
             c_meta.run_meta(p)
             c_meta.run_content(p)
-            c_links.run_links(p, 80, not ctx.cache.get("no_link_status"))
+            c_links.run_links(p, int(ctx.cfg.get("link_check_cap") or 200), not ctx.cache.get("no_link_status"))
             c_images.run_images(p)
             c_schema.run_schema(p, {"money": "money", "post": "article", "hub": "hub"}.get(ctx.ptype, "other"),
                                 (ctx.cfg.get("schema_types") or {}).get("money"))
@@ -76,6 +76,8 @@ def make(cid, rule, ids, what):
         if not sel:
             raise Missing(f"technical SEO results for {', '.join(ids or ['any check'])}",
                           f"run growth tech_seo_check {ctx.url} and fix why it stopped")
+        if not ctx.cache.get("no_link_status") and any(r.cid == "LNK-02" and r.level == "SKIP" for r in sel):
+            raise Skip("internal link status was not fetched (the run did not allow it)", blocked=True)
         fails = [r for r in sel if r.level == "FAIL"]
         warns = [r for r in sel if r.level == "WARN"]
         if fails:
@@ -85,7 +87,8 @@ def make(cid, rule, ids, what):
             ctx.warn("; ".join(f"{r.cid} {r.msg}" for r in warns[:3]), " | ".join(dict.fromkeys(r.fix for r in warns[:3] if r.fix))
                      or "see the technical SEO playbook")
         else:
-            ctx.ok(f"{len(sel)} technical SEO line(s) pass ({', '.join(sorted({r.cid for r in sel})[:6])})")
+            ctx.ok(f"{len(sel)} technical SEO line(s) pass ({', '.join(sorted({r.cid for r in sel})[:6])})"
+                   + "".join(f"; {r.msg}" for r in sel if r.cid == "LNK-02" and r.level == "OK"))
     return _bridge
 
 

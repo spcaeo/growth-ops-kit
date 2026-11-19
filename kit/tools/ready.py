@@ -5,7 +5,7 @@
   growth ready --list                                           # what is READY now
 
 A page is READY only when the full gate, run on the one preview address (growth.json preview_url) against the
-worktree that serves it (growth.json preview_repo), shows 0 FAIL. That includes the independent review (rule 109),
+worktree that serves it (growth.json preview_repo), shows 0 FAIL. That includes the status of every internal link (growth.json link_check_cap, default 200), the independent review (rule 109),
 fresh screenshots and click-test, the fact check, the AI baseline and the speed run: no exceptions, no "known" FAILs.
 Manual checkpoints (research/<key>-checkpoints.md, see `growth checkpoints`) must each be ticked with a proof.
 READY is recorded in journal/ready.json with the commit it was checked at; any later commit makes it not READY again.
@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -75,6 +76,66 @@ def manual_problems(path, key):
     return checkpoints.manual_status(plan.read_text())[2]
 
 
+GATE_LINE = re.compile(r"^Gate: (\d+) FAIL, (\d+) WARN, (\d+) OK, (\d+) SKIP, (\d+) BLOCKED-SKIP", re.M)
+RESULT_LINE = re.compile(r"^(?:(?:FAIL|WARN|OK)\s+\S+\s+\[([\w.-]+)\]|(?:BLOCKED-)?SKIP ([\w.-]+):)", re.M)
+
+
+def run_gate(cmd):
+    """Run the gate; a gate that cannot even start is a result too (code 99), never an exception that skips the verdict."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT)
+    except OSError as e:
+        return subprocess.CompletedProcess(cmd, 99, "", f"{type(e).__name__}: {e}")
+
+
+def expected_checks(ptype):
+    """The check ids the gate must report for a page of this type at READY: the build stage, plus house.features."""
+    from gatelib import CHECKS
+    ids = {c.cid for c in CHECKS.values() if ptype in c.types and c.stage == "build"}
+    return ids | {"house.features"}
+
+
+def gate_problem(r, ptype):
+    """"" when the gate ran to the end and reported every check; else the plain reason it did not.
+    Fail closed: a non-zero exit, no summary line, no checks run or a check that did not report is never READY."""
+    out = r.stdout or ""
+    if r.returncode != 0 and not any(l.startswith("FAIL") for l in out.splitlines()):
+        why = ((r.stderr or "").strip().splitlines() or ["no message"])[-1][:160]
+        return f"gate did not complete (exit code {r.returncode}): {why}"
+    summ = GATE_LINE.findall(out)
+    if len(summ) != 1:
+        return f"gate did not complete: expected one 'Gate:' summary line, found {len(summ)}"
+    if not any(int(x) for x in summ[0]):
+        return "gate ran 0 checks"
+    try:
+        want = expected_checks(ptype)
+    except Exception as e:  # noqa: BLE001
+        return f"gate checks could not be loaded: {type(e).__name__}: {str(e)[:120]}"
+    if int(summ[0][4]) or re.search(r"^BLOCKED-SKIP ", out, re.M):
+        names = sorted({m for m in re.findall(r"^BLOCKED-SKIP ([\w.-]+):", out, re.M)})
+        return f"{int(summ[0][4])} required check(s) could not run ({', '.join(names[:6])}); install what they need or fix the setup, then run ready again"
+    got = {a or b for a, b in RESULT_LINE.findall(out)}
+    if want - got:
+        return f"gate did not report {len(want - got)} expected check(s): {', '.join(sorted(want - got)[:6])}"
+    return ""
+
+
+def key_problem(path, key):
+    """The key a page was pre-flighted with is its key for good: READY refuses another one (a page cannot borrow the
+    review, dossier and fact check of a different page by naming its key). "" when it matches."""
+    try:
+        e = json.loads((PROJECT / "journal" / "preflight.json").read_text()).get(path, {})
+    except (OSError, ValueError):
+        return ""                        # no pre-flight record: ev.preflight is the check that wants one
+    if not e:
+        return ""
+    if not e.get("key"):
+        return f"the pre-flight of {path} did not record a page key: run growth preflight {path} again with --key {key}"
+    if e["key"] != key:
+        return f"{path} was pre-flighted with key '{e['key']}', not '{key}': use --key {e['key']}"
+    return ""
+
+
 def held_proposals(key):
     """The page's held-field proposals with their status (growth held): listed so the owner sees them before a freeze lifts."""
     import held
@@ -110,9 +171,12 @@ def main():
         sys.exit("growth.json has no preview_url: set the one address the owner sees previews on")
     url = CFG["preview_url"].rstrip("/") + path
     cmd = [sys.executable, str(KIT_DIR / "tools" / "gate.py"), "page", path, "--url", url,
-           "--type", a.type, "--key", a.key, "--no-link-status"] + (["--repo", str(repo)] if repo else [])
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT)
+           "--type", a.type, "--key", a.key] + (["--repo", str(repo)] if repo else [])
+    r = run_gate(cmd)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
+    broken = key_problem(path, a.key) or gate_problem(r, a.type)
+    if broken:
+        fails.insert(0, f"FAIL {broken}")
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     held_lines = held_proposals(a.key)
