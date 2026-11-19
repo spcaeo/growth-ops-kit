@@ -40,6 +40,7 @@ def project_stack():
 # tool -> (where it lives under kit/, one line)
 TOOLS = {
     "gate": ("tools/gate.py", "run every check of the page rulebook on one page (growth gate page /x --url ...), or process, engine, coverage"),
+    "serve": ("tools/serve.py", "serve a production build's folder on 127.0.0.1 (growth serve <dist>), so READY runs on the build and not on a dev server"),
     "ready": ("tools/ready.py", "the golden rule: a page is READY only when the full gate shows 0 FAIL on the one preview address"),
     "checkpoints": ("tools/checkpoints.py", "the manual checks of a page's checkpoints file: which are ticked with proof, which are open"),
     "preflight": ("tools/preflight.py", "before building a page: planning complete, site healthy, every checkpoint written down"),
