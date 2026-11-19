@@ -64,17 +64,21 @@ def fetch(force=False):
         except ValueError:
             cached = None
     if config.source_on("sitemap"):
-        if cached and not force and cached.get("source") == "sitemap" and cached.get("fetched", "")[:10] == today and cached.get("pages"):
+        if (cached and not force and cached.get("source") == "sitemap" and cached.get("fetched", "")[:10] == today
+                and cached.get("pages") and "trailing_slash" in cached):
             return cached
         try:
-            pages, seen = [], set()
+            pages, seen, slash = [], set(), []
             for loc, lm in sitemaps.read(config.SITEMAP_URL, get=_status_get):   # follows a sitemap index
+                if to_path(loc) not in (None, "/"):
+                    slash.append(loc.split("#", 1)[0].split("?", 1)[0].endswith("/"))
                 p = to_path(loc)
                 if p and p not in seen:
                     seen.add(p); pages.append(dict(path=p, lastmod=lm))
             if not pages:
                 raise ValueError("the sitemap lists no page")
-            out = dict(fetched=now.isoformat(timespec="minutes"), source="sitemap", pages=pages, error=None)
+            out = dict(fetched=now.isoformat(timespec="minutes"), source="sitemap", pages=pages, error=None,
+                       trailing_slash=bool(slash) and sum(slash) * 2 > len(slash))   # most addresses end in "/"
             json.dump(out, open(CACHE, "w", encoding="utf-8"), indent=1)
             return out
         except Exception as e:

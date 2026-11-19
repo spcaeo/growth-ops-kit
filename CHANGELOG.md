@@ -31,6 +31,11 @@ The kit and the book share one version number. Dates are written year-month-day.
   A2 also searches its pages (html, txt, xml, md, json), so a leftover on the site itself fails too. The line says
   how many files were searched and how many mention the old brand, with the build's absolute path; with no build
   (unset, missing, or no page files) A2 is TODO, never OK.
+- Sites whose addresses end in "/": the page tracker asked analytics for /x while Search Console keys the page as
+  /x/, so every page's Google numbers came back 0 (and page_journeys' replies, keyed /x/, were never matched). The
+  tracker learns the site's form from its sitemap (`trailing_slash` in sitemap-cache.json; `page_tracker.trailing_slash`
+  overrides) and sends that form. The inventory matches sitemap paths, tracker numbers and growth.json lists
+  (money_core, core_pages, new_pages) with or without the slash.
 
 ## 2.0.1 - 2026-11-18
 
