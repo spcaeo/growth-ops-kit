@@ -32,7 +32,9 @@ Nothing enters either route unless the page passed pre-flight before its build (
 2. **Checks on the branch** (in a worktree that has its dependencies): `growth checks`, and
    `growth gate page <path> --url <local URL> --repo . --type <type>`. Fix on the branch until all pass. If one fails
    the same way on the production branch, say so and stop.
-3. **Local preview.** The dev server on its own port, looked at by someone who did not write the change, at the widths
+3. **Local preview.** The gate and READY run on the production build served locally (`growth serve <dist>`, or the site's own
+   preview command in `growth.json` `preview_cmd`); `ev.prod-build` fails a page a dev server answered. The preview
+   is looked at by someone who did not write the change, at the widths
    of rule 106 (360 to 1920). The review surface is a localhost address, not the code host or the hosting dashboard
    (rule 113). Close the browser and stop the server when done.
 4. **Push the branch and open the pull request** (`git push -u origin <branch>`, `gh pr create`). This does not deploy

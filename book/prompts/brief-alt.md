@@ -14,6 +14,9 @@ tool or none.
    titles and what none of them offers.
 3. Mistakes to avoid: every `__PROJECT__/research/*-verify-*.md` (the independent checks: learn their kinds,
    especially unfair comparisons, prices shown as if the vendor's, unsourced numbers).
+4. Comparison rule (rule 109, `kit/checklists/review.md` R1 to R3): for every price sum or "cheaper" claim, name the
+   feature the sum is about, then price the cheapest plan on each side that HAS that feature. Every number in the head
+   and the verdict is also stated in the body with its source. No two answers (FAQ, body, verdict) say different things.
 
 ## Deliver, in order (commit after each step, by path)
 0. Plan and fact check: `__PROJECT__/research/__SLUG__-plan-__DATE__.md` (who lands here and why; the reader paths;

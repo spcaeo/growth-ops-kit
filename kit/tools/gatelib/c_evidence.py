@@ -110,10 +110,45 @@ def dossier(ctx):
                 "answer all 32 dossier questions (money-page playbook)")
 
 
-@check("ev.review", "109", ALL, "an independent review or audit of the built page, within 30 days", needs="project")
+def checklist_ids(ctx):
+    """The ids (R1, R2 ...) of kit/checklists/review.md: the fixed list every independent review answers."""
+    f = ctx.kit_dir / "checklists" / "review.md"
+    return re.findall(r"(?m)^- \*\*(R\d+)\b", f.read_text()) if f.is_file() else []
+
+
+VERDICT = r"(?mi)^[\s>*_`|-]*(?:\[.\]\s*)?(R\d+)\b[\s:.)*_`|-]*(pass(?:ed)?|fixed|n/a)\b"
+
+
+def review_problems(text, ids):
+    """What an independent review file still lacks: a verdict (pass, fixed, n/a) for every checklist id, and a reviewer
+    who is not the builder."""
+    got = {m.group(1).upper() for m in re.finditer(VERDICT, text)}
+    out = [f"{i} has no verdict (pass, fixed or n/a)" for i in ids if i not in got]
+    rev = re.search(r"(?mi)^[\s*_-]*reviewer\b[\s*_]*:\s*(.+)$", text)
+    bld = re.search(r"(?mi)^[\s*_-]*builder\b[\s*_]*:\s*(.+)$", text)
+    if not rev or not rev.group(1).strip().strip("*_ "):
+        out.append("no 'Reviewer: <model>' line")
+    elif bld and bld.group(1).strip().lower() == rev.group(1).strip().lower():
+        out.append("the reviewer is the builder (a different model must review)")
+    return out
+
+
+@check("ev.review", "109", ALL, "an independent review of the built page, within 30 days, that answers every item of the review checklist", needs="project")
 def review(ctx):
-    research_fresh(ctx, REVIEW_NAME, "independent review",
-                   "have a reviewer (a different model from the builder) audit the page; save research/<page>-audit-<date>.md or <page>-review-<date>.md (rule 109)")
+    files = ctx.research(REVIEW_NAME)
+    cut = (dt.datetime.now() - dt.timedelta(days=FRESH_DAYS)).timestamp()
+    fresh = [f for f in files if mtime(f) >= cut]
+    fix = ("have a reviewer (a different model from the builder) review the page against kit/checklists/review.md: growth review new "
+           f"{ctx.key or '<page>'} writes research/<page>-review-<date>.md; answer every item (rule 109)")
+    if not fresh:
+        ctx.fail(f"no independent review in research/ within {FRESH_DAYS} days", fix)
+        return
+    ids = checklist_ids(ctx)
+    if not ids:
+        raise Missing("kit/checklists/review.md", "restore the kit's review checklist")
+    probs = review_problems(fresh[-1].read_text(errors="replace"), ids)
+    ctx.verdict([f"{fresh[-1].name}: " + "; ".join(probs[:6]) + (f"; +{len(probs) - 6} more" if len(probs) > 6 else "")] if probs else [],
+                f"independent review: {fresh[-1].name} answers all {len(ids)} checklist items", fix)
 
 
 @check("ev.ai-baseline", "152", ("money",), "AI-answer baseline: 10+ journal runs for the page in the US market within 30 days", needs="project")

@@ -135,6 +135,8 @@
   "link_words": {"product_words": [], "generic": [], "stem": {}},
   "preview_url": "",
   "_preview_url": "The one address the owner sees previews on. Empty = the golden-rule guard (ready, url_guard) is off.",
+  "preview_cmd": "",
+  "_preview_cmd": "The site's own command that serves the PRODUCTION build locally (for example the framework's preview command), when growth serve <dist> does not fit (a site that renders on a server). READY must run on a production build, never a dev server (rule 106).",
   "preview_repo": "",
   "_preview_repo": "The worktree the page is built in. Required when site_repo is set: READY and the evidence dates read this folder, not the main site checkout.",
   "checkpoints_extra": "",

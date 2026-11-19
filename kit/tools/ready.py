@@ -75,6 +75,19 @@ def manual_problems(path, key):
     return checkpoints.manual_status(plan.read_text())[2]
 
 
+def held_proposals(key):
+    """The page's held-field proposals with their status (growth held): listed so the owner sees them before a freeze lifts."""
+    import held
+    return held.lines(held.load(held.plan_path(PROJECT, key)))
+
+
+def print_held(lines):
+    if lines:
+        print(f"Held-field proposals ({len(lines)}; growth held list <key>):")
+        for l in lines:
+            print(" ", l[:200])
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("path", nargs="?")
@@ -102,6 +115,7 @@ def main():
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
+    held_lines = held_proposals(a.key)
     d = ledger()
     if fails:
         d.pop(path, None)
@@ -109,10 +123,12 @@ def main():
         print(f"NOT READY {path}: {len(fails)} FAIL, {oks} OK. The URL may not be shared with the owner.")
         for l in fails:
             print(" ", l[:200])
+        print_held(held_lines)
         sys.exit(1)
     d[path] = {"commit": head(repo), "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "ok": oks, "url": url}
     LEDGER.write_text(json.dumps(d, indent=1) + "\n")
     print(f"READY {path}: 0 FAIL, {oks} OK at {d[path]['commit'][:7]}. It may be shared: {url}")
+    print_held(held_lines)
 
 
 if __name__ == "__main__":

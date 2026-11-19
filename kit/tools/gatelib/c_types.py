@@ -66,7 +66,8 @@ def toc(ctx):
 @check("post.read-next", "54", ("post",), "exactly one 'Read next' section under the post", needs="live")
 def read_next(ctx):
     m = domx.main(ctx.root())
-    n = [h for h in find_all(m, "h2") + find_all(m, "h3") if re.search(r"(?i)^(read next|related)", domx.text(h))]
+    boxes = design.find(ctx, "read_next")      # an <aside>/<nav>/<section> labelled Read next, else growth.json design.read_next
+    n = boxes or [h for h in find_all(m, "h2") + find_all(m, "h3") if re.search(r"(?i)^(read next|related)", domx.text(h))]
     ctx.verdict([] if len(n) == 1 else [f"{len(n)} read-next sections"], "one Read next section", "keep exactly one 'Read next' section (rule 54)")
 
 

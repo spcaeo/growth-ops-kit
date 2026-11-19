@@ -84,8 +84,12 @@ def test_a_key_containing_review_does_not_pass_on_another_research_file(tmp_path
 def test_a_dated_audit_or_review_file_passes(tmp_path):
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
-    assert run_review(review_ctx(tmp_path / "a", "asana-review", ["asana-review-audit-2026-11-18.md"])) == "OK"
-    assert run_review(review_ctx(tmp_path / "b", "lawn", ["lawn-opus-review-2026-11-18.md"])) == "OK"
+    from gatelib.c_evidence import checklist_ids
+    full = "Reviewer: model-b\nBuilder: model-a\n" + "".join(f"{i} pass: seen\n" for i in checklist_ids(review_ctx(tmp_path, "k", [])))
+    for sub, key, name in (("a", "asana-review", "asana-review-audit-2026-11-18.md"), ("b", "lawn", "lawn-opus-review-2026-11-18.md")):
+        ctx = review_ctx(tmp_path / sub, key, [name])
+        (tmp_path / sub / "research" / name).write_text(full)
+        assert run_review(ctx) == "OK"
 
 
 def test_an_undated_review_name_fails(tmp_path):
