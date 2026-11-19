@@ -28,6 +28,21 @@ def row(step, ok, what, fix=""):
     rows.append((step, st, what, "" if ok is True or ok == "busy" else fix))
 
 
+def port_in_use(port):
+    import socket
+    with socket.socket() as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def port_is_our_tracker(port):
+    """True when what answers on the port is a page tracker dashboard."""
+    try:
+        return b"page change tracker" in urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2).read(200_000)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def a5_state(setup_text, repo=None):
     """(ok, what) for the 'Control check' row of SETUP.md: the status cell (the last one) says done, and the row names at
     least one commit id. With a site repo, every id must exist in it (git cat-file), so a made-up id does not pass."""
@@ -235,15 +250,21 @@ if db.exists():
         locked = locked or "locked" in str(e).lower() or "busy" in str(e).lower()
     measured = not CFG.get("site_repo") or bool(n_changes)
     ok8 = (lo == start or not start) and hi and hi >= (date.today() - timedelta(days=3)).isoformat() and not auto_jobs and measured
+    _port = int(CFG.get("tracker_port", 18700))
+    _foreign = port_in_use(_port) and not port_is_our_tracker(_port)
+    jobs_note += f"; port {_port} is in use by another program" if _foreign else ""
     st8 = True if ok8 else (False if not measured else None)
     if locked and st8 is not True:
         st8, jobs_note = "busy", jobs_note + "; database is busy (a sync is writing), check again in a minute"
+    elif _foreign and st8 is True:
+        st8 = None
     row("A8 Page tracker running, history backfilled", st8,
         f"Search Console {lo} to {hi} (history starts {start}); {jobs_note}"
         + (f"; pages with a content file: {n_files}, changes tracked: {n_changes}" if CFG.get("site_repo") else ""),
         ("set growth.json page_tracker.content_globs (or content_dirs / page_sources) so pages map to their files, then "
          "growth page-tracker sync" if not measured else
-         "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job"))
+         "growth page-tracker sync | growth page-tracker search-history | remove any auto-start job"
+         + (f" | set tracker_port in growth.json to a free port ({_port} is taken)" if _foreign else "")))
 else:
     row("A8 Page tracker running, history backfilled", False, f"page-tracker/tracker.db missing; {jobs_note}",
         "growth page-tracker sync (book/01-flow.md A8)" + (" | remove any auto-start job" if auto_jobs else ""))

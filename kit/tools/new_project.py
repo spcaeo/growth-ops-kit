@@ -43,6 +43,18 @@ __pycache__/
 """
 
 
+def port_is_free(port: int) -> bool:
+    import socket
+    with socket.socket() as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", port)) != 0
+
+
+def free_port(start: int, tries: int = 100) -> int:
+    """`start` when nothing listens there, else the next free port above it."""
+    return next((p for p in range(start, start + tries) if port_is_free(p)), start)
+
+
 def name_from(site: str) -> str:
     host = urlsplit(site).netloc.lower().removeprefix("www.")
     return (host.split(".")[0] or "site").replace("-", " ").title()
@@ -117,6 +129,8 @@ def make(folder: Path, site: str, name: str = "", stack: str = "static", force: 
     cfg_file = folder / "growth.json"
     cfg = json.loads(cfg_file.read_text())
     cfg["stack"] = stack
+    if cfg_file in made and isinstance(cfg.get("tracker_port"), int):     # a new file only: never move a port the owner chose
+        cfg["tracker_port"] = free_port(cfg["tracker_port"])
     cfg_file.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
     for d in WORK_DIRS:
         (folder / d).mkdir(parents=True, exist_ok=True)
