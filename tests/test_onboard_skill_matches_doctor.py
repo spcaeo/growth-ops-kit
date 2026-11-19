@@ -20,3 +20,14 @@ def test_the_skill_table_has_a_row_for_every_doctor_step():
 
 def test_the_skill_does_not_hard_code_a_step_count():
     assert not re.search(r"\b\d{1,2}/\d{1,2}\b", SKILL), "write 'every step OK' (doctor's last line), not a number"
+
+
+def test_every_growth_command_the_skill_names_exists():
+    """Each `growth <tool>` in the onboard skill is a real command."""
+    import sys
+    sys.path.insert(0, str(ROOT))
+    ns = {}
+    exec(compile((ROOT / "growth").read_text(), "growth", "exec"), {"__name__": "x", "__file__": str(ROOT / "growth")}, ns)
+    known = set(ns["TOOLS"]) | {"help", "setup", "page", "check", "ready", "measure", "status", "doctor", "wizard", "new-project"}
+    named = set(re.findall(r"`growth ([a-z][a-z_-]+)", SKILL))
+    assert not {n for n in named if n not in known and n.replace("-", "_") not in known}, named - known

@@ -127,7 +127,7 @@ def test_a_bad_recheck_date_is_refused_and_due_never_crashes(demo_project):
     assert r.returncode != 0 and "YYYY-MM-DD" in r.stderr
     (demo_project / "journal").mkdir(exist_ok=True)
     with (demo_project / "journal" / "entries.jsonl").open("a") as f:
-        f.write(json.dumps({"id": "J0099", "at": "x", "pages": ["/x"], "kind": "finding", "status": "open", "title": "bad", "recheck_on": "soon"}) + "\n")
+        f.write(json.dumps({"id": "J0099", "at": "2026-11-19 06:48-05:00", "pages": ["/x"], "kind": "finding", "status": "open", "title": "bad", "recheck_on": "soon"}) + "\n")
     r = tool(demo_project, "journal.py", "due")
     assert r.returncode == 0 and "BAD DATE" in r.stderr
 

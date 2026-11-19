@@ -38,6 +38,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import PROJECT, TZ, CFG  # noqa: E402
 import paths  # noqa: E402  (one form of a site path)
+import atomic  # noqa: E402  (lock + atomic write: parallel agents never lose a line)
 
 J = PROJECT / "journal"
 ENTRIES = J / "entries.jsonl"
@@ -46,7 +47,37 @@ RUNS = J / "runs"
 
 
 def now():
-    return dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z")
+    """Stored time: ISO 8601 to the minute with the UTC offset, e.g. 2026-11-19 06:48-05:00 (the zone is part of the value)."""
+    return dt.datetime.now(TZ).isoformat(sep=" ", timespec="minutes")
+
+
+_LEGACY_AT = re.compile(r"^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) ([A-Za-z]{2,5})$")
+
+
+def parse_at(value):
+    """A journal time as an aware datetime, or None when it is not a real time with a zone.
+
+    Accepts ISO 8601 with an offset ("2026-11-19 06:48-05:00", "2026-11-19T06:48:00Z") and the older "2026-11-19 06:48 EST"
+    form only when the zone name is UTC/GMT or is the project's own timezone name at that moment. Anything else (no zone,
+    a made-up zone, text) is None: callers must ignore such an entry, never count it as fresh."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    v = value.strip()
+    m = _LEGACY_AT.match(v)
+    if m:
+        try:
+            naive = dt.datetime.strptime(f"{m.group(1)} {m.group(2)}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            return None
+        if m.group(3).upper() in ("UTC", "GMT"):
+            return naive.replace(tzinfo=dt.timezone.utc)
+        local = naive.replace(tzinfo=TZ)
+        return local if local.tzname() == m.group(3) else None
+    try:
+        d = dt.datetime.fromisoformat(v)
+    except ValueError:
+        return None
+    return d if d.tzinfo is not None and d.utcoffset() is not None else None
 
 
 def today():
@@ -54,14 +85,30 @@ def today():
 
 
 def slug(path):
-    s = path.strip("/") or "home"
-    return re.sub(r"[^a-z0-9-]+", "-", s.lower()).strip("-")
+    """The page's folder/note name: paths.snapshot_slug, the same one every tool uses ("site"/"off-site" stay words)."""
+    return paths.snapshot_slug(path) if path.startswith("/") else (re.sub(r"[^a-z0-9-]+", "-", path.lower()).strip("-") or "site")
 
 
 def load():
+    """Every entry with a readable time. A line with a bad or zone-less time (or broken JSON) is left out and reported on
+    stderr, so an edited or damaged entry can never count as fresh."""
     if not ENTRIES.exists():
         return []
-    return [json.loads(l) for l in ENTRIES.read_text().splitlines() if l.strip()]
+    out = []
+    for n, l in enumerate(ENTRIES.read_text().splitlines(), 1):
+        if not l.strip():
+            continue
+        try:
+            e = json.loads(l)
+        except ValueError:
+            print(f"journal: line {n} of entries.jsonl is not valid JSON and is ignored", file=sys.stderr)
+            continue
+        if parse_at(e.get("at")) is None:
+            print(f"journal: {e.get('id') or e.get('of') or 'line ' + str(n)} has an unreadable time {e.get('at')!r} "
+                  f"(needs an ISO time with a zone) and is ignored", file=sys.stderr)
+            continue
+        out.append(e)
+    return out
 
 
 def state():
@@ -81,14 +128,22 @@ def state():
 
 
 def next_id():
-    n = sum(1 for e in load() if "of" not in e) + 1
+    """The next free id. Only call it while holding the journal lock (main() does), or two writers get the same id.
+    It counts the highest id used, not the lines, so an ignored line never makes an id repeat."""
+    used = []
+    for l in (ENTRIES.read_text().splitlines() if ENTRIES.exists() else []):
+        try:
+            m = re.fullmatch(r"J(\d+)", str(json.loads(l).get("id", "")))
+        except (ValueError, AttributeError):
+            continue
+        if m:
+            used.append(int(m.group(1)))
+    n = max(used or [0]) + 1
     return f"J{n:04d}"
 
 
 def append(obj):
-    J.mkdir(parents=True, exist_ok=True)
-    with ENTRIES.open("a") as f:
-        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    atomic.append_line(ENTRIES, json.dumps(obj, ensure_ascii=False))
 
 
 def norm_pages(pages):
@@ -147,7 +202,7 @@ def render_actions(cur):
     out += ["", "## Done", "", "| # | Action | Done | Note |", "| --- | --- | --- | --- |"]
     for e in [r for r in rows if r.get("status") != "open"]:
         out.append(f"| {e['id']} | {e['title']} | {e.get('done_at', '')} | {e.get('done_note', '')} |")
-    (J / "OWNER-ACTIONS.md").write_text("\n".join(out) + "\n")
+    atomic.write_text(J / "OWNER-ACTIONS.md", "\n".join(out) + "\n")
 
 
 def cmd_actions(a):
@@ -192,7 +247,7 @@ def cmd_run(a):
     run = {"id": rid, "at": now(), "kind": a.kind, "engine": a.engine, "market": market, "settings": a.settings or "",
            "pages": norm_pages(a.page), "query": a.query, "named": a.named or "", "response": resp}
     rf = folder / f"{rid}-{a.engine}-{slug(norm_pages(a.page)[0])}.json"
-    rf.write_text(json.dumps(run, ensure_ascii=False, indent=1) + "\n")
+    atomic.write_text(rf, json.dumps(run, ensure_ascii=False, indent=1) + "\n")
     e = {"id": rid, "at": run["at"], "kind": "run", "pages": run["pages"], "tags": (a.tag or []) + [a.kind, a.engine],
          "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
          "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
@@ -263,10 +318,10 @@ def _render_notes():
                            ("Answered and done questions", [e for e in es if e["kind"] == "question" and e.get("status") != "open"]),
                            ("Notes", [e for e in es if e["kind"] == "note"])):
             out += [f"## {title}", ""] + ([fmt(e) for e in sel] or ["- none"]) + [""]
-        (PAGES / f"{slug(p)}.md").write_text("\n".join(out))
+        atomic.write_text(PAGES / f"{slug(p)}.md", "\n".join(out))
         idx.append(f"| [[{slug(p)}]] | {len(es)} | {len(openq)} | {len(due)} | {es[-1]['at'] if es else ''} |")
     idx += ["", "Owner action items: [[OWNER-ACTIONS]]"]
-    (J / "INDEX.md").write_text("\n".join(idx) + "\n")
+    atomic.write_text(J / "INDEX.md", "\n".join(idx) + "\n")
     render_actions(cur)
 
 
@@ -333,8 +388,12 @@ def main():
     sub.add_parser("open")
     sub.add_parser("render")
     a = ap.parse_args()
-    {"add": cmd_add, "ask": cmd_ask, "answer": cmd_answer, "done": cmd_done, "close": cmd_close, "run": cmd_run, "show": cmd_show,
-     "due": cmd_due, "open": cmd_open, "action": cmd_action, "actions": cmd_actions, "render": lambda a: (render(), print("ok"))}[a.cmd](a)
+    fn = {"add": cmd_add, "ask": cmd_ask, "answer": cmd_answer, "done": cmd_done, "close": cmd_close, "run": cmd_run, "show": cmd_show,
+          "due": cmd_due, "open": cmd_open, "action": cmd_action, "actions": cmd_actions, "render": lambda a: (render(), print("ok"))}[a.cmd]
+    if a.cmd in ("due", "open", "actions"):   # read only
+        return fn(a)
+    with atomic.locked(J / "journal"):         # one writer at a time: ids are taken, the line is added and the notes rebuilt together
+        return fn(a)
 
 
 if __name__ == "__main__":

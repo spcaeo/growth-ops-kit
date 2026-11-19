@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 GROWTH = ROOT / "growth"
 # Shared helper modules in kit/tools/ that other tools import and that are not commands. A new helper goes here; it does not
 # need a fake `growth <name>` command and help line. (A module that people run belongs in growth's TOOLS table instead.)
-INTERNAL_MODULES = {"config", "transcript"}
+INTERNAL_MODULES = {"config", "transcript", "atomic", "fetch_rule"}
 
 
 def growth(*args, cwd=None, env=None):

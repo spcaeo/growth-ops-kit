@@ -155,7 +155,7 @@ def test_commit_identity_is_the_configured_one_else_a_noreply_address(nx_project
     _, lines = run_gate(project, base, "--only", "repo.commit-identity")
     assert _verdict(lines, "repo.commit-identity").startswith("OK"), "\n".join(lines)
     _set(project, commit_identity={"name": "", "email": ""})                   # empty again: the noreply rule
-    noreply = "7+someone@users.noreply" + ".github.com"  # leak-check: allow
+    noreply = "7+someone" + "@users.noreply.github.com"
     _git(repo, "commit", "-q", "--amend", "--reset-author", "--no-edit",
          GIT_COMMITTER_NAME="T", GIT_COMMITTER_EMAIL=noreply, GIT_AUTHOR_NAME="T", GIT_AUTHOR_EMAIL=noreply)
     _, lines = run_gate(project, base, "--only", "repo.commit-identity")
