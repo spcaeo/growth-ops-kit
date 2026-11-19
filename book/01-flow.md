@@ -21,6 +21,12 @@ one step (a playbook, a brief, a tool). If two files disagree about the order of
         │ `growth doctor` all OK             └──────────── F. LEARN: log, rules, playbook, memory ◄────────┘
 ```
 
+**The short front door.** Day to day a person types six commands: `growth setup` (once: asks a few plain questions and
+installs everything), `growth page <url-or-path>` (opens the page job and writes the brief), `growth check` (runs the gate on
+the open job's page against the preview), `growth ready` (the gate's verdict, with a plain summary first), `growth measure`
+(the day 7/14/28/56 comparison) and `growth status` (what is open and the next step). Every other tool in this book still
+works on its own; the flow below names them.
+
 **Three rules hold in every stage** (full list: [02-owner-rules.md](02-owner-rules.md)):
 1. **No shortcuts.** Every step of the job's playbook, in order, with every owner check-in. A skipped step is raised
    with the owner before, never after.
@@ -48,8 +54,8 @@ page work starts before every step is OK.**
 | A4 | Connect analytics and Search Console | Use your analytics connector (recommended: [Skald](https://skaldanalytics.com), AI traffic analytics from your server log, plus Search Console; a direct Search Console connector is not yet built). Every connector is optional and the rest of the kit works without one. Keys go in a file outside git (`keys_file` in `growth.json`, mode 600), never printed. | analytics answers (or "not connected" is recorded); keys file mode 600 |
 | A5 | Prove control of the live site | A tiny visible edit the owner checks live, then a rollback. | `SETUP.md` row "Control check": "done" in the status cell and the commit ids of the release and the rollback |
 | A6 | Task tracker | `growth tasks` keeps `docs/tasks.json`: tasks, steps, outputs, and the owner's open questions. | the file reads |
-| A7 | Full site inventory | `growth inventory` (after a production build of the site): every URL with page group, pillar, cluster, type, buyer stage, words, links, Google numbers; a money-pages table. | live pages = sitemap count, built in the last 7 days |
-| A7b | Site link graph | `growth link_graph crawl` then `growth link_graph report --out research/link-graph-<date>.md`: every internal link of every page read from the rendered HTML (target, anchor, zone, nearest heading), inbound and outbound, orphans, weak pages, redirects, broken links, anchor problems, cluster health. File the fix list in the journal per source page (`growth journal add --page <src> --tag internal-link`). Playbook: [link-graph](playbooks/link-graph.md). | the link-graph database built in the last 7 days; report saved; fixes filed |
+| A7 | Full site inventory | `growth inventory --base <preview address>` (after a production build of the site, served locally; a project with `live_site_rule: no-crawl` refuses the live host): every URL with page group, pillar, cluster, type, buyer stage, words, links, Google numbers; a money-pages table. | live pages = sitemap count, built in the last 7 days |
+| A7b | Site link graph | `growth link_graph crawl --base <preview address>` then `growth link_graph report --out research/link-graph-<date>.md`: every internal link of every page read from the rendered HTML (target, anchor, zone, nearest heading), inbound and outbound, orphans, weak pages, redirects, broken links, anchor problems, cluster health. File the fix list in the journal per source page (`growth journal add --page <src> --tag internal-link`). Playbook: [link-graph](playbooks/link-graph.md). | the link-graph database built in the last 7 days; report saved; fixes filed |
 | A8 | Page tracker running, history backfilled | Find Search Console's first stored day and put it in `growth.json`; run the tracker's `search-history` backfill; then start the tracker each working day. **Nothing starts with the computer** (the project may move between computers). | history from the first day to the last 3 days; no auto-start job |
 | A9 | Owner journal page current | `growth owner_journal --no-open` rebuilds `journal/owner-journal.html` from the steps log and the journal, so the owner can read what was asked and done. | the page is newer than the steps log and the journal |
 | A10 | Agent guards installed | `growth new-project` writes `.claude/settings.json` with the Stop hook (`kit/hooks/stop_hook.sh`), which blocks an unlogged owner message, a preview address shown before READY, and a helper agent on the wrong model. | `.claude/settings.json` holds the Stop hook |

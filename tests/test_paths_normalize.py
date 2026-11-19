@@ -35,3 +35,9 @@ def test_archive_journal_and_snapshot_name_a_page_the_same(demo_project, monkeyp
     import page_archive
     for f in ("/blog/a-post/", "blog/a-post", "https://shop.example/blog/a-post?x=1"):
         assert page_archive.slug_of(f) == journal.slug(paths.key(f)) == paths.snapshot_slug(f) == "blog__a-post"
+
+
+def test_journal_notes_do_not_collide_for_a_b_c_and_a_b_c(demo_project, monkeypatch):
+    monkeypatch.setenv("GROWTH_PROJECT", str(demo_project))
+    import journal
+    assert journal.slug("/a/b-c") != journal.slug("/a-b/c")
