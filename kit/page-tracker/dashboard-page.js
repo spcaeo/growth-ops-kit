@@ -75,7 +75,8 @@ function marketBox(p) {
   return `<h3>Target market</h3><div class="box"><table><thead><tr><th></th><th class="r">Clicks</th><th class="r">Impressions</th><th class="r">Position</th></tr></thead><tbody>
     <tr><td>All countries</td><td class="num r">${fmtN(m.all.clicks)}</td><td class="num r">${fmtN(m.all.impressions)}</td><td class="num r">${pos(m.all.position)}</td></tr>
     <tr><td>Target market, measured</td><td class="num r">${fmtN(m.measured.clicks)}</td><td class="num r">${fmtN(m.measured.impressions)}</td><td class="num r">${pos(m.measured.position)}</td></tr>
-    <tr><td>Target market, estimated (upper bound)</td><td class="num r">–</td><td class="num r">${m.estimate.impressions == null ? '–' : fmtN(m.estimate.impressions)}</td><td class="num r">–</td></tr></tbody></table></div>
+    <tr><td>Target market, estimated (upper bound)</td><td class="num r">–</td><td class="num r">${m.estimate.impressions == null ? '–' : fmtN(m.estimate.impressions)}</td><td class="num r">–</td></tr>${m.clean ? `<tr><td>Target market without brand, spam and off-topic searches (measured, then estimated)</td><td class="num r">–</td><td class="num r">${fmtN(m.clean.measured_impressions)} / ${m.clean.estimate_impressions == null ? '–' : fmtN(m.clean.estimate_impressions)}</td><td class="num r">–</td></tr>` : ''}</tbody></table></div>
+    ${m.noise ? `<p class="sub">Of the searches Google lists: ${Math.round(100 * m.noise.classes.brand.share_impressions)}% brand, ${Math.round(100 * m.noise.classes.spam.share_impressions)}% spam, ${Math.round(100 * m.noise.classes.off_topic.share_impressions)}% off topic (by impressions). ${esc(m.noise.assumption)}.</p>` : ''}
     <p class="sub">${esc(m.definition)}. The estimate ${esc(m.estimate.assumption)}.${m.definition_changed ? ' <b>The definition changed between snapshots: do not compare before and after across it.</b>' : ''}</p>`;
 }
 function tabMilestones(p) {

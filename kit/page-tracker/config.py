@@ -137,6 +137,11 @@ def target_markets():
     return [str(x).lower() for x in (GROWTH.get("target_markets") or [])]
 
 
+def query_noise():
+    """growth.json query_noise: brand, spam, off_topic and on_topic words used to take non-buyer searches out of the market figures."""
+    return {k: v for k, v in (GROWTH.get("query_noise") or {}).items() if isinstance(v, list)}
+
+
 _ALIASES = None
 
 

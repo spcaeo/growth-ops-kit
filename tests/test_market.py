@@ -52,3 +52,33 @@ def test_the_tracker_exports_the_measured_market_and_records_the_definition(demo
     (demo_project / "growth.json").write_text(json.dumps(cfg2))
     r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, env=env, cwd=demo_project, timeout=120)
     assert r.returncode == 0 and "ok" in r.stdout, r.stdout + r.stderr
+
+
+NOISE = {"brand": ["acme boards"], "spam": ["free download"], "off_topic": ["jobs"]}
+QUERIES = [("board tools", 5, 600), ("acme boards login", 9, 200), ("free download board", 0, 100), ("board jobs near me", 0, 50),
+           ("https://spam.example.com", 0, 50), ("[us] board software", 1, 100)]
+
+
+def test_queries_are_sorted_into_brand_spam_off_topic_and_buyer_searches():
+    assert [market.classify(q, NOISE) for q, _c, _i in QUERIES] == ["buyer", "brand", "spam", "off_topic", "spam", "buyer"]
+    assert market.classify("board tools", {"on_topic": ["software"]}) == "off_topic"        # nothing on topic in it
+    assert market.classify("acme boards jobs", NOISE) == "brand"                            # first matching class wins
+    assert market.classify("boards", {"brand": ["board"]}) == "buyer"                       # whole words only
+
+
+def test_the_noise_share_is_measured_on_the_listed_searches_and_states_its_assumption():
+    n = market.noise([(q, c, i) for q, c, i in QUERIES], NOISE)
+    assert n["listed_impressions"] == 1100 and n["classes"]["brand"]["impressions"] == 200 and n["classes"]["spam"]["impressions"] == 150
+    assert n["noise_share_impressions"] == round(400 / 1100, 4) and n["classes"]["brand"]["top"] == "acme boards login"
+    assert "long tail" in n["assumption"]
+    assert market.noise(QUERIES, {}) is None                                                # nothing configured, nothing claimed
+
+
+def test_the_clean_figures_sit_next_to_the_measured_and_the_estimate_and_are_marked():
+    rows = [("usa", 11, 27487, 5.2), ("gbr", 5, 20000, 2.0)]
+    m = market.measure(rows, (88, 295810, 3.2), ["usa"], QUERIES, NOISE)
+    keep = 1 - round(400 / 1100, 4)
+    assert m["measured"]["impressions"] == 27487 and m["clean"]["measured_impressions"] == round(27487 * keep)
+    assert m["clean"]["estimate_impressions"] == round(m["estimate"]["impressions"] * keep) and "assumed" in m["clean"]["assumption"] or "assumes" in m["clean"]["assumption"]
+    assert "noise" in m["definition"] and market.definition(["usa"]) != market.definition(["usa"], NOISE)   # a new noise list is a new definition
+    assert "clean" not in market.measure(rows, (88, 295810, 3.2), ["usa"])                  # no noise config: unchanged
