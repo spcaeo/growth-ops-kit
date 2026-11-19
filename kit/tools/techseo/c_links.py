@@ -83,7 +83,10 @@ def run_links(p, max_links=80, check_status=True):
     # LNK-08 old hosts, http
     host = re.escape(p.site_host.removeprefix("www."))
     retired = [h for h in p.old_hosts if h]
-    old = [a for a in withhref if re.search(rf"^http://(www\.)?{host}|^https?://www\.{host}", a.get("href"))
+    # the non-canonical twin: the bare host when the site lives on www., the www. host when it does not. A full link
+    # to the canonical host itself is fine (a copy/open URL component prints it on purpose; friction 50).
+    twin = host if p.site_host.startswith("www.") else rf"www\.{host}"
+    old = [a for a in withhref if re.search(rf"^http://(www\.)?{host}(?=[/:?#]|$)|^https?://{twin}(?=[/:?#]|$)", a.get("href"))
            or any(h in a.get("href").lower() for h in retired)]
     (rep.fail if old else rep.ok)("LNK-08", f"{len(old)} link(s) to an old or non-canonical host (first: {old[0].get('href')})" if old else "no links to retired or non-canonical hosts",
                                   f"link to {p.site_origin}/... or a relative path")
