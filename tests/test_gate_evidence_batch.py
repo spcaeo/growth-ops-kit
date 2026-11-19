@@ -169,3 +169,65 @@ def test_preflight_plan_files_survives_a_project_with_no_journal(demo_project):
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, cwd=demo_project)
     assert r.returncode == 0, r.stderr
     assert "links.plan" in r.stdout          # reported as a missing plan, not a crash
+
+
+# ---- #62
+
+GEN = [("1. Before the build (x)", [("ev.a", "`ev.a` (rule 1): a"), ("ev.b", "`ev.b` (rule 2): b")]),
+       ("3. Before READY (y)", [("ev.c", "`ev.c` (rule 3): c")])]
+
+
+def merged(old="", gen=GEN, extra=()):
+    import checkpoints
+    return checkpoints.merge(old, gen, list(extra), "# Checkpoints: /x", "2026-11-19")
+
+
+def test_manual_items_need_a_tick_and_a_proof():
+    import checkpoints
+    text = merged(extra=["rule 530: click test", "rule 31: one verdict"])
+    total, done, probs = checkpoints.manual_status(text)
+    assert (total, done, len(probs)) == (2, 0, 2)          # generated items are not counted
+    text = text.replace("- [ ] rule 530: click test", "- [x] rule 530: click test")
+    assert "ticked with no proof" in checkpoints.manual_status(text)[2][0]
+    text = text.replace("- [x] rule 530: click test", "- [x] rule 530: click test -- J0028, 53/53")
+    assert checkpoints.manual_status(text)[:2] == (2, 1)
+    assert checkpoints.manual_status(text.replace("-- J0028, 53/53", "-- todo"))[1] == 0
+
+
+def test_preflight_merges_keeps_ticks_proofs_and_project_sections():
+    first = merged(extra=["rule 530: click test"])
+    edited = (first.replace("- [ ] rule 530: click test", "- [x] rule 530: click test -- J0028, 53/53")
+              .replace("- [ ] `ev.a`", "- [x] `ev.a`") + "\n## 6. Site rules\n\n- [ ] logo per tool\n- [x] FAQ equals schema -- compared\n")
+    gen2 = [("1. Before the build (x)", [("ev.a", "`ev.a` (rule 1): a changed words"), ("ev.d", "`ev.d` (rule 4): new")]),
+            ("3. Before READY (y)", [])]
+    out = merged(edited, gen2, extra=["rule 530: click test", "rule 99: new rule"])
+    assert "- [x] rule 530: click test -- J0028, 53/53" in out          # tick and proof kept
+    assert "- [x] `ev.a` (rule 1): a changed words" in out              # generated tick kept, text refreshed
+    assert "- [ ] `ev.d`" in out and "- [ ] rule 99: new rule" in out   # new items added
+    assert "## 6. Site rules" in out and "- [ ] logo per tool" in out   # project section kept
+    assert "`ev.b` left the scope" in out and "`ev.c` left the scope" in out   # removed ones marked, not deleted
+    import checkpoints
+    assert checkpoints.manual_status(out)[2][0].startswith("unticked")  # the open ones still count, removed ones do not
+    assert merged(out, gen2, extra=["rule 530: click test", "rule 99: new rule"]) == out    # a second run changes nothing
+
+
+def test_ready_lists_open_manual_items_and_passes_when_all_are_proven(demo_project, monkeypatch):
+    monkeypatch.setenv("GROWTH_PROJECT", str(demo_project))
+    sys.path.insert(0, str(TOOLS))
+    import ready
+    monkeypatch.setattr(ready, "PROJECT", demo_project)
+    (demo_project / "research").mkdir(exist_ok=True)
+    plan = demo_project / "research" / "x-checkpoints.md"
+    plan.write_text(merged(extra=["rule 530: click test"]))
+    assert len(ready.manual_problems("/x", "x")) == 1
+    plan.write_text(plan.read_text().replace("- [ ] rule 530: click test", "- [x] rule 530: click test -- J0028, 53/53"))
+    assert ready.manual_problems("/x", "x") == []
+    plan.unlink()
+    assert ready.manual_problems("/x", "x") == []          # no file: ev.preflight is the check that wants it
+
+
+def test_checkpoints_cli_exits_1_while_a_manual_item_is_open(tmp_path):
+    f = tmp_path / "c.md"
+    f.write_text(merged(extra=["rule 530: click test"]))
+    r = subprocess.run([sys.executable, str(TOOLS / "checkpoints.py"), str(f)], capture_output=True, text=True)
+    assert r.returncode == 1 and "manual checks 0/1" in r.stdout

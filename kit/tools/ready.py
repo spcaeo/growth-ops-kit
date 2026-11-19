@@ -7,6 +7,7 @@
 A page is READY only when the full gate, run on the one preview address (growth.json preview_url) against the
 worktree that serves it (growth.json preview_repo), shows 0 FAIL. That includes the independent review (rule 109),
 fresh screenshots and click-test, the fact check, the AI baseline and the speed run: no exceptions, no "known" FAILs.
+Manual checkpoints (research/<key>-checkpoints.md, see `growth checkpoints`) must each be ticked with a proof.
 READY is recorded in journal/ready.json with the commit it was checked at; any later commit makes it not READY again.
 growth url_guard (the Stop hook) blocks any reply that shows the owner a local page URL that is not READY.
 """
@@ -59,6 +60,21 @@ def is_ready(path):
     return bool(e) and e.get("commit") == head(preview_repo())
 
 
+def manual_problems(path, key):
+    """Manual checkpoints of the page still open (unticked, or ticked with no proof), read from the file preflight writes."""
+    import checkpoints
+    plan = None
+    try:
+        rel = json.loads((PROJECT / "journal" / "preflight.json").read_text()).get(path, {}).get("plan")
+        plan = PROJECT / rel if rel else None
+    except (OSError, ValueError):
+        pass
+    plan = plan if plan and plan.is_file() else PROJECT / "research" / f"{key}-checkpoints.md"
+    if not plan.is_file():
+        return []                        # no file: ev.preflight (rule 0a) is the check that wants one
+    return checkpoints.manual_status(plan.read_text())[2]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("path", nargs="?")
@@ -84,6 +100,7 @@ def main():
            "--type", a.type, "--key", a.key, "--no-link-status"] + (["--repo", str(repo)] if repo else [])
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=PROJECT)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
+    fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     d = ledger()
     if fails:

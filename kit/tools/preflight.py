@@ -27,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, KIT_DIR, PROJECT, TZ  # noqa: E402
 from ready import preview_repo_problem  # noqa: E402
+import checkpoints  # noqa: E402  (merge the checkpoints file, never overwrite it)
 
 LEDGER = PROJECT / "journal" / "preflight.json"
 PLAN = ["proc.doctor", "proc.owner-messages", "proc.rulebook-current", "ev.inventory", "ev.snapshot", "ev.dossier",
@@ -91,19 +92,28 @@ def write_plan(path, ptype, key, checks):
     for c in sorted(checks, key=lambda c: (c.rule, c.cid)):
         phase = ("release" if c.stage == "release" else "before" if c.cid in PLAN else
                  "finish" if c.cid in FINISH else "fold")
-        when[phase].append(f"- [ ] `{c.cid}` (rule {c.rule}): {c.what}")
+        when[phase].append((c.cid, f"`{c.cid}` (rule {c.rule}): {c.what}"))
     head = {"before": "1. Before the build (growth preflight must PASS)",
             "fold": "2. After EVERY fold commit (gate on the preview; fix before the next fold, never at the end)",
             "finish": "3. Before READY (growth ready), after the last commit",
             "release": "4. After publishing, on the production site"}
-    out = [f"# Checkpoints: {path} ({ptype} page)", "",
-           f"Written {dt.datetime.now(TZ):%Y-%m-%d %H:%M %Z} by growth preflight. Every check in scope, sorted by when "
-           "it is checked. The builder gets this with the brief and ticks each box with its evidence.", ""]
-    for k in head:
-        out += [f"## {head[k]} ({len(when[k])})", ""] + when[k] + [""]
+    header = (f"# Checkpoints: {path} ({ptype} page)\n\n"
+              f"Updated {dt.datetime.now(TZ):%Y-%m-%d %H:%M %Z} by growth preflight (it merges: ticks, proofs and your own items stay). "
+              "Generated items are proven by the gate run. Manual items (section 5) have no gate check: the builder ticks each "
+              "with one line of proof after ' -- ', and `growth ready` fails while one is open.")
+    extra_file = CFG.get("checkpoints_extra") or ""
+    extra = []
+    if extra_file:
+        ef = (PROJECT / extra_file).expanduser()
+        if not ef.is_file():
+            sys.exit(f"growth.json checkpoints_extra points at {extra_file}, which does not exist")
+        extra = checkpoints.extra_items(ef)
     p = PROJECT / "research" / f"{key}-checkpoints.md"
-    p.write_text("\n".join(out))
-    return p, {k: len(v) for k, v in when.items()}
+    p.parent.mkdir(parents=True, exist_ok=True)
+    old = p.read_text() if p.exists() else ""
+    p.write_text(checkpoints.merge(old, [(head[k], when[k]) for k in head], extra, header, dt.datetime.now(TZ).strftime("%Y-%m-%d")))
+    total, done, _ = checkpoints.manual_status(p.read_text())
+    return p, {**{k: len(v) for k, v in when.items()}, "manual": total, "manual_done": done}
 
 
 def main():
@@ -132,7 +142,8 @@ def main():
     plan_file, counts = write_plan(path, a.type, a.key, checks_in_scope(a.type))
 
     print(f"Checkpoint plan: {plan_file.relative_to(PROJECT)} ({counts['before']} before the build, {counts['fold']} after "
-          f"every fold, {counts['finish']} before READY, {counts['release']} after publishing)")
+          f"every fold, {counts['finish']} before READY, {counts['release']} after publishing; "
+          f"manual checks {counts['manual_done']}/{counts['manual']})")
     print(f"Site health ({repo.name if repo else 'no site checkout'}): "
           + ("OK" if not health else f"{len(health)} problems, fix them before the page:") + ("" if nextjs else " (not checked: Next.js adapter only)"))
     for h in health:
