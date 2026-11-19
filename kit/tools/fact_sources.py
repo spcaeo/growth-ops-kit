@@ -75,7 +75,7 @@ def banned_problem(url, cfg=None) -> str | None:
 
 # ---- the stat sentences of a page -------------------------------------------------------------------------------------------
 BLOCKS = {"p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th", "dd", "dt", "blockquote", "figcaption", "caption", "summary"}
-BYLINE_CLS = re.compile(r"byline|author|posted|published|updated|post-meta|entry-meta|breadcrumb|copyright", re.I)
+BYLINE_CLS = re.compile(r"byline|author|posted|published|updated|post-meta|entry-meta|breadcrumb|copyright|\btoc\b|table-of-contents|read-?time|reading-?time", re.I)
 BYLINE_TEXT = re.compile(r"^\s*(by|posted|published|updated|last (updated|reviewed|modified)|reviewed by|written by|©|copyright)\b", re.I)
 COPYRIGHT = re.compile(r"©|\bcopyright\b|\ball rights reserved\b", re.I)
 UNITS = r"(?:year|month|week|day|hour|minute)s?"
@@ -113,6 +113,9 @@ CONTACT_PATTERNS = (
     re.compile(r"\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b"),                                    # K1A 0B1 (Canadian postal code)
     re.compile(r"\b\d{1,6}\s+(?:[A-Za-z.]+\s+){0,3}?(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Way|Ct|Court|Pl|Place|Pkwy|Parkway|Hwy|Highway)\b\.?"),  # 222 East Main St
     re.compile(r"\b(?:Suite|Ste|Unit|Floor|Room|Rm)\.?\s*#?[\w-]+", re.I),                  # Suite B-2, Suite 200
+    # the site's own computed reading time ("11 min read", "4 min left", "Reading time: 6 minutes") is no stat
+    re.compile(r"\b\d+\s*(?:min|mins|minutes?)\.?\s+(?:read|left|to read|remaining)\b", re.I),
+    re.compile(r"\breading time:?\s*\d+\s*(?:min|mins|minutes?)\b", re.I),
 )
 
 
