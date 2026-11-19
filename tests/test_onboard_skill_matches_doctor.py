@@ -28,6 +28,6 @@ def test_every_growth_command_the_skill_names_exists():
     sys.path.insert(0, str(ROOT))
     ns = {}
     exec(compile((ROOT / "growth").read_text(), "growth", "exec"), {"__name__": "x", "__file__": str(ROOT / "growth")}, ns)
-    known = set(ns["TOOLS"]) | {"help", "setup", "page", "check", "ready", "measure", "status", "doctor", "wizard", "new-project"}
+    known = set(ns["TOOLS"]) | set(ns["ALIASES"]) | {"help", "setup", "page", "check", "ready", "measure", "status", "doctor", "wizard", "new-project"}
     named = set(re.findall(r"`growth ([a-z][a-z_-]+)", SKILL))
     assert not {n for n in named if n not in known and n.replace("-", "_") not in known}, named - known
