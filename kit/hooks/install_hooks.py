@@ -34,6 +34,9 @@ KIT_HOOK = f"""#!/bin/sh
 # Blocks the commit when the tests fail or the leak check finds a key, a private word or a personal address.
 if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
 cd "$(git rev-parse --show-toplevel)" || exit 1
+# The git-ignored word list lives in the main checkout; a linked worktree has no copy of its own.
+WORDS="$PWD/.private-words"
+[ -f "$WORDS" ] || WORDS="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)/.private-words"
 # Test what is being committed (the staged files), not the shared working tree other people are editing.
 SNAP=$(mktemp -d "${{TMPDIR:-/tmp}}/growth-hook.XXXXXX") || exit 1
 trap 'rm -rf "$SNAP"' EXIT
@@ -41,7 +44,7 @@ git checkout-index -a --prefix="$SNAP/" || exit 1
 # The tests make their own git repositories: they must not inherit this commit's index, repository or author.
 for v in $(env | grep '^GIT_' | cut -d= -f1); do unset "$v"; done
 unset GIT_INDEX_FILE
-if ! out=$(cd "$SNAP" && PYTHONDONTWRITEBYTECODE=1 python3 kit/tools/leak_check.py --root "$SNAP" --private-words "$PWD/.private-words" 2>&1); then
+if ! out=$(cd "$SNAP" && PYTHONDONTWRITEBYTECODE=1 python3 kit/tools/leak_check.py --root "$SNAP" --private-words "$WORDS" 2>&1); then
   printf '%s\n' "$out" | tail -15
   echo "pre-commit BLOCKED: the leak check found something that must not be committed (growth leak_check)."
   exit 1
@@ -49,6 +52,39 @@ fi
 if ! out=$(cd "$SNAP" && PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -x tests 2>&1); then
   printf '%s\n' "$out" | tail -15
   echo "pre-commit BLOCKED: tests fail (python3 -m pytest tests). Fix them, then commit."
+  exit 1
+fi
+exit 0
+"""
+
+
+KIT_MSG_HOOK = f"""#!/bin/sh
+# {MARK} kit-msg: written by kit/hooks/install_hooks.py (edit that file, then run it again; not this one).
+# Blocks the commit when its message holds a key or a private word (the pre-commit hook only reads files).
+if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
+cd "$(git rev-parse --show-toplevel)" || exit 1
+WORDS="$PWD/.private-words"
+[ -f "$WORDS" ] || WORDS="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)/.private-words"
+MSG="$1"; case "$MSG" in /*) ;; *) MSG="$PWD/$MSG" ;; esac
+[ -f "$MSG" ] || MSG="$(git rev-parse --git-dir)/COMMIT_EDITMSG"
+if ! out=$(PYTHONDONTWRITEBYTECODE=1 python3 "{KIT_DIR}/tools/leak_check.py" --message "$MSG" --private-words "$WORDS" 2>&1); then
+  printf '%s\\n' "$out" | tail -10
+  echo "commit-msg BLOCKED: the commit message holds a key or a private word. Reword it, then commit."
+  exit 1
+fi
+exit 0
+"""
+
+KIT_PUSH_HOOK = f"""#!/bin/sh
+# {MARK} kit-push: written by kit/hooks/install_hooks.py (edit that file, then run it again; not this one).
+# Blocks a push while the whole history (every commit, message and identity) is not clean.
+if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
+cd "$(git rev-parse --show-toplevel)" || exit 1
+WORDS="$PWD/.private-words"
+[ -f "$WORDS" ] || WORDS="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)/.private-words"
+if ! out=$(PYTHONDONTWRITEBYTECODE=1 python3 "{KIT_DIR}/tools/leak_check.py" --history --private-words "$WORDS" 2>&1); then
+  printf '%s\\n' "$out" | tail -15
+  echo "pre-push BLOCKED: growth leak_check --history found something that must not be published."
   exit 1
 fi
 exit 0
@@ -71,6 +107,24 @@ fi
 if ! out=$("$G" leak_check --staged 2>&1); then
   printf '%s\n' "$out" | tail -15
   echo "pre-commit BLOCKED: the leak check found something that must not be committed."
+  exit 1
+fi
+exit 0
+"""
+
+
+def project_msg_hook(project: Path) -> str:
+    return f"""#!/bin/sh
+# {MARK} project-msg: written by kit/hooks/install_hooks.py (edit that file, then run it again; not this one).
+# Blocks the commit when its message holds a key or a private word.
+if [ -x "$0.local" ]; then "$0.local" "$@" || exit 1; fi
+export GROWTH_PROJECT="{project}"
+G="{GROWTH}"
+[ -x "$G" ] || exit 0
+MSG="$1"; case "$MSG" in /*) ;; *) MSG="$PWD/$MSG" ;; esac
+if ! out=$(cd "{project}" && "$G" leak_check --message "$MSG" 2>&1); then
+  printf '%s\\n' "$out" | tail -10
+  echo "commit-msg BLOCKED: the commit message holds a key or a private word. Reword it, then commit."
   exit 1
 fi
 exit 0
@@ -139,8 +193,9 @@ def listed(repo: Path) -> list[str]:
 
 
 def cmd_kit(remove=False):
-    hook = hooks_dir(KIT_ROOT) / "pre-commit"
-    print(remove_hook(hook) if remove else write_hook(hook, KIT_HOOK))
+    for name, body in (("pre-commit", KIT_HOOK), ("commit-msg", KIT_MSG_HOOK), ("pre-push", KIT_PUSH_HOOK)):
+        hook = hooks_dir(KIT_ROOT) / name
+        print(remove_hook(hook) if remove else write_hook(hook, body))
 
 
 def cmd_project(remove=False):
@@ -148,8 +203,9 @@ def cmd_project(remove=False):
     project = require_project()
     if not (project / ".git").exists() and subprocess.run(["git", "-C", str(project), "rev-parse"], capture_output=True).returncode:
         sys.exit(f"{project} is not inside a git repository; run git init there first.")
-    hook = hooks_dir(project) / "pre-commit"
-    print(remove_hook(hook) if remove else write_hook(hook, project_hook(project)))
+    for name, body in (("pre-commit", project_hook(project)), ("commit-msg", project_msg_hook(project))):
+        hook = hooks_dir(project) / name
+        print(remove_hook(hook) if remove else write_hook(hook, body))
 
 
 def cmd_site(wt: str, remove=False):

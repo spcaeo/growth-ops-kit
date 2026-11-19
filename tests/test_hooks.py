@@ -77,3 +77,59 @@ def test_the_kit_hook_clears_the_commits_git_variables_before_running_the_tests(
     import hooks_text
     assert "unset GIT_INDEX_FILE" in hooks_text.KIT_HOOK and "unset \"$v\"" in hooks_text.KIT_HOOK
     assert hooks_text.KIT_HOOK.index("checkout-index") < hooks_text.KIT_HOOK.index("unset GIT_INDEX_FILE") < hooks_text.KIT_HOOK.index("pytest")
+
+
+def test_commit_msg_hook_blocks_a_private_word_in_the_message(tmp_path):
+    p = project(tmp_path)
+    (p / ".private-words").write_text("initech\n")
+    r = install(p, "project")
+    assert r.returncode == 0, r.stderr
+    hook = p / ".git" / "hooks" / "commit-msg"
+    assert hook.is_file() and "growth-gate-hook" in hook.read_text() and os.access(hook, os.X_OK)
+    (p / "ok.md").write_text("plain text\n")
+    sh(p, "git", "add", "ok.md")
+    c = sh(p, "git", "commit", "-qm", "work for the Initech run")
+    assert c.returncode != 0 and "commit-msg BLOCKED" in (c.stdout + c.stderr)
+    assert sh(p, "git", "commit", "-qm", "plain message").returncode == 0
+    assert "removed" in install(p, "remove", "project").stdout and not hook.exists()
+
+
+def test_leak_check_message_mode_reads_a_file_and_ignores_comment_lines(tmp_path):
+    (tmp_path / "words").write_text("initech\n")
+    msg = tmp_path / "MSG"
+    leak = ROOT / "kit" / "tools" / "leak_check.py"
+    msg.write_text("fine subject\n# initech in a git comment line\n")
+    ok = sh(tmp_path, sys.executable, str(leak), "--message", str(msg), "--private-words", str(tmp_path / "words"))
+    assert ok.returncode == 0, ok.stdout
+    msg.write_text("fine subject\n\nbody names Initech\n")
+    bad = sh(tmp_path, sys.executable, str(leak), "--message", str(msg), "--private-words", str(tmp_path / "words"))
+    assert bad.returncode == 1 and "FAIL commit message:3 private word" in bad.stdout
+
+
+def test_kit_hook_scripts_find_the_word_list_of_the_main_checkout():
+    sys.path.insert(0, str(ROOT / "kit" / "hooks"))
+    import install_hooks
+    for body in (install_hooks.KIT_HOOK, install_hooks.KIT_MSG_HOOK, install_hooks.KIT_PUSH_HOOK):
+        assert "git-common-dir" in body and "--private-words" in body
+    assert "--history" in install_hooks.KIT_PUSH_HOOK
+
+
+def test_kit_commit_msg_hook_blocks_in_the_main_checkout_and_in_a_linked_worktree(tmp_path):
+    sys.path.insert(0, str(ROOT / "kit" / "hooks"))
+    import install_hooks
+    main = tmp_path / "main"
+    main.mkdir()
+    sh(main, "git", "init", "-q")
+    (main / ".private-words").write_text("initech\n")
+    (main / "a.txt").write_text("a\n")
+    sh(main, "git", "add", "a.txt")
+    assert sh(main, "git", "commit", "-qm", "first").returncode == 0
+    install_hooks.write_hook(main / ".git" / "hooks" / "commit-msg", install_hooks.KIT_MSG_HOOK)
+    wt = tmp_path / "wt"
+    sh(main, "git", "worktree", "add", "-q", str(wt), "-b", "side")
+    for where in (main, wt):
+        (where / f"{where.name}.txt").write_text("x\n")
+        sh(where, "git", "add", f"{where.name}.txt")
+        bad = sh(where, "git", "commit", "-qm", "the Initech run")
+        assert bad.returncode != 0 and "commit-msg BLOCKED" in (bad.stdout + bad.stderr), where
+        assert sh(where, "git", "commit", "-qm", "neutral words").returncode == 0, where

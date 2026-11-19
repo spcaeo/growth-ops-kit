@@ -100,6 +100,9 @@ if command -v git >/dev/null 2>&1 && [ -e "$ROOT/.git" ]; then
   esac
 fi
 
+# 6c. The kit checkout's own git hooks (pre-commit, commit-msg, pre-push): safe to run again, local .git only
+if [ -e "$ROOT/.git" ] && [ -x "$PY" ] && "$PY" "$ROOT/kit/hooks/install_hooks.py" kit >/dev/null 2>&1; then ok "git hooks installed for this checkout (leak check on files, messages and before a push)"; fi
+
 # 7. Tests (the demo site included), then the leak check
 if [ -x "$VENV/bin/python" ]; then
   [ "$BROWSERS" = 1 ] || export GROWTH_SKIP_BROWSER=1
