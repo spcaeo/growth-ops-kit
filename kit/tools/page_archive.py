@@ -38,8 +38,6 @@ WIDTHS = {"desktop-1366.png": (1366, 900, False), "mobile-390.png": (390, 844, T
 
 def slug_of(path):
     return paths.snapshot_slug(path)   # the one folder name per page (the same as inventory/pages/<slug>/)
-    import paths
-    return paths.snapshot_slug(path)
 
 
 def folder(path, stage, day=None):

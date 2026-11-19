@@ -68,7 +68,7 @@ TEL_WORD = re.compile(r"(?i)\b(?:tel|telephone|phone|call|mobile|cell|whatsapp|f
 BARE_PHONE = re.compile(r"(?<![\w.+-])(?:\+?1)?[2-9]\d{9}(?![\w-])")
 INTL_PHONE = re.compile(r"(?<![\w.])\+\d{1,3}[ .-]?\d{4,5}[ .-]\d{4,6}(?![\w-])|(?<![\w.])\+\d{10,14}(?![\w-])")
 EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")
-EMAIL_OK_DOMAIN = re.compile(r"(?i)(^|\.)example(\.[a-z]+)?$|(^|\.)noreply\.github\.com$|^anthropic\.com$|(^|\.)invalid$|(^|\.)localhost$|(^|\.)test$")
+EMAIL_OK_DOMAIN = re.compile(r"(?i)(^|\.)example(\.[a-z]+)?$|(^|\.)noreply(\.github\.com)?$|^anthropic\.com$|(^|\.)invalid$|(^|\.)localhost$|(^|\.)test$")
 EMAIL_OK_FULL = {"noreply@anthropic.com"}
 PHONE = re.compile(r"(?<![\w.])(?:\+?1[ .-])?\(?\b[2-9]\d{2}\)?[ .-]\d{3}[ .-]\d{4}\b(?![\w-])|(?<![\w.])\+\d{1,3}[ .-]\d{2,4}[ .-]\d{3,4}(?:[ .-]\d{2,4})?\b")
 PHONE_OK = re.compile(r"555[ .-]?01\d\d")
@@ -281,7 +281,7 @@ def scan_history(root: Path, words: list[str]):
             continue
         if line.startswith("+") and not line.startswith("+++"):
             ln += 1
-            for _n, kind, shown in scan_text(line[1:], words):
+            for _n, kind, shown in scan_text(line[1:], words, allow=allow_marker_ok(cur)):
                 report.append((f"commit {commit}: {cur}", ln, kind, shown))
     # one line per kind of identity warning, not one per commit
     uniq, counts = [], {}
