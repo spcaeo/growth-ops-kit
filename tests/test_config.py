@@ -99,5 +99,7 @@ def test_owner_messages_find_the_transcripts_of_the_projects_own_path(tmp_path, 
     assert om.transcript_dirs(proj, home=home) == [want]
     parent = home / ".claude" / "projects" / om.slug(proj.parent)
     parent.mkdir(parents=True)
-    assert om.transcript_dirs(proj, home=home) == [want, parent]
+    assert om.transcript_dirs(proj, home=home) == [want]      # the folder above is never read by default (#21)
+    assert om.transcript_dirs(proj, home=home, cfg={"transcripts_dir": str(parent)}) == [parent]       # only when growth.json says so
+    assert om.transcript_dirs(proj, home=home, cfg={"transcripts_dir": [str(want), str(parent)]}) == [want, parent]
     assert om.transcript_dirs(proj, home=tmp_path / "empty") == []

@@ -75,6 +75,7 @@ TOOLS = {
     "setup_task": ("tools/setup_task.py", "(library) the setup task in docs/tasks.json, ticked from doctor's results"),
     "wizard_state": ("tools/wizard_state.py", "(library) the wizard's memory, setup-state.json: each answer with its date, source and test"),
     "research_gate": ("tools/research_gate.py", "(library) the research-browser gate: no research step before the browser and the Google region are confirmed"),
+    "workflow": ("tools/workflow.py", "the task workflow as a rule: `check` (Stop hook: no open task, steps with no proof) and `stage` (re-read the page's checkpoints)"),
     "hook": ("hooks/stop_hook.sh", "run a Claude Code hook by name (growth hook stop): found through the PATH, so settings.json holds no absolute path"),
     "install_hooks": ("hooks/install_hooks.py", "install the git pre-commit hooks (kit, project, site)"),
     "checks": ("adapters/nextjs/checks.sh", "(Next.js adapter) run only the tests and build a change touches"),
@@ -109,10 +110,13 @@ def main(argv):
         return 0
     name, rest = argv[0], argv[1:]
     if name == "hook":
-        if rest[:1] != ["stop"]:
-            print("growth hook: say which hook. Available: stop", file=sys.stderr)
+        if rest[:1] == ["stage"]:        # PostToolUse hook: re-read the checkpoints at a stage boundary
+            name, rest = "workflow", ["stage"]
+        elif rest[:1] != ["stop"]:
+            print("growth hook: say which hook. Available: stop, stage", file=sys.stderr)
             return 2
-        rest = rest[1:]
+        else:
+            rest = rest[1:]
     tool = resolve(name)
     if tool is None:
         print(f"growth: no tool '{name}'. Run: growth help", file=sys.stderr)

@@ -7,7 +7,8 @@ Data: docs/tasks.json (one file, easy to read, copy and reuse for another projec
   growth tasks show T5                    # one task with every step
   growth tasks add "Title" "Owner's words" [--playbook new-post] [--research]   # new task, prints its id; a job with a
                                           # research step is refused until the research browser and Google region are confirmed
-  growth tasks step T5 "What was done" [--status done|doing|blocked] [--output path]
+  growth tasks add "Title" "Owner's words" [--type chat]   # new task, prints its id (--type chat: a chat that is not page work, needs no steps)
+  growth tasks step T5 "What to do" [--status todo|doing|done|blocked] [--output proof]   # default todo; done needs --output
   growth tasks tick T5 3 [--status done] --output "proof"   # update step 3 in place (never re-add it)
   growth tasks status T5 done|doing|blocked|waiting-owner|todo
   growth tasks ask "Question for the owner" [--task T5]
@@ -92,16 +93,24 @@ def main(argv: list) -> None:
         blocked = research_gate.problem(PROJECT, CFG) if research else None
         if blocked:
             sys.exit("this job has a research step and may not start yet: " + blocked)
+        kind = opt(args, "--type", "page")
+        assert kind in {"page", "chat"}, kind
         tid = f'T{max((int(t["id"][1:]) for t in db["tasks"]), default=0) + 1}'
-        db["tasks"].append({"id": tid, "title": args[0], "owner_words": args[1] if len(args) > 1 else "",
-                            "status": "doing", "started": now(), "finished": None, "steps": []})
+        task = {"id": tid, "title": args[0], "owner_words": args[1] if len(args) > 1 else "",
+                "status": "doing", "started": now(), "finished": None, "steps": []}
+        if kind != "page":
+            task["type"] = kind
+        db["tasks"].append(task)
         save(db)
         print(tid)
     elif cmd == "step":
-        status = opt(args, "--status", "done")
+        status = opt(args, "--status", "todo")   # a new step is todo: it is done only once it has proof (#24)
         output = opt(args, "--output")
         t = find(db, args[0])
         assert status in STATUSES, status
+        if status == "done" and not (output or "").strip():
+            sys.exit("a step created as done needs --output with its proof (file, commit or command and result); "
+                     "otherwise add it as todo (the default) and tick it later")
         # A step already in the list is ticked with `tick`, never added again: re-adding left the first copy open
         # (once, 30 steps showed "todo" on five finished pages).
         key = re.match(r"\s*((?:Playbook |Pipeline |Part )?step\s*[\d.]+[a-z]?|Part [\d.]+[a-z]?|Pipeline \d+|\d+\.)", args[1], re.I)
