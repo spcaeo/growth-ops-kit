@@ -4,6 +4,7 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+- Status line: shows "manual checks n/m" from the page's checkpoints file (the one the open task names, else the newest; hidden when it has no manual items), e.g. `T3 ▰▰▱▱▱▱▱▱▱▱ 9/44 · now: 10 Research · manual checks 3/12`. This is the status-line counter #62 left open. (#62)
 - README: a table "What you get per stack" (live-page checks on every stack, code checks per adapter, an Astro site runs as `static`) and a roadmap line for an Astro adapter. (#11)
 - README, "Start in 10 minutes": any folder works; keep the kit, the project folder and the site repository as three separate folders, and the project folder outside the site repository. (#14)
 - `growth owner_messages` reads only the project folder's own agent transcripts by default; the folder above is read only when growth.json `transcripts_dir` says so (it may now be one folder or a list), so a general projects folder no longer floods the Stop hook with unrelated messages. (#21)
