@@ -32,7 +32,9 @@ def auto_start_jobs(project):
     """The jobs that start THIS project's work with the computer: a launchd plist or a crontab line that runs something
     inside the project folder, or names it (GROWTH_PROJECT=<folder>). Matched on the folder's path, never on the
     business name, so another tool for the same business (its own folder) is not counted.
-    GROWTH_LAUNCHD_DIRS (os.pathsep list) and GROWTH_CRONTAB (the crontab text) replace the real ones in tests."""
+    GROWTH_LAUNCHD_DIRS (os.pathsep list) and GROWTH_CRONTAB (the crontab text) replace the real ones in tests.
+    Known limits: a job that names the folder through ~ or a symlink is not matched (only the project side is resolved),
+    and Linux systemd user timers are not checked (nor were they before)."""
     import os
     import plistlib
     folder = re.escape(str(Path(project).resolve()).rstrip("/"))
