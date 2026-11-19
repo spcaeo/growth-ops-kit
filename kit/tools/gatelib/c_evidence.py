@@ -124,6 +124,22 @@ def shots_106(ctx):
                 "check the page at 360, 390, 820, 1280 and 1920 and save <name>-<width>.png (rules 106, 68, 39)")
 
 
+def lead_signs_off(ctx):
+    """True when the owner delegated sign-off for this page to the lead (growth.json decision_delegation: listed page,
+    not expired, the owner's words) AND the lead has filed its own decision for the page with 'VERDICT: OK'."""
+    cd = ctx.cfg.get("decision_delegation") or {}
+    try:
+        until = dt.date.fromisoformat(str(cd.get("until")))
+    except ValueError:
+        return False
+    if until < dt.date.today() or len(str(cd.get("why") or "")) < 20:
+        return False
+    if paths.key(ctx.need_path()) not in {paths.key(x) for x in cd.get("pages") or []}:
+        return False
+    return any(e.get("kind") == "decision" and re.search(r"\bVERDICT:\s*OK\b", f"{e.get('title') or ''} {e.get('text') or ''}")
+               for e in ctx.page_entries())
+
+
 def delegation_until(e):
     """The end date of an owner's delegation decision (title 'Delegation: ...', text '... until YYYY-MM-DD'), else None."""
     if not str(e.get("title") or "").lower().startswith("delegation"):
@@ -264,7 +280,7 @@ def review(ctx):
     if not probs:                       # a review file anyone can type counts only once the owner signed it off (audit H2)
         import approvals
         st, info = approvals.status(ctx.docs or (ctx.project / "docs"), "review", fresh[-1].name, fresh[-1].read_bytes())
-        if st != "ok":
+        if st != "ok" and not lead_signs_off(ctx):
             probs.append(approvals.explain(st, info, "the review", f"growth approve review research/{fresh[-1].name}"))
     ctx.verdict([f"{fresh[-1].name}: " + "; ".join(probs[:6]) + (f"; +{len(probs) - 6} more" if len(probs) > 6 else "")] if probs else [],
                 f"independent review: {fresh[-1].name} answers all {len(ids)} checklist items", fix)

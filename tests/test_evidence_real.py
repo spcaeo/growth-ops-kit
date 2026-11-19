@@ -159,3 +159,14 @@ def test_a_delegation_in_growth_json_lets_the_leads_verdict_stand_in(tmp_path):
     assert line(c(old), "ev.decision").level == "FAIL"                                   # expired
     bare = {"decision_delegation": {**good["decision_delegation"], "why": ""}}
     assert line(c(bare), "ev.decision").level == "FAIL"                                  # no owner words
+
+
+def test_lead_sign_off_under_a_delegation(tmp_path):
+    from gatelib.c_evidence import lead_signs_off
+    v = {"id": "J0002", "at": "2026-11-19 16:00", "kind": "decision", "pages": ["/x"], "tags": [], "title": "Lead VERDICT: OK", "text": ""}
+    p = project(tmp_path, [v])
+    good = {"decision_delegation": {"pages": ["/x"], "until": "2099-12-31", "why": "owner in chat: publish without me"}}
+    assert lead_signs_off(Ctx(project=p, path="/x", key="x", cfg=good, docs=p / "docs"))
+    assert not lead_signs_off(Ctx(project=p, path="/x", key="x", cfg={}, docs=p / "docs"))
+    q = project(tmp_path / "q", [])
+    assert not lead_signs_off(Ctx(project=q, path="/x", key="x", cfg=good, docs=q / "docs"))   # no verdict filed
