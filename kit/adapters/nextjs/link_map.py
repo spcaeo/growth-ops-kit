@@ -2,7 +2,7 @@
 """Internal link map and link planner for the site (read-only on the site; standard library only).
 
 It reads the site repo (Markdown posts and pages, the app routes and the page components), resolves redirects from the
-redirect files named in growth.json (nextjs.redirect_files), and builds one link graph: every link with its source, target, anchor (the words clicked) and
+redirect files named in growth.json (redirect_files), and builds one link graph: every link with its source, target, anchor (the words clicked) and
 WHERE it sits on the page:
   body       written in the page's own text (Markdown body, or a text link in the page's own components)
   hub-list   a hub's guide list or shelves (the files named in growth.json nextjs.hub_files, if any)
@@ -35,7 +35,7 @@ different page (rule 90), is skipped, so no two sources get the same words.
 It also lists anchor fixes for existing links (duplicate words, or words with no search phrase) and outbound
 suggestions: a hub to every spoke of its silo, a spoke up to its hub and to its closest siblings.
 
-Where this site's code is laid out differently, growth.json "nextjs" says so (every key is optional):
+Where this site's code is laid out differently, growth.json says so (every key is optional; the first four sit at the top level, the older "nextjs" block is still read):
   posts_dir, pages_dir   the Markdown folders (default content/posts and content/pages; a missing folder is skipped)
   redirect_files         files holding the site's redirects: "/old": "/new" pairs, and a Set named ...GONE... of 410 paths
   retired_paths          address prefixes that answer 410 on purpose (for example "/tag")
@@ -57,15 +57,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tools"))
-from config import CFG, PROJECT, SITE_REPO, TZ  # noqa: E402
+from config import CFG, PROJECT, SITE_REPO, TZ, site_setting  # noqa: E402
 
 DB = PROJECT / "page-tracker" / "tracker.db"
 NX = CFG.get("nextjs") or {}
 BLOG = "/" + (CFG.get("blog_path") or "/blog").strip("/")
-POSTS_DIR = NX.get("posts_dir") or "content/posts"
-PAGES_DIR = NX.get("pages_dir") or "content/pages"
-REDIRECT_FILES = list(NX.get("redirect_files") or [])
-RETIRED = tuple(NX.get("retired_paths") or [])
+POSTS_DIR = site_setting(CFG, "posts_dir", "content/posts")
+PAGES_DIR = site_setting(CFG, "pages_dir", "content/pages")
+REDIRECT_FILES = list(site_setting(CFG, "redirect_files", []))
+RETIRED = tuple(site_setting(CFG, "retired_paths", []))
 HUB_FILES = list(NX.get("hub_files") or [])
 TEMPLATE_FILES = list(NX.get("template_files") or ["components/nav.tsx", "components/header.tsx", "components/footer.tsx"])
 RELATED_FILE = NX.get("related_posts_file") or ""
@@ -197,7 +197,7 @@ class Site:
         p = self.repo / rel
         return p.read_text() if p.exists() else ""
 
-    # -------- redirects (the files named in growth.json nextjs.redirect_files)
+    # -------- redirects (the files named in growth.json redirect_files)
     def _redirects(self):
         """"/old": "/new" pairs and the 410 paths of a Set named ...GONE..., from every redirect file."""
         self.path_redirects, self.gone_paths = {}, set()

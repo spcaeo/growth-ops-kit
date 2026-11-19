@@ -271,13 +271,14 @@ def no_secrets(ctx):
     ctx.verdict(probs, f"{len(ctx.branch_files())} changed files, no secrets", "remove the secret, rotate the key, keep keys in ~/.config only (rule 119)")
 
 
-@check("repo.commit-identity", "118", what="every commit on the branch uses the repo's noreply identity", needs="nextjs")
+@check("repo.commit-identity", "118", what="every commit on the branch uses the repo's commit identity (growth.json commit_identity.email; else a noreply address)", needs="nextjs")
 def commit_identity(ctx):
-    want = ctx.commit_email()
     out = ctx.git("log", ctx.base_ref() + "..HEAD", "--format=%h %ae %ce")
-    bad = [l for l in out.splitlines() if l.strip() and (l.split()[1] != want or l.split()[2] != want)]
-    n = len([l for l in out.splitlines() if l.strip()])
-    ctx.verdict(bad, f"{n} branch commit(s), all by {want}", f"commit with -c user.email={want} (rule 118); fix with git rebase --exec 'git commit --amend --reset-author --no-edit'")
+    rows = [l.split() for l in out.splitlines() if l.strip()]
+    bad = [" ".join(r) for r in rows if not ctx.identity_ok(r[1], r[2])]
+    want = ctx.commit_email()
+    fix = (f"commit with -c user.email={want} (rule 118)" if want else "commit with your GitHub noreply address, or set growth.json commit_identity.email (rule 118)")
+    ctx.verdict(bad, f"{len(rows)} branch commit(s), all {ctx.identity_rule()}", fix + "; fix with git rebase --exec 'git commit --amend --reset-author --no-edit'")
 
 
 @check("repo.commit-style", "123", what="every branch commit has a one-line subject and the co-author line", needs="nextjs")
@@ -295,25 +296,26 @@ def commit_style(ctx):
     ctx.verdict(probs, "branch commits are one plain sentence with the co-author line", "commit by path with one sentence and the co-author line (rule 123)")
 
 
-@check("repo.branch", "114", what="the work is on a page/article/fix/design branch that is not merged into the production branch", needs="nextjs")
+@check("repo.branch", "114", what="the work is on a branch with an allowed prefix (growth.json branch_prefixes; default page/, article/, fix/, design/) that is not merged into the production branch", needs="nextjs")
 def branch(ctx):
     b = ctx.git("rev-parse", "--abbrev-ref", "HEAD").strip()
     base = ctx.base_ref()
     prod = base.split("/", 1)[-1]
     probs = []
-    if not re.match(r"(article|page|fix|design)/", b):
-        probs.append(f"branch '{b}' is not article/, page/, fix/ or design/")
+    prefixes = ctx.branch_prefixes()
+    if not any(b.startswith(p) for p in prefixes):
+        probs.append(f"branch '{b}' does not start with " + ", ".join(prefixes))
     code, _ = run(["git", "-C", str(ctx.repo), "merge-base", "--is-ancestor", "HEAD", base])
     if code == 0 and b != prod:
         probs.append(f"the branch is already in {base}")
-    ctx.verdict(probs, f"on branch {b}, not merged", "work on a page/... branch; merge only on the owner's yes (rule 114)")
+    ctx.verdict(probs, f"on branch {b}, not merged", "work on a branch with an allowed prefix (growth.json branch_prefixes); merge only on the owner's yes (rule 114)")
 
 
-@check("repo.content-reader", "104", what="only the one named module reads the content files (growth.json nextjs.content_reader)", needs="nextjs")
+@check("repo.content-reader", "104", what="only the one named module reads the content files (growth.json content_reader)", needs="nextjs")
 def content_reader(ctx):
     reader = ctx.nx("content_reader")
     if not reader:
-        raise Skip("growth.json nextjs.content_reader is not set: name the one module that reads the content files to switch this check on")
+        raise Skip("growth.json content_reader is not set: name the one module that reads the content files to switch this check on")
     folders = "|".join(re.escape(d.strip("/")) for d in (ctx.nx("posts_dir", "content/posts"), ctx.nx("pages_dir", "content/pages")))
     probs = []
     for f in ctx.repo_files(("app/**/*.ts", "app/**/*.tsx", "components/**/*.tsx", "lib/**/*.ts")):
@@ -402,11 +404,11 @@ def redirects(ctx):
                 "ask first; file the owner's yes with growth journal add --kind decision --tag redirect (rule 75)")
 
 
-@check("repo.retired-410", "76", what="retired page groups still answer 410 (growth.json nextjs.retired_paths)", needs="nextjs")
+@check("repo.retired-410", "76", what="retired page groups still answer 410 (growth.json retired_paths)", needs="nextjs")
 def retired_410(ctx):
     paths = ctx.nx("retired_paths", [])
     if not paths:
-        raise Skip("this site has no retired page groups listed (growth.json nextjs.retired_paths)")
+        raise Skip("this site has no retired page groups listed (growth.json retired_paths)")
     repo = ctx.need_repo()
     code = "\n".join(f.read_text(errors="replace") for n in ("middleware.ts", "middleware.js", "next.config.ts", "next.config.js", "next.config.mjs", "vercel.json", "netlify.toml")
                      for f in [repo / n] if f.is_file())

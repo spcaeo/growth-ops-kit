@@ -52,8 +52,8 @@ def test_no_false_fail_from_layout_assumptions(nx_project, base):
     for assumption in ("lib/content.ts", "/tag/", "origin/main", "unknown revision", "lib/hubs", "content/posts"):
         assert assumption not in fails, f"a FAIL still assumes {assumption!r}:\n{fails}"
     skips = [l for l in lines if l.startswith("SKIP")]
-    assert any(l.startswith("SKIP repo.content-reader:") and "nextjs.content_reader" in l for l in skips)
-    assert any(l.startswith("SKIP repo.retired-410:") and "nextjs.retired_paths" in l for l in skips)
+    assert any(l.startswith("SKIP repo.content-reader:") and "growth.json content_reader" in l for l in skips)
+    assert any(l.startswith("SKIP repo.retired-410:") and "growth.json retired_paths" in l for l in skips)
 
 
 def test_the_branch_checks_use_the_configured_production_branch(nx_project, base):
@@ -79,3 +79,98 @@ def test_a_configured_content_reader_is_checked(nx_project, base):
     (project / "growth.json").write_text(json.dumps(cfg))
     _, lines = run_gate(project, base, "--only", "repo.content-reader")
     assert any("[repo.content-reader]" in l and l.startswith("OK") for l in lines), "\n".join(lines)
+
+
+def test_stack_neutral_settings_at_the_top_level_switch_the_checks_on(nx_project, base):
+    project, repo = nx_project
+    cfg = json.loads((project / "growth.json").read_text())
+    cfg["content_reader"] = "lib/posts.ts"                 # top level, nothing under "nextjs"
+    (project / "growth.json").write_text(json.dumps(cfg))
+    _, lines = run_gate(project, base, "--only", "repo.content-reader")
+    assert any("[repo.content-reader]" in l and l.startswith("OK") for l in lines), "\n".join(lines)
+    assert not any(l.startswith("SKIP repo.content-reader") for l in lines)
+
+
+def test_site_setting_reads_the_top_level_first_then_the_older_nextjs_block():
+    import config
+    old = {"nextjs": {"posts_dir": "old/posts", "retired_paths": ["/tag"]}}
+    assert config.site_setting(old, "posts_dir", "content/posts") == "old/posts"      # the one-release fallback
+    assert config.site_setting(old, "pages_dir", "content/pages") == "content/pages"  # default when neither has it
+    both = {"posts_dir": "new/posts", "nextjs": {"posts_dir": "old/posts"}}
+    assert config.site_setting(both, "posts_dir") == "new/posts"                      # the top level wins
+    assert config.site_setting({"posts_dir": ""}, "posts_dir", "d") == "d"            # empty counts as not set
+    assert set(config.SITE_KEYS) == {"retired_paths", "redirect_files", "posts_dir", "pages_dir", "content_reader"}
+
+
+def test_the_project_template_keeps_the_neutral_keys_at_the_top_level():
+    tpl = json.loads((ROOT / "templates" / "project" / "growth.json").read_text())
+    import config
+    for k in config.SITE_KEYS:
+        assert k in tpl and k not in tpl["nextjs"], k
+
+
+def test_the_site_hook_reads_posts_dir_from_either_place():
+    sys.path.insert(0, str(ROOT / "kit" / "hooks"))
+    import install_hooks
+    for cfg in ({"posts_dir": "writing"}, {"nextjs": {"posts_dir": "writing"}}):
+        assert install_hooks.route_of("writing/hello.md", Path("."), cfg) == "/blog/hello"
+
+
+def _set(project, **kw):
+    cfg = json.loads((project / "growth.json").read_text())
+    cfg.update(kw)
+    (project / "growth.json").write_text(json.dumps(cfg))
+
+
+def _verdict(lines, cid):
+    return next((l for l in lines if f"[{cid}]" in l), "")
+
+
+def _git(repo, *args, **env):
+    return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True, env={**os.environ, **env})
+
+
+def test_branch_prefixes_default_to_the_kits_four_and_can_be_set(nx_project, base):
+    project, repo = nx_project
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    assert _verdict(lines, "repo.branch").startswith("OK")                     # page/lawn-mowing, the default prefixes
+    _git(repo, "checkout", "-qb", "review-header")
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    v = _verdict(lines, "repo.branch")
+    assert v.startswith("FAIL") and "review-header" in v and "page/" in v      # not allowed by default
+    _set(project, branch_prefixes=["review-", "fix"])                          # "review-" as written, "fix" means "fix/"
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    assert _verdict(lines, "repo.branch").startswith("OK"), "\n".join(lines)
+    _git(repo, "checkout", "-qb", "page/other")                                # the kit's own prefix is now not listed
+    _, lines = run_gate(project, base, "--only", "repo.branch")
+    assert _verdict(lines, "repo.branch").startswith("FAIL")
+
+
+def test_commit_identity_is_the_configured_one_else_a_noreply_address(nx_project, base):
+    project, repo = nx_project
+    # the fixture's commit is by an example.com address: neither configured nor noreply
+    _, lines = run_gate(project, base, "--only", "repo.commit-identity")
+    assert _verdict(lines, "repo.commit-identity").startswith("FAIL")
+    _set(project, commit_identity={"name": "", "email": "test@example.com"})   # a private repo's own identity, on purpose
+    _, lines = run_gate(project, base, "--only", "repo.commit-identity")
+    assert _verdict(lines, "repo.commit-identity").startswith("OK"), "\n".join(lines)
+    _set(project, commit_identity={"name": "", "email": ""})                   # empty again: the noreply rule
+    noreply = "7+someone@users.noreply" + ".github.com"  # leak-check: allow
+    _git(repo, "commit", "-q", "--amend", "--reset-author", "--no-edit",
+         GIT_COMMITTER_NAME="T", GIT_COMMITTER_EMAIL=noreply, GIT_AUTHOR_NAME="T", GIT_AUTHOR_EMAIL=noreply)
+    _, lines = run_gate(project, base, "--only", "repo.commit-identity")
+    assert _verdict(lines, "repo.commit-identity").startswith("OK"), "\n".join(lines)
+
+
+def test_the_checkpoint_plan_marks_adapter_checks_skip_on_a_static_stack(demo_project, tmp_path):
+    code = ("import sys; sys.path.insert(0, 'kit/tools'); import preflight\\n"
+            "from pathlib import Path\\n"
+            "(preflight.PROJECT / 'research').mkdir(exist_ok=True)\\n"
+            "for stack in ('static', 'nextjs'):\\n"
+            "    p, _ = preflight.write_plan('/x', 'money', 'x-' + stack, preflight.checks_in_scope('money'), stack)\\n"
+            "    print(stack, p.read_text().count('SKIP on this stack'))\\n")
+    r = subprocess.run([sys.executable, "-c", code.replace("\\n", "\n")], cwd=ROOT, capture_output=True, text=True,
+                       env={**os.environ, "GROWTH_PROJECT": str(demo_project)})
+    assert r.returncode == 0, r.stderr
+    counts = dict(l.split() for l in r.stdout.split("\n") if l.strip())
+    assert int(counts["static"]) > 0 and counts["nextjs"] == "0"

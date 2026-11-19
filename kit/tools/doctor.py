@@ -285,7 +285,8 @@ row("A9 Owner journal page current", True if _fresh else ("busy" if _recent and 
 _settings = PROJECT / ".claude" / "settings.json"
 _hook = False
 try:
-    _hook = "stop_hook.sh" in json.dumps(json.loads(_settings.read_text()).get("hooks", {}).get("Stop", []))
+    _stop = json.dumps(json.loads(_settings.read_text()).get("hooks", {}).get("Stop", []))
+    _hook = "stop_hook.sh" in _stop or "hook stop" in _stop
 except (OSError, ValueError, AttributeError):
     pass
 row("A10 Agent guards installed (Stop hook)", _hook, ".claude/settings.json runs kit/hooks/stop_hook.sh when the agent stops"
@@ -297,6 +298,34 @@ _pv = (CFG.get("preview_url") or "").strip()
 row("A11 Preview address set (golden rule guard)", True if _pv else None,
     f"preview_url {_pv}" if _pv else "preview_url is empty: no guard stops an address going to the owner before READY",
     "set preview_url in growth.json to the one address every review happens on (book/01-flow.md A11)")
+
+# A12 the commands in .claude/settings.json can find the kit on this machine
+import os as _os
+import re as _re
+import shutil as _shutil
+_cmds = []
+try:
+    _cfg = json.loads(_settings.read_text())
+    _cmds = [h.get("command", "") for e in _cfg.get("hooks", {}).get("Stop", []) for h in e.get("hooks", [])]
+    _cmds += [str((_cfg.get("statusLine") or {}).get("command", ""))]
+except (OSError, ValueError, AttributeError):
+    pass
+_cmds = [c for c in _cmds if "GROWTH_PROJECT" in c or "growth" in c]
+_gone = []
+for _c in _cmds:
+    _m = _re.search(r"\$\{GROWTH_KIT:-([^}]+)\}", _c)
+    _kit = Path(_os.environ.get("GROWTH_KIT") or (_m.group(1) if _m else ""))
+    if "command -v growth" in _c and _shutil.which("growth"):
+        continue
+    if not _m and "command -v growth" not in _c:
+        continue
+    if not (_kit / "growth").is_file():
+        _gone.append(str(_kit))
+row("A12 Hook commands find the kit", None if not _cmds else not _gone,
+    "no hook command in .claude/settings.json to check" if not _cmds else
+    ("every hook command resolves (growth on the PATH, or the kit folder it names exists)" if not _gone else
+     f"the kit folder named in .claude/settings.json is not here: {', '.join(sorted(set(_gone)))}"),
+    "run bash setup.sh in the kit checkout (links growth onto the PATH), or set GROWTH_KIT to the kit folder, or: growth new-project <this folder> --site <url> --force")
 
 w = max(len(r[0]) for r in rows)
 print(f"{CFG.get('name', 'This project')} growth setup ({CFG.get('site_url', 'no site_url')})\n")

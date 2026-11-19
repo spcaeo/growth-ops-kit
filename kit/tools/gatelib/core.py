@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import KIT_DIR  # noqa: E402
+from config import KIT_DIR, SITE_KEYS, site_setting  # noqa: E402
 
 PAGE_TYPES = ("money", "hub", "post", "core")
 ALL = PAGE_TYPES                    # a check for every page type ("site" scope)
@@ -291,6 +291,8 @@ class Ctx:
 
     def nx(self, key, default=None):
         """A setting of growth.json "nextjs" (how this site's code is laid out); `default` when it is not set."""
+        if key in SITE_KEYS:           # stack-neutral keys: top level first, the older nextjs block as a fallback
+            return site_setting(self.cfg, key, default)
         v = (self.cfg.get("nextjs") or {}).get(key)
         return default if v in (None, "", [], {}) else v
 
@@ -313,8 +315,26 @@ class Ctx:
         return self.cache["bfiles"]
 
     def commit_email(self):
-        """The git identity commits must carry: growth.json commit_identity.email (older name: committer_email)."""
+        """The git identity commits must carry: growth.json commit_identity.email (older name: committer_email).
+        "" when none is set: the noreply rule applies then (see identity_ok)."""
         return (self.cfg.get("commit_identity") or {}).get("email") or self.cfg.get("committer_email", "")
+
+    def identity_ok(self, *emails):
+        """True when every address is the configured commit identity; with none configured, when it is a GitHub noreply address."""
+        want = self.commit_email()
+        return all((e == want) if want else e.lower().endswith("@users.noreply.github.com") for e in emails)
+
+    def identity_rule(self):
+        want = self.commit_email()
+        return f"by {want}" if want else "by a GitHub noreply address (set growth.json commit_identity.email to name another)"
+
+    def branch_prefixes(self):
+        """The branch prefixes work may happen on: growth.json branch_prefixes (default page/, article/, fix/, design/). An entry
+        ending in / or - is used as written ("review-" allows review-header); any other entry gets a / ("page" means "page/")."""
+        v = self.cfg.get("branch_prefixes")
+        got = [str(x).strip() for x in v] if isinstance(v, list) else []
+        got = [x if x.endswith(("/", "-")) else x + "/" for x in got if x]
+        return got or ["page/", "article/", "fix/", "design/"]
 
     def site_origin(self):
         return self.cfg.get("site_url", "").rstrip("/")

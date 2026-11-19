@@ -6,17 +6,17 @@ from gatelib.c_process import *  # noqa: F401,F403
 from gatelib.core import Skip, check, run  # noqa: F401
 
 
-@check("proc.commit-identity", "118", P, "every unmerged commit in every site worktree uses the noreply identity", needs="nextjs")
+@check("proc.commit-identity", "118", P, "every unmerged commit in every site worktree uses the commit identity (growth.json commit_identity.email; else a noreply address)", needs="nextjs")
 def commit_identity(ctx):
-    want = ctx.commit_email()
     probs = []
     for w in worktrees(ctx):
         out = ctx.git("-C", w["worktree"], "log", ctx.base_ref(site_repo(ctx)) + "..HEAD", "--format=%h %ae %ce", repo=site_repo(ctx))
         for line in out.splitlines():
             h, a, c = line.split()
-            if a != want or c != want:
+            if not ctx.identity_ok(a, c):
                 probs.append(f"{w['worktree'].rsplit('/', 1)[-1]} {h} {a}")
-    ctx.verdict(probs, f"all unmerged commits in {len(worktrees(ctx))} worktrees use {want}", f"commit with -c user.email={want} (rule 118)")
+    ctx.verdict(probs, f"all unmerged commits in {len(worktrees(ctx))} worktrees are {ctx.identity_rule()}",
+                "commit with the identity in growth.json commit_identity.email, or a GitHub noreply address when none is set (rule 118)")
 
 
 def project_start(ctx, repo):

@@ -57,6 +57,19 @@ def load_cfg(project: Path) -> dict:
         raise SystemExit(f"{project / 'growth.json'} is not valid JSON: {e}")
 
 
+# Settings every stack has (retired addresses, redirect lists, content folders). They live at the top level of growth.json;
+# the older place, the "nextjs" block, is still read as a fallback for one release.
+SITE_KEYS = ("retired_paths", "redirect_files", "posts_dir", "pages_dir", "content_reader")
+
+
+def site_setting(cfg: dict, key: str, default=None):
+    """A stack-neutral setting: growth.json top level first, else the older nextjs block, else `default`."""
+    for v in (cfg.get(key), (cfg.get("nextjs") or {}).get(key)):
+        if v not in (None, "", [], {}):
+            return v
+    return default
+
+
 def resolve_in(project: Path, value: str) -> Path:
     """A path from growth.json: ~ expands to the home folder; a relative path is relative to the project root."""
     p = Path(value).expanduser()

@@ -60,7 +60,7 @@ def test_new_project_registers_statusline_and_keeps_other_settings(tmp_path):
     new_project.agent_files(tmp_path, "Demo", "https://example.com", ROOT)
     cfg = json.loads((tmp_path / ".claude" / "settings.json").read_text())
     assert cfg["model"] == "keep-me"
-    assert "statusline.py" in cfg["statusLine"]["command"]
+    assert cfg["statusLine"]["command"].endswith(" statusline")
     assert cfg["hooks"]["Stop"][0]["hooks"][0]["statusMessage"]
     cfg["statusLine"] = {"type": "command", "command": "my own"}
     (tmp_path / ".claude" / "settings.json").write_text(json.dumps(cfg))

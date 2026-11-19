@@ -103,3 +103,10 @@ instruction logged and written into its one home). Details: [book/01-flow.md](bo
 Add what you learn. A new rule goes in the page rulebook with its tag and its entry in `kit/rules/registry.json` in
 the same change. A new lesson goes in `book/lessons.md` with its date and what it cost. Never put a client name, a
 key or a private number in this repository: the leak check runs at pre-commit and in CI.
+
+Commit under a neutral identity, not a personal one: `bash setup.sh` sets a repo-local GitHub no-reply identity for
+this checkout (it asks once, or reads `GROWTH_KIT_GIT_EMAIL`; your global git config is never changed). Keep the words
+that must never appear (client and project names) one per line in a git-ignored `.private-words` file at the checkout
+root: the leak check reads it, and `growth leak_check --history` fails on a private word in an unpushed commit's
+message, files or author identity. A second worktree does not have that file; pass it with
+`--private-words <path-to-the-main-checkout>/.private-words`.

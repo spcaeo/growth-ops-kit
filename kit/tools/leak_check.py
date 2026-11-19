@@ -3,6 +3,7 @@
 
   growth leak_check                      # every file of the repo that is tracked or not ignored
   growth leak_check --staged             # only what is staged (the pre-commit hook)
+  growth leak_check --message FILE       # one commit message (the commit-msg hook)
   growth leak_check --history            # every commit of the repo: added lines, file names, messages, author and committer (before any push)
   growth leak_check --root DIR           # another folder (default: the git repo or folder the command runs in)
 
@@ -155,8 +156,11 @@ def scan_files(root: Path, files: list[str], words: list[str], staged=False):
 
 def scan_history(root: Path, words: list[str]):
     """(hits, warnings). Hits: every added line of every commit, every file name that ever existed and every commit
-    message. Warnings: a private word in a commit's author or committer name or email (history is replaced at publish)."""
+    message. A private word in the author or committer name or email is a hit when the commit is not on any remote yet
+    (one push would publish it for good), else a warning (history is replaced at publish)."""
     report, warns = [], []
+    # commits no remote has yet: a private word in their identity is a FAIL (one push would publish it for good)
+    unpushed = {h[:8] for h in git(root, "rev-list", "--all", "--not", "--remotes").stdout.decode("utf-8", "replace").split()}
     log = git(root, "log", "--all", "--no-color", "-p", "-U0", "--no-ext-diff",
               "--format=@@commit %H%n@@who %an%x09%ae%x09%cn%x09%ce%n%B%n@@endmsg").stdout.decode("utf-8", "replace")
     commit, msg, cur, in_msg, ln = "", [], "", False, 0
@@ -170,10 +174,13 @@ def scan_history(root: Path, words: list[str]):
                 name, email, cname, cemail = (line[6:].split("\t") + ["", "", "", ""])[:4]
                 for role, nm, em in (("author", name, email), ("committer", cname, cemail)):
                     for w in words:
-                        if word_rx(w).search(nm):
-                            warns.append((f"commit {commit}", 0, f"private word in the {role} name", w))
-                        if word_rx(w).search(em):
-                            warns.append((f"commit {commit}", 0, f"private word in the {role} email", w))
+                        for field, val in (("name", nm), ("email", em)):
+                            if not word_rx(w).search(val):
+                                continue
+                            if commit in unpushed:
+                                report.append((f"commit {commit}", 0, f"private word in the {role} {field} (not pushed yet)", w))
+                            else:
+                                warns.append((f"commit {commit}", 0, f"private word in the {role} {field}", w))
             elif line == "@@endmsg":
                 in_msg = False
                 for _n, kind, shown in scan_text("\n".join(msg), words):
@@ -219,6 +226,7 @@ def main(argv=None):
     ap.add_argument("--root", default="", help="folder to check (default: the git repo the command runs in, else this folder)")
     ap.add_argument("--staged", action="store_true", help="only the files staged for commit")
     ap.add_argument("--history", action="store_true", help="every commit, not just the files now")
+    ap.add_argument("--message", default="", help="a commit message file (the commit-msg hook): keys and private words in it fail")
     ap.add_argument("--private-words", default="", help="the private words file (default: <root>/.private-words)")
     a = ap.parse_args(argv)
     root = Path(a.root or ".").resolve()
@@ -227,6 +235,13 @@ def main(argv=None):
         root = Path(top)
     warns = []
     words = private_words(Path(a.private_words) if a.private_words else root / ".private-words")
+    if a.message:
+        text = "\n".join(l for l in Path(a.message).read_text(errors="replace").splitlines() if not l.startswith("#"))
+        bad = [(n, kind, shown) for n, kind, shown in scan_text(text, words) if kind != "email address"]
+        for n, kind, shown in bad:
+            print(f"FAIL commit message:{n} {kind}: {shown}")
+        print(f"leak_check: {len(bad)} hit(s) in the commit message ({len(words)} private word(s) checked).")
+        return 1 if bad else 0
     if a.history:
         if not in_git(root):
             print("leak_check --history needs a git repository", file=sys.stderr)
