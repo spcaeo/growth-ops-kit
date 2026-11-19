@@ -62,6 +62,7 @@ TOOLS = {
     "inventory": ("tools/inventory.py", "full page inventory from the sitemap: every URL, section, stage, size, words, Search Console numbers"),
     "link_graph": ("tools/link_graph.py", "crawl the site's internal links into a graph and report orphans, weak pages and clusters"),
     "link_map": ("adapters/nextjs/link_map.py", "(Next.js adapter) internal link map and link planner read from the site's code"),
+    "fingerprint": ("tools/fingerprint.py", "the page's fingerprint as served (built HTML + CSS/JS hashes); evidence stays fresh while it is unchanged"),
     "page_archive": ("tools/page_archive.py", "before-and-after full-page screenshots and HTML of a page (rule 36i)"),
     "research": ("tools/research.py", "the page's structured research record (search window, AI answers, People also ask, vendor facts); the gate reads it, the brief is written from it"),
     "vendor_page": ("tools/vendor_page.py", "read a vendor page's raw text (no summariser), quote the plan's exact line, list its monthly/yearly and other toggles, file the fact"),

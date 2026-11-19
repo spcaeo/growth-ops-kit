@@ -8,6 +8,7 @@ import re
 from zoneinfo import ZoneInfo
 
 from .core import ALL, Missing, check, mtime
+import fingerprint  # noqa: E402  kit/tools/fingerprint.py: the page as served
 import paths  # noqa: E402  kit/tools/paths.py: one form of a site path
 
 FRESH_DAYS = 30
@@ -75,20 +76,37 @@ def shot_problem(p, width):
 
 
 def fresh_widths(ctx, widths):
-    since = ctx.last_change_time()
     files = shots(ctx)
-    have = {}
+    have, since = {}, None
     for p in files:
         m = re.search(r"-(\d{3,4})\.png$", p.name)
-        if m and mtime(p) >= since and not shot_problem(p, int(m.group(1))):
-            have.setdefault(int(m.group(1)), []).append(p.name)
+        if not m or shot_problem(p, int(m.group(1))):
+            continue
+        # shots stored with the page's fingerprint (growth fingerprint record) stay fresh while the built page is the same
+        if not ctx.unchanged_since((fingerprint.shots_sidecar(p.parent).get(paths.key(ctx.need_path())))):
+            if since is None:
+                since = ctx.last_change_time()
+            if mtime(p) < since:
+                continue
+        have.setdefault(int(m.group(1)), []).append(p.name)
     return [w for w in widths if w not in have], have
 
 
 def tagged_after_commit(ctx, tag):
-    # journal times are kept to the minute; compare at the minute, so an entry filed in the commit's minute counts
-    t0 = dt.datetime.fromtimestamp(ctx.last_change_time(), tz(ctx)).replace(second=0, microsecond=0)
-    return [e for e in ctx.page_entries() if tag in (e.get("tags") or []) and (at(e, tz(ctx)) or t0) >= t0]
+    """The page's journal entries with this tag that still hold: filed with a fingerprint equal to the page's built output now
+    (fresh whatever commits came since), else filed after the page's last change (the commit-based rule, for old evidence)."""
+    here = paths.key(ctx.need_path())
+    tagged = [e for e in ctx.page_entries() if tag in (e.get("tags") or [])]
+    out, t0 = [], None
+    for e in tagged:
+        if ctx.unchanged_since((e.get("fp") or {}).get(here)):
+            out.append(e)
+            continue
+        if t0 is None:        # journal times are kept to the minute; compare at the minute, so an entry filed in the commit's minute counts
+            t0 = dt.datetime.fromtimestamp(ctx.last_change_time(), tz(ctx)).replace(second=0, microsecond=0)
+        if (at(e, tz(ctx)) or t0) >= t0:
+            out.append(e)
+    return out
 
 
 @check("ev.shots-1366-390", "158", ALL, "screenshots at 1366 and 390 px, newer than the page's last change (the designer's look)", needs="project")

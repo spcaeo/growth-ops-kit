@@ -4,6 +4,10 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.2.3 - 2026-11-19
+
+- Evidence freshness by what the page renders: evidence (a click-test or share-preview or speed journal entry, and screenshots) is stored with a fingerprint of the page as served (new `kit/tools/fingerprint.py`, `growth fingerprint show|record`; `growth journal add|run --url` for a preview address): the sha256 of its built HTML (build ids, build times, nonces, comments and timestamps stripped) plus the sha256 of the CSS and JS files it links, read from `build_dir` (or fetched from the preview URL); nothing is rebuilt. When the fingerprint still equals the page now, the evidence is fresh whatever commits touched `src/components` or `src/data`. Evidence with no fingerprint (old evidence) keeps the commit-based rule (a journal entry also still counts when it is filed after the last change). Shots take their fingerprint from `research/*-shots/fingerprint.json` (`growth fingerprint record <page> --key <key>`).
+
 ## 2.2.2 - 2026-11-19
 
 - `words.no-customers`: new growth.json `words.implied_proof_allow` (`[{"pattern", "why"}]`): an entry with a why removes that implied-proof pattern ("trusted by", "case stud(y|ies)", ...) for a site whose owner approved it; `aggregateRating` in the same list lets structured data carry a rating; customer names in `words.hidden_customers` still FAIL, also after an allowed "trusted by"; an entry without a why FAILs. Default empty, nothing changes.
