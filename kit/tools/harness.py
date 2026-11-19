@@ -59,8 +59,21 @@ PROTECTED_FILES = [".claude/settings.json", ".claude/settings.local.json", "grow
 OLD_UNSAFE_ALLOW = ["Bash(git branch*)", "Bash(python3 -m pytest*)", "Bash(pytest*)"]
 
 
+OURS = 'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" '
+
+
 def run_growth() -> str:
-    return 'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" "$(command -v growth || echo "${GROWTH_KIT:-%s}/growth")"' % KIT_ROOT
+    """The kit's own growth by its absolute path (audit L5: `command -v growth` ran whatever `growth` came first on the
+    PATH as the Stop hook). GROWTH_KIT in your own environment may point it elsewhere; --repair refreshes the path and doctor
+    A12 reports a kit folder that moved."""
+    return OURS + '"${GROWTH_KIT:-%s}/growth"' % KIT_ROOT
+
+
+def _refresh(c: str, wanted: str) -> str:
+    """Our own hook command (any older form, or a kit path that moved) -> the current one; anything else unchanged."""
+    if c.startswith(OURS) and ("command -v growth" in c or "${GROWTH_KIT:-" in c) and c != wanted:
+        return wanted
+    return c
 
 
 def venv_python() -> str:
@@ -130,18 +143,27 @@ def install(folder: Path, name: str, site: str, kit_root: Path = KIT_ROOT, permi
             c = h.get("command", "")
             if "${GROWTH_KIT:-" in c and "stop_hook.sh" in c:           # our own older form (absolute kit path)
                 h["command"] = command
+            elif "hook stop" in c:
+                h["command"] = _refresh(c, command)
             if ("hook stop" in h.get("command", "") or "stop_hook.sh" in h.get("command", "")) and not h.get("statusMessage"):
                 h["statusMessage"] = STOP_MESSAGE
     post = cfg_s["hooks"].setdefault("PostToolUse", [])       # the workflow guard: re-read the checkpoints at each stage (once)
     if "hook stage" not in json.dumps(post):
         post.append({"matcher": "Bash", "hooks": [{"type": "command", "command": f"{run_growth()} hook stage".replace(str(KIT_ROOT), str(kit_root)),
                                                     "statusMessage": STAGE_MESSAGE}]})
+    stage_command = f"{run_growth()} hook stage".replace(str(KIT_ROOT), str(kit_root))
+    for entry in post:
+        for h in entry.get("hooks", []):
+            if "hook stage" in h.get("command", ""):
+                h["command"] = _refresh(h["command"], stage_command)
     if not post:
         del cfg_s["hooks"]["PostToolUse"]
     if "statusLine" not in cfg_s:       # the owner watches the open task tick off at the bottom of the window (never replaced)
         cfg_s["statusLine"] = {"type": "command", "padding": 0, "command": status_command}
     elif "${GROWTH_KIT:-" in str(cfg_s["statusLine"].get("command", "")) and "statusline.py" in cfg_s["statusLine"]["command"]:
         cfg_s["statusLine"]["command"] = status_command
+    elif str(cfg_s["statusLine"].get("command", "")).endswith(" statusline"):
+        cfg_s["statusLine"]["command"] = _refresh(cfg_s["statusLine"]["command"], status_command)
     if permissions:
         allow, deny = permissions_wanted(cfg or _project_cfg(folder), kit_root)
         perm = cfg_s.setdefault("permissions", {})
