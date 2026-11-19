@@ -40,7 +40,8 @@ def project_stack():
 # tool -> (where it lives under kit/, one line)
 TOOLS = {
     "gate": ("tools/gate.py", "run every check of the page rulebook on one page (growth gate page /x --url ...), or process, engine, coverage"),
-    "serve": ("tools/serve.py", "serve a production build's folder on 127.0.0.1 (growth serve <dist>), so READY runs on the build and not on a dev server"),
+    "serve_build": ("tools/serve_build.py", "(also: growth serve) serve a production build's folder on 127.0.0.1 (growth serve <dist>), so READY runs on the build and not on a dev server"),
+    "review": ("tools/review.py", "the independent review of a page: start research/<key>-review-<date>.md from the kit's fixed checklist (rule 109)"),
     "ready": ("tools/ready.py", "the golden rule: a page is READY only when the full gate shows 0 FAIL on the one preview address"),
     "checkpoints": ("tools/checkpoints.py", "the manual checks of a page's checkpoints file: which are ticked with proof, which are open"),
     "preflight": ("tools/preflight.py", "before building a page: planning complete, site healthy, every checkpoint written down"),
@@ -82,7 +83,7 @@ TOOLS = {
     "checks": ("adapters/nextjs/checks.sh", "(Next.js adapter) run only the tests and build a change touches"),
     "page_tracker": ("page-tracker/tracker.py", "the page tracker: sync, report (did our page changes help?); also serve, ai-summary"),
 }
-ALIASES = {"new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
+ALIASES = {"serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
 
 
 def usage():

@@ -13,6 +13,9 @@ even to a reader who should pick __COMPETITOR__ or neither. Short, deep and uniq
    pages we could read").
 2. Search results for "__KW__": `__SERP__`.
 3. Mistakes to avoid: every `__PROJECT__/research/*-verify-*.md`.
+4. Comparison rule (rule 109, `kit/checklists/review.md` R1 to R3): for every price sum or "cheaper" claim, name the
+   feature the sum is about, then price the cheapest plan on each side that HAS that feature. Every number in the head
+   and the verdict is also stated in the body with its source. No two answers (FAQ, body, verdict) say different things.
 
 ## Deliver (commit after each step, by path)
 0. Fact check every claim of the current post (body, tables, FAQ, structured data) against the vendors' OWN pages and

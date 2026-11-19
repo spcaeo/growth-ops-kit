@@ -45,7 +45,7 @@ def test_the_fix_names_the_sites_own_preview_command_when_recorded():
 
 
 def test_growth_serve_serves_a_built_folder(tmp_path):
-    from serve import make_server
+    from serve_build import make_server
     (tmp_path / "about").mkdir()
     (tmp_path / "about" / "index.html").write_text("<h1>About</h1>")
     (tmp_path / "pricing.html").write_text("<h1>Pricing</h1>")

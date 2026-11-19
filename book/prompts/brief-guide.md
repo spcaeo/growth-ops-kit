@@ -15,6 +15,9 @@ yourself, other providers).
 
 ## Where you work
 Worktree `wt-__W__`, branch `page/__SLUG__` (see lane-write.md "Where you work"). Dev server port: __PORT__.
+4. Comparison rule (rule 109, `kit/checklists/review.md` R1 to R3): for every price sum or "cheaper" claim, name the
+   feature the sum is about, then price the cheapest plan on each side that HAS that feature. Every number in the head
+   and the verdict is also stated in the body with its source. No two answers (FAQ, body, verdict) say different things.
 
 ## Deliver (commit after each step, by path)
 0. Fact-check every claim of the current post (body, tables, FAQ, structured data) and write
