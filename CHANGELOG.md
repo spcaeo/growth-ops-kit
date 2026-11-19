@@ -68,6 +68,11 @@ The kit and the book share one version number. Dates are written year-month-day.
   and `box_ignore` skipped). New growth.json settings: `design`, `design_exceptions` (a WARN with its reason; FAILs
   again when its task is done or its date has passed), `disclosure_pattern`, `box_ignore`.
 
+- tags.not-local judges what a local page really requests: it loads the page in the headless browser, waits 4 s, scrolls
+  and clicks once, and fails only on requests to analytics or ad hosts. Without a browser it reads the markup, where a
+  loader behind a `location.hostname` guard for the site's own host counts as off. embeds.lazy ignores iframes inside
+  `<noscript>` (they never load while JavaScript is on).
+
 ## 2.0.1 - 2026-11-18
 
 Fixes from the independent review of 2.0.0, before anything is published.
