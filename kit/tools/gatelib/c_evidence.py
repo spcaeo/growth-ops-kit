@@ -11,6 +11,7 @@ from .core import ALL, Missing, check, mtime
 import paths  # noqa: E402  kit/tools/paths.py: one form of a site path
 
 FRESH_DAYS = 30
+DOSSIER_WORDS = 20
 # One naming rule for research files, the same in book/playbooks/cluster-redesign.md. The page key comes first and the
 # pattern is matched on the rest of the name: "-audit-<date>" or "-review-<date>" for the independent review (a date is
 # required, so a page key that merely contains "review" does not pass); "-research-check", "-fact-check", "-claims" or
@@ -41,13 +42,46 @@ def shots(ctx):
     return [p for d in dirs for p in d.rglob("*.png")]  # subfolders too (e.g. sketch/), per style round
 
 
+SHOT_MIN_BYTES, SHOT_MAX_BYTES = 1000, 60_000_000
+
+
+def png_size(p):
+    """(width, height) of a real PNG file, else None."""
+    try:
+        with open(p, "rb") as f:
+            head = f.read(24)
+    except OSError:
+        return None
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+        return None
+    return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+
+
+def shot_problem(p, width):
+    """None when the file is a real screenshot taken at `width` px (1x, 1.5x, 2x or 3x); else why not (audit H2: a
+    zero-byte file named a-1366.png counted)."""
+    try:
+        size = p.stat().st_size
+    except OSError:
+        return "unreadable"
+    if not SHOT_MIN_BYTES <= size <= SHOT_MAX_BYTES:
+        return f"{size} bytes is not a screenshot"
+    wh = png_size(p)
+    if not wh:
+        return "not a PNG image"
+    w, h = wh
+    if not any(abs(w - width * k) <= max(4, width * k * 0.02) for k in (1, 1.5, 2, 3)) or not 200 <= h <= 60000:
+        return f"{w}x{h} px is not a {width} px wide page"
+    return None
+
+
 def fresh_widths(ctx, widths):
     since = ctx.last_change_time()
     files = shots(ctx)
     have = {}
     for p in files:
         m = re.search(r"-(\d{3,4})\.png$", p.name)
-        if m and mtime(p) >= since:
+        if m and mtime(p) >= since and not shot_problem(p, int(m.group(1))):
             have.setdefault(int(m.group(1)), []).append(p.name)
     return [w for w in widths if w not in have], have
 
@@ -75,17 +109,29 @@ def shots_106(ctx):
 
 @check("ev.decision", "116", ALL, "the owner's check-in or yes for this page is filed as a journal decision", needs="project")
 def decision(ctx):
-    d = [e for e in ctx.page_entries() if e.get("kind") == "decision"]
-    if d:
-        ctx.ok(f"{len(d)} decision(s), latest {d[-1]['id']}: {d[-1].get('title', '')[:60]}")
+    import approvals
+    d = [e for e in ctx.page_entries() if e.get("kind") == "decision" and "of" not in e]
+    docs = ctx.docs or (ctx.project / "docs")
+    states = [(e, approvals.status(docs, "decision", e.get("id"), approvals.decision_content(e))) for e in d]
+    good = [e for e, (st, _) in states if st == "ok"]
+    if good:
+        ctx.ok(f"{len(good)} owner-approved decision(s), latest {good[-1]['id']}: {good[-1].get('title', '')[:60]}")
+    elif d:
+        e, (st, info) = states[-1]          # filed, but the owner never approved it (anyone can file a journal entry)
+        ctx.fail(approvals.explain(st, info, f"decision {e['id']}", f"growth approve decision {e['id']}"),
+                 "the owner approves the decision in their own terminal: growth approve decision <journal id> (rules 0, 116)")
     else:
-        ctx.fail("no owner decision filed for this page", "file the owner's answer: growth journal add --page <path> --kind decision ... (rules 0, 116)")
+        ctx.fail("no owner decision filed for this page", "file the owner's answer: growth journal add --page <path> --kind decision ..., "
+                 "then the owner runs growth approve decision <id> in their own terminal (rules 0, 116)")
 
 
-def research_fresh(ctx, pattern, what, fix, min_lines=1):
+def research_fresh(ctx, pattern, what, fix, min_lines=1, need_url=False):
     files = ctx.research(pattern)
     cut = (dt.datetime.now() - dt.timedelta(days=FRESH_DAYS)).timestamp()
-    fresh = [f for f in files if mtime(f) >= cut and len(f.read_text(errors="replace").splitlines()) >= min_lines]
+    def real(f):
+        t = f.read_text(errors="replace")
+        return len([ln for ln in t.splitlines() if ln.strip()]) >= min_lines and (not need_url or re.search(r"https?://\S+", t))
+    fresh = [f for f in files if mtime(f) >= cut and real(f)]
     if fresh:
         ctx.ok(f"{what}: {fresh[-1].name}")
     else:
@@ -94,9 +140,9 @@ def research_fresh(ctx, pattern, what, fix, min_lines=1):
 
 @check("ev.research-check", "5", ALL, "a fact check of the page's claims against official sources, within 30 days", needs="project")
 def research_check(ctx):
-    research_fresh(ctx, RESEARCH_NAME, "fact check",
+    research_fresh(ctx, RESEARCH_NAME, "fact check (5+ lines citing at least one source address)",
                    "check every claim against its official source and save research/<page>-research-check-<date>.md, or the researcher's "
-                   "research/<page>-research-<date>.md (rules 5, 6)")
+                   "research/<page>-research-<date>.md, with each claim and its source URL (rules 5, 6)", min_lines=5, need_url=True)
 
 
 @check("ev.dossier", "27", ("money", "hub"), "the page's research dossier (32 questions, competitors) exists", needs="project")
@@ -105,9 +151,13 @@ def dossier(ctx):
     if not files:
         ctx.fail("no dossier in research/", "run the money-page research (32-question dossier) first (rule 27; book/02-owner-rules.md 'Money pages are unique')")
         return
-    n = len(re.findall(r"(?m)^#{2,4}\s*(Q|Question\s*)?\d{1,2}\b", files[-1].read_text(errors="replace")))
-    ctx.verdict([f"{files[-1].name} answers {n} of 32 questions"] if n < 32 else [], f"{files[-1].name}: {n} questions",
-                "answer all 32 dossier questions (money-page playbook)")
+    text = files[-1].read_text(errors="replace")
+    heads = list(re.finditer(r"(?m)^#{2,4}\s*(Q|Question\s*)?\d{1,2}\b.*$", text))
+    # a question counts only with an answer under it (audit H2: 32 bare headings passed)
+    n = sum(1 for i, m in enumerate(heads)
+            if len(re.findall(r"\w+", text[m.end():heads[i + 1].start() if i + 1 < len(heads) else len(text)])) >= DOSSIER_WORDS)
+    ctx.verdict([f"{files[-1].name} answers {n} of 32 questions ({DOSSIER_WORDS}+ words each)"] if n < 32 else [], f"{files[-1].name}: {n} questions answered",
+                f"answer all 32 dossier questions, {DOSSIER_WORDS} words or more under each (money-page playbook)")
 
 
 def checklist_ids(ctx):
@@ -128,6 +178,8 @@ def review_problems(text, ids):
     bld = re.search(r"(?mi)^[\s*_-]*builder\b[\s*_]*:\s*(.+)$", text)
     if not rev or not rev.group(1).strip().strip("*_ "):
         out.append("no 'Reviewer: <model>' line")
+    elif not bld or not bld.group(1).strip().strip("*_ "):
+        out.append("no 'Builder: <model>' line (the reviewer must be shown to differ from the builder)")
     elif bld and bld.group(1).strip().lower() == rev.group(1).strip().lower():
         out.append("the reviewer is the builder (a different model must review)")
     return out
@@ -147,16 +199,53 @@ def review(ctx):
     if not ids:
         raise Missing("kit/checklists/review.md", "restore the kit's review checklist")
     probs = review_problems(fresh[-1].read_text(errors="replace"), ids)
+    if not probs:                       # a review file anyone can type counts only once the owner signed it off (audit H2)
+        import approvals
+        st, info = approvals.status(ctx.docs or (ctx.project / "docs"), "review", fresh[-1].name, fresh[-1].read_bytes())
+        if st != "ok":
+            probs.append(approvals.explain(st, info, "the review", f"growth approve review research/{fresh[-1].name}"))
     ctx.verdict([f"{fresh[-1].name}: " + "; ".join(probs[:6]) + (f"; +{len(probs) - 6} more" if len(probs) > 6 else "")] if probs else [],
                 f"independent review: {fresh[-1].name} answers all {len(ids)} checklist items", fix)
+
+
+def run_answer(ctx, e):
+    """The saved raw answer of a journal run (journal/runs/...json), or None when there is none, it is empty, or its
+    recorded sha256 no longer matches (audit H2: made-up runs with empty answers counted)."""
+    import hashlib
+    src = str(e.get("source") or "")
+    f = (ctx.project / src) if src else None
+    if not f or not f.is_file():
+        return None
+    raw = f.read_bytes()
+    want = e.get("sha256") or e.get("raw_sha256")
+    if want and hashlib.sha256(raw).hexdigest() != want:
+        return None
+    try:
+        d = json.loads(raw)
+        resp, query = str(d.get("response") or ""), str(d.get("query") or "")
+    except (ValueError, AttributeError):
+        resp, query = raw.decode(errors="replace"), ""
+    return (query or str(e.get("title") or "").split(":", 1)[-1], resp) if len(resp.strip()) >= 40 else None
 
 
 @check("ev.ai-baseline", "152", ("money",), "AI-answer baseline: 10+ journal runs for the page in the US market within 30 days", needs="project")
 def ai_baseline(ctx):
     cut = dt.datetime.now(tz(ctx)) - dt.timedelta(days=FRESH_DAYS)
     market = (ctx.cfg.get("market") or {}).get("primary_country", "US")
-    runs = [e for e in ctx.page_entries() if e.get("kind") == "run" and e.get("market") == market and (at(e, tz(ctx)) or cut) >= cut]
-    ctx.verdict([f"{len(runs)} {market} runs (10 needed)"] if len(runs) < 10 else [], f"{len(runs)} {market} AI-answer runs",
+    cand = [e for e in ctx.page_entries() if e.get("kind") == "run" and e.get("market") == market and (at(e, tz(ctx)) or cut) >= cut]
+    runs, seen_q, seen_a = [], set(), set()
+    for e in cand:              # distinct questions, each with its own saved, non-empty answer
+        got = run_answer(ctx, e)
+        if got is None:
+            continue
+        q, ans = re.sub(r"\W+", " ", got[0].lower()).strip(), got[1]
+        if q in seen_q or ans.strip() in seen_a:
+            continue
+        seen_q.add(q)
+        seen_a.add(ans.strip())
+        runs.append(e)
+    ctx.verdict([f"{len(runs)} {market} runs with distinct questions and a saved answer (10 needed; {len(cand) - len(runs)} not counted)"]
+                if len(runs) < 10 else [], f"{len(runs)} {market} AI-answer runs",
                 f"run the buyer's 10-15 AI questions with a {market} place and file them: growth journal run --market {market} (money-page.md 35)")
 
 
@@ -212,6 +301,23 @@ def task_steps(ctx):
     since = str(ctx.cfg.get("proof_required_since") or "")
     probs += [f"{task['id']} step {s.get('n')} done with no proof" for s in steps
               if s.get("status") == "done" and not s.get("output") and (not since or s.get("at", "")[:len(since)] >= since)]
+    # a proof must name something checkable that exists (audit H1): "x", "abc" or a made-up commit is not proof;
+    # proof_required_since grandfathers older steps here too
+    import checkpoints
+    repos = [ctx.repo] if ctx.repo else []
+    for s in steps:
+        if s.get("status") == "done" and s.get("output") and (not since or s.get("at", "")[:len(since)] >= since):
+            why = checkpoints.proof_problem(s["output"], ctx.project, repos)
+            if why:
+                probs.append(f"{task['id']} step {s.get('n')} proof is not checkable: {why[:110]}")
+    import approvals                    # an owner question of this task counts as answered only with the owner's approval
+    for q in t.get("questions") or []:
+        if q.get("task") == task["id"] and q.get("answer"):
+            st, info = approvals.status(ctx.docs or (ctx.project / "docs"), "answer", q.get("id"), approvals.answer_content(q))
+            if st != "ok":
+                probs.append(f"{q.get('id')}: " + approvals.explain(st, info, "the answer", f"growth approve answer {q.get('id')} \"...\""))
+    probs += [f"{task['id']} was closed with open steps {f.get('open_steps')} (forced: {f.get('reason', '')[:60]})"
+              for f in task.get("forced") or [] if task.get("status") == "done"]
     ctx.verdict(probs, f"{task['id']}: {len(steps)} steps, none skipped or left open",
                 "do the step, or tick it with its proof: growth tasks tick <task> <n> --output <proof>; raise a step with the owner before skipping it (rule 0)")
 

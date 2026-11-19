@@ -9,6 +9,8 @@ Two kinds of item:
   manual      anything else that is a checkbox: the project's own rules (growth.json "checkpoints_extra" names a file
               with one rule per bullet) and any line the builder adds. No gate check runs them, so each one must be
               ticked with its proof after " -- ":   - [x] rule 530: click test -- J0028, 53/53 clicked
+              The proof must name something checkable: a file that exists, a commit, a journal id, a command with its
+              output line, or a web address ("x", "abc", "yes" are refused).
 `growth ready` fails while a manual item is unticked or ticked with no proof. `growth preflight` merges into the file
 instead of rewriting it: ticks, proofs, hand-added items and project sections stay, new generated items are added and a
 generated item that left the scope moves to "Removed from scope" (kept for the record, never counted).
@@ -26,6 +28,80 @@ ITEM = re.compile(r"^- \[([ xX])\] (.*)$")
 GEN_ITEM = re.compile(r"^`([\w.\-]+)`")
 SEP = re.compile(r"\s(?:--|—)\s")
 WEAK = {"", "proof", "todo", "tbd", "done", "ok", "..."}
+
+# ---- what counts as proof (tasks, checkpoints, the gate: one rule) ------------------------------------------------------
+# A proof names something a person can check: a file that exists, a commit that exists, a journal entry that exists, a
+# command with its output line, or a web address. "x", "abc", "yes" and "done" are not proof (audit H1).
+PROOF_MIN = 4
+URL_RE = re.compile(r"https?://[^\s)>\]]+")
+JOURNAL_RE = re.compile(r"\bJ-?\d{1,6}\b")
+COMMIT_RE = re.compile(r"(?<![\w/.-])[0-9a-f]{7,40}(?![\w/.-])")
+FILE_RE = re.compile(r"(?<![\w:/])(?:~?/|\./)?(?:[\w.@+-]+/)*[\w@+-][\w.@+-]*\.[A-Za-z0-9]{1,8}(?![\w/])")
+CMD_RE = re.compile(r"(?:`[^`]{3,}`|\b(?:growth|git|npm|npx|pnpm|yarn|pytest|python3?|node|curl|make|lighthouse|playwright)\s+\S[^\n]*?)"
+                    r"\s*(?:->|=>|→|:|\bgave\b|\bprints?\b|\breturned\b)\s*\S")
+
+
+def _git_has(repo, sha):
+    import subprocess
+    try:
+        return subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _journal_ids(project):
+    import json
+    try:
+        return {json.loads(l).get("id") for l in (Path(project) / "journal" / "entries.jsonl").read_text().splitlines() if l.strip()}
+    except (OSError, ValueError):
+        return set()
+
+
+def proof_refs(text, project=None, repos=()):
+    """What the proof names that exists: {"file": [(path, sha256)], "commit": [...], "journal": [...], "url": [...],
+    "command": [...]}. Without a project, a file, commit or journal id counts by its shape alone."""
+    import hashlib
+    text = str(text or "")
+    out = {"url": URL_RE.findall(text), "command": [m.group(0) for m in CMD_RE.finditer(text)], "file": [], "commit": [], "journal": []}
+    bare = URL_RE.sub(" ", text)
+    roots = [Path(r) for r in ((project,) if project else ()) + tuple(repos or ()) if r]
+    jids = _journal_ids(project) if project else None
+    for j in JOURNAL_RE.findall(bare):
+        if jids is None or j in jids:
+            out["journal"].append(j)
+    for sha in COMMIT_RE.findall(bare):
+        if roots and any(_git_has(r, sha) for r in roots):
+            out["commit"].append(sha)
+        elif not roots and re.search(r"\d", sha) and re.search(r"[a-f]", sha):   # by shape: digits and letters
+            out["commit"].append(sha)
+    for f in FILE_RE.findall(bare):
+        if re.fullmatch(r"\d+(\.\d+)+", f):          # 1.5, 53.0: a number, not a file
+            continue
+        if not roots:
+            out["file"].append((f, ""))
+            continue
+        for r in roots:
+            cand = Path(f).expanduser()
+            cand = cand if cand.is_absolute() else r / cand
+            if cand.is_file():
+                out["file"].append((f, hashlib.sha256(cand.read_bytes()).hexdigest()))
+                break
+    return out
+
+
+def proof_problem(text, project=None, repos=()):
+    """None when `text` is meaningful proof; else what is wrong, in plain words."""
+    t = str(text or "").strip()
+    if t.lower() in WEAK or len(t) < PROOF_MIN:
+        return (f"'{t}' is not proof: name what you checked (a file, a commit, a journal id, a command with its output "
+                "line, or a web address)")
+    refs = proof_refs(t, project, repos)
+    if any(refs.values()):
+        return None
+    hint = " (it names a file, commit or journal id that does not exist)" if project and (
+        FILE_RE.search(t) or COMMIT_RE.search(t) or JOURNAL_RE.search(t)) else ""
+    return (f"'{t[:60]}' names nothing checkable{hint}: give a file that exists, a commit id, a journal id, a command with "
+            "its output line (growth gate page /x -> 0 FAIL), or a web address")
 
 
 def split_proof(text):
@@ -114,8 +190,9 @@ def merge(old, gen, extra, header, today):
     return "\n".join(out).rstrip("\n") + "\n"
 
 
-def manual_status(text):
-    """(total, done, problems): every manual checkbox item must be ticked with a proof."""
+def manual_status(text, project=None, repos=()):
+    """(total, done, problems): every manual checkbox item must be ticked with a proof that names something checkable
+    (proof_problem). With a project, files, commits and journal ids must also exist."""
     total = done = 0
     probs = []
     for head, lines in sections(text)[1:]:
@@ -132,16 +209,33 @@ def manual_status(text):
                 probs.append(f"unticked: {rule[:140]}")
             elif proof.lower() in WEAK or len(proof) < 3:
                 probs.append(f"ticked with no proof (add ' -- <what you saw>'): {rule[:120]}")
+            elif proof_problem(proof, project, repos):
+                probs.append(f"ticked with a proof that names nothing checkable ({proof_problem(proof, project, repos)[:120]}): {rule[:100]}")
             else:
                 done += 1
     return total, done, probs
+
+
+def missing_extra(text, extra):
+    """Rules of the project's checkpoints_extra file that are not in the checkpoints file at all (deleting a manual item
+    must not make it pass). READY calls this with checkpoints.extra_items(<the file growth.json names>)."""
+    have = {split_proof(ITEM.match(ln).group(2))[0] for ln in text.splitlines() if ITEM.match(ln)}
+    return [f"missing from the checkpoints file: {r[:140]}" for r in extra if r not in have]
+
+
+def project_of(path):
+    """The project folder above a checkpoints file (the nearest folder holding growth.json), or None."""
+    for d in Path(path).resolve().parents:
+        if (d / "growth.json").is_file():
+            return d
+    return None
 
 
 def main():
     if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
         print(__doc__)
         return 0
-    total, done, probs = manual_status(Path(sys.argv[1]).read_text())
+    total, done, probs = manual_status(Path(sys.argv[1]).read_text(), project_of(sys.argv[1]))
     print(f"manual checks {done}/{total}")
     for p in probs:
         print("  " + p)

@@ -148,8 +148,15 @@ def main(argv=None):
         rec = research.load(PROJECT, a.key)
         if rec is None:
             sys.exit(f"no record: growth research init {a.record} --key {a.key}")
+        # the raw text is saved and hashed, so the gate can check the quote is really in it (audit H9)
+        import hashlib
+        import re as _re
+        rf = PROJECT / "research" / "raw" / f"{a.key}-{_re.sub(r'[^a-z0-9]+', '-', a.vendor.lower()).strip('-')}-{dt.date.today().isoformat()}.txt"
+        rf.parent.mkdir(parents=True, exist_ok=True)
+        rf.write_text(raw)
         rec["vendor_facts"].append({"vendor": a.vendor, "fact": a.fact, "value": a.value, "shown_as": a.value, "view": a.view, "how_read": "raw",
-                                    "source_url": a.url or a.source_url, "quote": quote, "read_on": dt.date.today().isoformat()})
+                                    "source_url": a.url or a.source_url, "quote": quote, "read_on": dt.date.today().isoformat(),
+                                    "raw_file": str(rf.relative_to(PROJECT)), "raw_sha256": hashlib.sha256(rf.read_bytes()).hexdigest()})
         research.save(PROJECT, a.key, rec)
         print(f"recorded in research/{a.key}-record.json (view {a.view}, raw)")
     return 0

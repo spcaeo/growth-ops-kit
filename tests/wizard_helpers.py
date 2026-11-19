@@ -41,3 +41,37 @@ def make_site(tmp: Path) -> tuple[Path, Path]:
     (smap / "sitemap-1.xml").write_text(f'<urlset {ns}><url><loc>https://shop.example/en-us/about/</loc></url>'
                                         '<url><loc>https://shop.example/en-us/blog/post-a/</loc></url></urlset>')
     return repo, smap / "sitemap-index.xml"
+
+
+def owner_approve(tmp: Path, *args, cwd, typed=None, timeout=60):
+    """Run `growth approve ...` the way the owner does: in a real (pseudo) terminal, typing the code it shows back.
+    typed: the words to type instead of the right ones. Returns (exit code, what the terminal showed)."""
+    import pty
+    import re
+    import select
+    pid, fd = pty.fork()
+    if pid == 0:                                         # the child: its stdin, stdout and /dev/tty are the new terminal
+        try:
+            os.chdir(cwd)
+            os.execve(sys.executable, [sys.executable, str(ROOT / "growth"), "approve", *args], env(tmp))
+        finally:
+            os._exit(127)
+    out, sent = b"", False
+    while True:
+        ready, _, _ = select.select([fd], [], [], timeout)
+        if not ready:
+            break
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:
+            break
+        if not chunk:
+            break
+        out += chunk
+        m = re.search(rb"approve (\d{4})", out)
+        if m and not sent:
+            os.write(fd, ((typed if typed is not None else f"approve {m.group(1).decode()}") + "\n").encode())
+            sent = True
+    _, st = os.waitpid(pid, 0)
+    os.close(fd)
+    return os.waitstatus_to_exitcode(st), out.decode(errors="replace")

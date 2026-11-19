@@ -77,7 +77,8 @@ def test_a_new_project_gets_the_onboard_skill_and_the_stop_hook(tmp_path):
     cfg = json.loads((folder / ".claude" / "settings.json").read_text())
     cmd = cfg["hooks"]["Stop"][0]["hooks"][0]["command"]
     assert "growth" in cmd and cmd.endswith("hook stop") and "CLAUDE_PROJECT_DIR" in cmd
-    assert "command -v growth" in cmd and str(new_project.KIT_DIR.parent) in cmd       # PATH first, this kit folder only as the fallback
+    # audit L5: the kit's own growth by its absolute path, never the first `growth` on the PATH
+    assert "command -v growth" not in cmd and f'"${{GROWTH_KIT:-{new_project.KIT_DIR.parent}}}/growth" hook stop' in cmd
     claude = (folder / "CLAUDE.md").read_text()
     assert "Acme Mowing" in claude and "<fill in" not in claude and str(new_project.KIT_DIR.parent) in claude
 
@@ -160,7 +161,7 @@ def test_hook_commands_use_the_growth_command_and_old_ones_are_moved(tmp_path):
     new_project.make(f, "https://x.example", force=True)
     cfg = json.loads((f / ".claude" / "settings.json").read_text())
     assert len(cfg["hooks"]["Stop"]) == 1
-    assert cfg["hooks"]["Stop"][0]["hooks"][0]["command"].endswith("growth\")\" hook stop") and "/old/place" not in json.dumps(cfg)
+    assert cfg["hooks"]["Stop"][0]["hooks"][0]["command"].endswith("/growth\" hook stop") and "/old/place" not in json.dumps(cfg)
     assert cfg["statusLine"]["command"].endswith("statusline") and "statusline.py" not in cfg["statusLine"]["command"]
 
 
@@ -180,3 +181,17 @@ def test_doctor_a12_flags_a_kit_folder_that_is_gone(tmp_path):
     settings = folder / ".claude" / "settings.json"
     settings.write_text(settings.read_text().replace(str(new_project.KIT_DIR.parent), "/nowhere/kit"))
     assert a12().startswith("FAIL") and "/nowhere/kit" in a12()
+
+
+def test_old_path_lookup_hooks_are_moved_to_the_kits_absolute_path(tmp_path):
+    """audit L5: `$(command -v growth ...)` ran whatever growth was first on the PATH; --force / --repair rewrites it."""
+    f = tmp_path / "p"
+    (f / ".claude").mkdir(parents=True)
+    old = 'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" "$(command -v growth || echo "${GROWTH_KIT:-/old/place}/growth")"'
+    (f / ".claude" / "settings.json").write_text(json.dumps({
+        "hooks": {"Stop": [{"hooks": [{"type": "command", "command": old + " hook stop", "statusMessage": "x"}]}],
+                  "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": old + " hook stage", "statusMessage": "y"}]}]},
+        "statusLine": {"type": "command", "command": old + " statusline"}}))
+    new_project.make(f, "https://x.example", force=True)
+    text = (f / ".claude" / "settings.json").read_text()
+    assert "command -v growth" not in text and "/old/place" not in text and str(new_project.KIT_DIR.parent) in text

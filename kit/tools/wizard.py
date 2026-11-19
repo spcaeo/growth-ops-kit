@@ -9,8 +9,9 @@ target country.
   growth wizard --repair                # install whatever the harness is missing (never overwrites your own settings)
   growth wizard status                  # each step, its status, answer source and date
   growth wizard answer <step> <value>   # record one answer (value is JSON or plain text); used by the /onboard skill
-  growth wizard confirm browser --name "Browser 1"
-  growth wizard confirm region --seen "United States" --owner-confirmed
+  growth wizard confirm browser --name "Browser 1"          # the agent records what it sees ...
+  growth wizard confirm region --seen "United States"
+  growth approve browser   /   growth approve region         # ... and the owner confirms it, in their own terminal
   growth wizard research-check [--connected "Browser 1"] [--task T5 --step 3]   # start of every research step
 
 What it will never do: push, merge, deploy, change DNS, read the live site page by page, print a key. Questions come from an
@@ -45,8 +46,8 @@ QUESTIONS = {
     "approver": 'Who approves a release (a merge or a deploy)? answer: "Name, role"',
     "harness": 'Install the agent harness (Stop hook, status bar, permissions, skills, CLAUDE.md lines) and git hooks? answer: {"permissions": true, "git_hooks": true}',
     "detect": 'Confirm what was detected (stack, sitemap, trailing slash, languages, redirects, content folders)? answer: {"confirm": true}',
-    "browser": 'Connect the research browser: in Claude Code type /chrome, choose the browser, check "By default: on". Then: growth wizard confirm browser --name "<its name>"',
-    "region": 'Set Google to the target country in that browser (Search settings > Other settings > Language & region > Results region), read the region Google reports, then: growth wizard confirm region --seen "<what Google says>" --owner-confirmed',
+    "browser": 'Connect the research browser: in Claude Code type /chrome, choose the browser, check "By default: on". Then: growth wizard confirm browser --name "<its name>", and the owner runs growth approve browser in their own terminal',
+    "region": 'Set Google to the target country in that browser (Search settings > Other settings > Language & region > Results region), read the region Google reports, then: growth wizard confirm region --seen "<what Google says>", and the owner runs growth approve region in their own terminal',
 }
 
 
@@ -279,18 +280,33 @@ def step_browser(s: Session) -> str:
         return f"research browser {cur['answer'].get('name')} confirmed {cur.get('date', '')[:10]}"
     if "browser" in s.answers:
         confirm_browser(s.project, (s.answers["browser"] or {}).get("name", "") if isinstance(s.answers["browser"], dict) else str(s.answers["browser"]), "answers-file")
-        return "research browser confirmed"
+        say("WAITING browser: the owner confirms it in their own terminal: growth approve browser")
+        raise Waiting("browser")
     ws.record(s.project, "browser", "asked")
     say("The research browser is not connected yet. Open Chrome, type /chrome in Claude Code and pick your browser.")
     say(f"WAITING browser: {QUESTIONS['browser']}")
     raise Waiting("browser")
 
 
-def confirm_browser(project: Path, name: str, source: str = "agent") -> None:
+def _owner_approval(project: Path, kind: str, content, summary: str) -> str:
+    """The owner said yes at `growth setup` in their own terminal (front_door's human mode): log it like growth approve."""
+    import approvals
+    return approvals.record(project / "docs", kind, kind, content, summary, via="growth setup (terminal)")["id"]
+
+
+def confirm_browser(project: Path, name: str, source: str = "agent") -> bool:
+    """Record the browser the agent sees. It is done only with the owner's approval: source "owner" is the owner at
+    `growth setup` in their own terminal; anyone else leaves it "tested" until the owner runs growth approve browser."""
     if not name.strip():
         raise SystemExit('confirm browser needs the browser\'s name: --name "Browser 1" (what list_connected_browsers shows)')
-    ws.record(project, "browser", "done", answer={"name": name.strip()}, source=source,
-              test={"command": "list_connected_browsers", "result": f"{name.strip()} connected"})
+    import approvals
+    test = {"command": "list_connected_browsers", "result": f"{name.strip()} connected"}
+    if source == "owner":
+        aid = _owner_approval(project, "browser", approvals.browser_content(name.strip()), f"research browser {name.strip()}")
+        ws.record(project, "browser", "done", answer={"name": name.strip(), "approval": aid}, source=source, test=test)
+        return True
+    ws.record(project, "browser", "tested", answer={"name": name.strip()}, source=source, test=test)
+    return False
 
 
 def confirm_region(project: Path, seen: str, owner_confirmed: bool, source: str = "agent") -> tuple[bool, str]:
@@ -302,11 +318,14 @@ def confirm_region(project: Path, seen: str, owner_confirmed: bool, source: str 
     if not ok:
         ws.record(project, "region", "asked", answer={"seen": seen, "owner_confirmed": False}, source=source, test=test)
         return False, (f"Google's region reads \"{seen}\", not {want}. Fix: " + gate.REGION_FIX.format(country=want)
-                       + f"; read it again, then: growth wizard confirm region --seen \"{want}\" --owner-confirmed")
-    if not owner_confirmed:
+                       + f"; read it again, then: growth wizard confirm region --seen \"{want}\"")
+    if not (owner_confirmed and source == "owner"):      # only the owner at `growth setup` in their terminal, or growth approve
         ws.record(project, "region", "tested", answer={"seen": seen, "owner_confirmed": False}, source=source, test=test)
-        return False, f"Google reports {seen}: matches {want}. Not done until the owner confirms it: add --owner-confirmed after they say yes."
-    ws.record(project, "region", "done", answer={"seen": seen, "owner_confirmed": True}, source=source, test=test)
+        return False, (f"Google reports {seen}: matches {want}. Not done until the owner confirms it in their own terminal: "
+                       "growth approve region")
+    import approvals
+    aid = _owner_approval(project, "region", approvals.region_content(seen, want), f"Google results region {seen}")
+    ws.record(project, "region", "done", answer={"seen": seen, "owner_confirmed": True, "approval": aid}, source=source, test=test)
     return True, f"Google region {seen} confirmed for {want}"
 
 
@@ -558,16 +577,19 @@ def main(argv=None) -> int:
         say(f"recorded the answer for {a.what[0]} (setup-answers.json); run growth wizard to use it")
         return 0
     if sub == "confirm":
+        if a.owner_confirmed:
+            say("--owner-confirmed is no longer taken from a command line: the owner confirms in their own terminal with "
+                f"growth approve {(a.what or ['region'])[0]}")
         if a.what[:1] == ["browser"]:
             confirm_browser(project, a.name)
-            say(f"research browser {a.name} confirmed")
+            say(f"research browser {a.name} recorded; not done until the owner runs, in their own terminal: growth approve browser")
         elif a.what[:1] == ["region"]:
-            ok, msg = confirm_region(project, a.seen, a.owner_confirmed)
+            ok, msg = confirm_region(project, a.seen, False)
             say(msg)
-            if not ok:
+            if not ok and ws.get(project, "region").get("status") != "tested":
                 return 1
         else:
-            sys.exit("confirm browser --name \"...\"  |  confirm region --seen \"...\" --owner-confirmed")
+            sys.exit("confirm browser --name \"...\"  |  confirm region --seen \"...\"   (then the owner: growth approve browser|region)")
         write_setup_md(project)
         run_doctor(project)
         return 0

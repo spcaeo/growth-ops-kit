@@ -56,3 +56,9 @@ def test_record_files_a_raw_fact_only_when_the_value_is_in_the_quoted_line(demo_
     row = json.loads((demo_project / "research" / "pm-record.json").read_text())["vendor_facts"][0]
     assert row["how_read"] == "raw" and row["view"] == "Monthly" and "billed monthly" in row["quote"] and row["source_url"].startswith("https://acme.example.com")
     assert "controls that can change the numbers" in ok.stdout
+    # audit H9: the raw text is saved with its hash, and the record check finds the quote in it
+    import research
+    assert (demo_project / row["raw_file"]).is_file() and len(row["raw_sha256"]) == 64
+    assert research.raw_problem(row, demo_project) is None
+    (demo_project / row["raw_file"]).write_text("changed")
+    assert "changed after" in research.raw_problem(row, demo_project)

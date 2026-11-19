@@ -412,15 +412,23 @@ def run_check(ctx: Ctx, c: Check):
     # growth.json design_exceptions: a check that does not fit this site's design, or a site-wide fault tracked as its
     # own task, prints a WARN with its reason in every run, never a silent pass; it FAILs again when the task is done or
     # its "until" date has passed (design.exception).
+    # The entry must be approved by the owner (growth approve exception <id>, docs/approvals.jsonl) and never excuses an
+    # evidence or process check, nor a line saying the check could not run (input missing, crashed, no result).
     fails = [ln for ln in ctx.lines[n:] if ln.level == "FAIL"]
     if fails:
         from .design import exception
+        import approvals
         exc = exception(ctx, c.cid)
-        if exc:
-            why, task = exc
+        if exc and exc[0] == "ok":
             for ln in fails:
+                if ln.what.startswith(approvals.NEVER_EXCUSED_LINES):
+                    ln.what += " (a design exception never excuses a check that could not run)"
+                    continue
                 ln.level = "WARN"
-                ln.what = f"design exception ({why}{'; task ' + task if task else ''}): {ln.what}"
+                ln.what = f"design exception ({exc[1]}): {ln.what}"
+        elif exc:
+            for ln in fails:
+                ln.what += f" (design exception not used: {exc[1]})"
     ctx._cur = None
 
 

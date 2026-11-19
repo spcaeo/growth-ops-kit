@@ -81,14 +81,17 @@ def test_a_key_containing_review_does_not_pass_on_another_research_file(tmp_path
     assert run_review(ctx) == "FAIL"
 
 
-def test_a_dated_audit_or_review_file_passes(tmp_path):
+def test_a_dated_audit_or_review_file_passes(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
     from gatelib.c_evidence import checklist_ids
+    import approvals
     full = "Reviewer: model-b\nBuilder: model-a\n" + "".join(f"{i} pass: seen\n" for i in checklist_ids(review_ctx(tmp_path, "k", [])))
     for sub, key, name in (("a", "asana-review", "asana-review-audit-2026-11-18.md"), ("b", "lawn", "lawn-opus-review-2026-11-18.md")):
         ctx = review_ctx(tmp_path / sub, key, [name])
         (tmp_path / sub / "research" / name).write_text(full)
+        approvals.record(tmp_path / sub / "docs", "review", name, full.encode(), by="owner")   # audit H2: the owner's sign-off
         assert run_review(ctx) == "OK"
 
 
@@ -149,6 +152,12 @@ def test_the_books_research_file_name_satisfies_the_fact_check(tmp_path):
     from gatelib import CHECKS
     from gatelib.core import run_check
     ctx = review_ctx(tmp_path, "lawn", ["lawn-research-2026-11-18.md"])
+    run_check(ctx, CHECKS["ev.research-check"])
+    assert ctx.lines[0].level == "FAIL"                  # audit H2: a one-line file ("x") is not a fact check
+    (tmp_path / "research" / "lawn-research-2026-11-18.md").write_text(
+        "# Fact check\n\n- Plan A is $12: https://acme.example.com/pricing (read 2026-11-18)\n- Free plan holds 2 users: same page\n"
+        "- Trial is 14 days: https://acme.example.com/trial\n- Founded 2015: https://acme.example.com/about\n")
+    ctx = review_ctx(tmp_path, "lawn", [])
     run_check(ctx, CHECKS["ev.research-check"])
     assert ctx.lines[0].level == "OK", ctx.lines[0].text()
     (tmp_path / "x").mkdir()

@@ -7,7 +7,7 @@ so a site whose markup the signals miss is described once, in the project, never
   find(ctx, concept)        -> [nodes]   (first the semantic signals, then the project's selector)
   select(root, selector)    -> [nodes]   a small CSS subset: tag, .class, #id, [attr], [attr=v], [attr^=v], [attr*=v],
                                          descendant combinator (space) and lists (comma)
-  exception(ctx, cid)       -> (why, task) when growth.json design_exceptions excuses this check today, else None
+  exception(ctx, cid)       -> ("ok"|"refused", why) for an owner-approved growth.json design exception, else None
 
 Concepts: site_header, site_footer, main, cover_image, byline, updated_date, reading_aid, faq_section, faq_question,
 table_source, calculator, read_next, disclosure.
@@ -314,23 +314,14 @@ def ignored(ctx, n):
 
 
 def exception(ctx, cid):
-    """(why, task) when growth.json design_exceptions excuses check `cid` today, else None. An entry needs a reason;
-    it stops counting once its task is done (docs/tasks.json) or its `until` date has passed, so the check FAILs again."""
-    for e in ctx.cfg.get("design_exceptions") or []:
-        if not isinstance(e, dict) or e.get("check") != cid or len((e.get("why") or "").strip()) < 10:
-            continue
-        until = e.get("until")
-        if until:
-            try:
-                if ctx.today > dt.date.fromisoformat(str(until)[:10]):
-                    continue
-            except ValueError:
-                continue
-        task = e.get("task")
-        if task and _task_done(ctx, task):
-            continue
-        return e["why"].strip(), task
-    return None
+    """(state, why) for growth.json design_exceptions and check `cid` (approvals.exception_state):
+    ("ok", why) the owner approved an entry that excuses it today; ("refused", why) an entry exists but does not count
+    (no owner approval, changed since, an evidence or process check, no 'until' within 30 days, expired, task done);
+    None when no entry names it."""
+    import approvals
+    state, _e, why = approvals.exception_state(ctx.docs or (ctx.project / "docs"), ctx.cfg, cid, ctx.today,
+                                               lambda t: _task_done(ctx, t))
+    return None if state == "none" else (state, why)
 
 
 def _task_done(ctx, tid):

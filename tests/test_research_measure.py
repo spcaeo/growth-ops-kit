@@ -77,7 +77,10 @@ def test_task_steps_are_ordered_by_their_label_not_their_place():
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp)
         (p / "docs").mkdir()
-        st = lambda n, w, s: {"n": n, "what": w, "status": s, "at": "2026-11-18 10:00", "output": "commit abc1234 proof"}  # noqa: E731
+        # audit H1: a proof must name something that exists (a made-up commit id no longer counts): a file in the project
+        (p / "research").mkdir()
+        (p / "research" / "post-notes.md").write_text("notes\n")
+        st = lambda n, w, s: {"n": n, "what": w, "status": s, "at": "2026-11-18 10:00", "output": "see research/post-notes.md"}  # noqa: E731
         steps = [st(1, "Step 1. a", "done"), st(2, "Step 2. b", "done"), st(3, "Step 3. c", "todo"), st(4, "Step 4. d", "todo"),
                  st(5, "Step 5. e", "todo"), st(6, "Step 2a. added later", "done")]   # appended at the end, done
         (p / "docs/tasks.json").write_text(json.dumps({"tasks": [{"id": "T1", "title": "Job: /blog/post/", "steps": steps}]}))

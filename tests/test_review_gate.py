@@ -60,9 +60,20 @@ def test_a_page_with_no_money_in_the_head_or_no_body_passes():
 
 # ---- the review file ----------------------------------------------------------------------------------------------------
 
-def review_line(tmp, text, key="lawn"):
+@pytest.fixture(autouse=True)
+def _temp_home(tmp_path, monkeypatch):
+    (tmp_path / "home").mkdir(exist_ok=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))         # approvals never read the real signing key
+
+
+def review_line(tmp, text, key="lawn", signed=True):
+    """audit H2: a review counts only once the owner signed it off (growth approve review); signed=True records that."""
+    import approvals
     (tmp / "research").mkdir(exist_ok=True)
-    (tmp / "research" / f"{key}-review-2026-11-18.md").write_text(text)
+    f = tmp / "research" / f"{key}-review-2026-11-18.md"
+    f.write_text(text)
+    if signed:
+        approvals.record(tmp / "docs", "review", f.name, f.read_bytes(), by="owner")
     ctx = Ctx(project=tmp, path="/" + key, key=key, cfg={})
     run_check(ctx, CHECKS["ev.review"])
     return ctx.lines[0]
@@ -123,3 +134,20 @@ def test_growth_review_new_writes_the_file_from_the_checklist(demo_project):
     assert r.returncode == 0, r.stderr
     f = next((demo_project / "research").glob("lawn-review-*.md"))
     assert "Reviewer: model-b" in f.read_text() and "R1 TODO" in f.read_text()
+
+
+def test_a_review_the_owner_did_not_sign_off_or_that_changed_after_fails(tmp_path):
+    """audit H2: a hand-typed review file with all verdicts passed on its own."""
+    ln = review_line(tmp_path, answered(), signed=False)
+    assert ln.level == "FAIL" and "growth approve review research/lawn-review-2026-11-18.md" in ln.what
+    review_line(tmp_path, answered())
+    f = tmp_path / "research" / "lawn-review-2026-11-18.md"
+    f.write_text(f.read_text() + "R1 pass: edited after sign-off\n")
+    ctx = Ctx(project=tmp_path, path="/lawn", key="lawn", cfg={})
+    run_check(ctx, CHECKS["ev.review"])
+    assert ctx.lines[0].level == "FAIL" and "changed after the owner approved it" in ctx.lines[0].what
+
+
+def test_a_review_needs_a_builder_line(tmp_path):
+    ln = review_line(tmp_path, answered().replace("Builder: model-a\n", ""))
+    assert ln.level == "FAIL" and "Builder" in ln.what
