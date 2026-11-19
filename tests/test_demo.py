@@ -159,6 +159,16 @@ def test_browser_checks_pass_on_the_strong_page_when_a_browser_is_installed(base
     assert sum(1 for l in r.stdout.splitlines() if l.startswith("OK")) == 2, r.stdout
 
 
+def png(w, h):
+    """A real PNG of w x h px (noise, so it does not compress to a few bytes)."""
+    import os as _os
+    import struct
+    import zlib
+    raw = b"".join(b"\x00" + _os.urandom(w // 8) + bytes(w * 3 - w // 8) for _ in range(h))
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)  # noqa: E731
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+
+
 def test_a_static_site_with_no_checkout_can_pass_the_evidence_checks(base, tmp_path):
     """No site_repo: the evidence checks date the page's last change from the site folder (growth.json site_dir), so they can
     pass; they used to FAIL with 'input missing: site checkout' and no static site could ever be READY."""
@@ -171,8 +181,8 @@ def test_a_static_site_with_no_checkout_can_pass_the_evidence_checks(base, tmp_p
     (proj / "growth.json").write_text(json.dumps(cfg))
     shots = proj / "research" / "lawn-mowing-shots"
     shots.mkdir(parents=True)
-    for w in (360, 390, 820, 1280, 1366, 1920):
-        (shots / f"hero-{w}.png").write_bytes(b"\x89PNG")
+    for w in (360, 390, 820, 1280, 1366, 1920):          # audit H2: real PNGs of the named width (b"\x89PNG" alone no longer counts)
+        (shots / f"hero-{w}.png").write_bytes(png(w, 900))
     now = time.strftime("%Y-%m-%d %H:%M")
     with open(proj / "journal" / "entries.jsonl", "a") as f:
         for i, tag in enumerate(("click-test", "share-preview")):
