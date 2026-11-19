@@ -41,3 +41,20 @@ def test_a_job_that_names_the_folder_in_its_environment_counts(demo_project, tmp
     agents.mkdir()
     plist(agents, "com.example.env", ["growth", "page-tracker", "sync"], EnvironmentVariables={"GROWTH_PROJECT": str(demo_project)})
     assert "auto-start jobs: 1" in doctor(demo_project, agents)
+
+
+def test_jobs_the_owner_scheduled_are_allowed(demo_project, tmp_path):
+    """growth.json automation.jobs (label + why) lists jobs the owner chose to run by themselves: shown, not blocking."""
+    import json
+    agents = tmp_path / "LaunchAgents"
+    agents.mkdir()
+    plist(agents, "com.example.operator", ["/bin/zsh", "run.sh", str(demo_project)], WorkingDirectory=str(demo_project))
+    assert "auto-start jobs: 1" in doctor(demo_project, agents)
+    cfg = json.loads((demo_project / "growth.json").read_text())
+    cfg["automation"] = {"jobs": [{"label": "com.example.operator", "why": "the owner wants a daily operator run"}]}
+    (demo_project / "growth.json").write_text(json.dumps(cfg))
+    line = doctor(demo_project, agents)
+    assert "auto-start jobs: 0" in line and "scheduled by the owner (growth.json automation.jobs): launchd com.example.operator" in line
+    cfg["automation"] = {"jobs": [{"label": "com.example.operator"}]}            # no why: not allowed
+    (demo_project / "growth.json").write_text(json.dumps(cfg))
+    assert "auto-start jobs: 1" in doctor(demo_project, agents)
