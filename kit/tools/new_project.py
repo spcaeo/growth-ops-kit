@@ -75,8 +75,16 @@ def agent_files(folder: Path, name: str, site: str, kit_root: Path) -> list[Path
     except ValueError:
         raise SystemExit(f"{settings} is not valid JSON; fix it, then run this again")
     stop = cfg.setdefault("hooks", {}).setdefault("Stop", [])
+    changed = False
     if "stop_hook.sh" not in json.dumps(stop):
-        stop.append({"hooks": [{"type": "command", "command": command}]})
+        stop.append({"hooks": [{"type": "command", "command": command,
+                                "statusMessage": "Checking every owner message is logged and every rule has its check"}]})
+        changed = True
+    if "statusLine" not in cfg:   # the owner watches the open task tick off at the bottom of the window (never replaced)
+        cfg["statusLine"] = {"type": "command", "padding": 0,
+                             "command": f'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" python3 "${{GROWTH_KIT:-{kit_root}}}/kit/tools/statusline.py"'}
+        changed = True
+    if changed:
         settings.parent.mkdir(parents=True, exist_ok=True)
         settings.write_text(json.dumps(cfg, indent=2) + "\n")
         made.append(settings)
@@ -142,7 +150,7 @@ def main(argv=None):
                    env={**os.environ, "GROWTH_PROJECT": str(folder), "PYTHONDONTWRITEBYTECODE": "1"})
     print(f"Project made: {folder} ({len(made)} files from templates/project)")
     print(f"Next: cd {folder} && growth doctor   (then fill in growth.json and BRAND.md; the onboard skill walks you through it)")
-    print("Agent files: .claude/skills/onboard (type /onboard in Claude Code, started in this folder) and .claude/settings.json (the Stop hook).")
+    print("Agent files: .claude/skills/onboard (type /onboard in Claude Code, started in this folder) and .claude/settings.json (the Stop hook, and the status bar that shows the open task's progress).")
     print(f"Put the kit's command on your PATH if `growth` is not found: export PATH=\"{KIT_DIR.parent}:$PATH\"")
     return 0
 
