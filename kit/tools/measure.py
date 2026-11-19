@@ -112,6 +112,8 @@ def run_all(db, pk, rec, rel, windows, today):
 
 
 def show(res):
+    if res.get("indexing"):
+        print(f"== {res['indexing']['text']}")
     for title, key in (("THE PAGE'S OWN NUMBERS", "page_numbers"), ("THE WHOLE SITE (not the page)", "site_numbers")):
         print(f"== {title}")
         for w in res[key]:
@@ -170,6 +172,8 @@ def main(argv=None):
         print(f"note: no research record for {a.key}; 'before' comes from the tracker's rows before the release", file=sys.stderr)
     today = research.day(a.today) or dt.date.today()
     res = run_all(PROJECT / "page-tracker" / "tracker.db", pk, rec, rel, windows, today)
+    import index_pages
+    res["indexing"] = index_pages.google_sees(PROJECT, pk)
     show(res)
     out = PROJECT / "research" / f"{a.key}-measure.json"
     out.parent.mkdir(parents=True, exist_ok=True)

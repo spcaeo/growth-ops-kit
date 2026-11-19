@@ -65,6 +65,7 @@ TOOLS = {
     "page_archive": ("tools/page_archive.py", "before-and-after full-page screenshots and HTML of a page (rule 36i)"),
     "research": ("tools/research.py", "the page's structured research record (search window, AI answers, People also ask, vendor facts); the gate reads it, the brief is written from it"),
     "vendor_page": ("tools/vendor_page.py", "read a vendor page's raw text (no summariser), quote the plan's exact line, list its monthly/yearly and other toggles, file the fact"),
+    "index": ("tools/index_pages.py", "after the page is live, get it indexed: growth index <url...> [--refresh], status, report, setup (providers: freshlycited, indexnow, manual; off until set in growth.json indexing)"),
     "measure": ("tools/measure.py", "measure a released page against its frozen baseline at day 7/14/28/56 (page and site kept apart); also schedule the re-checks on the release date"),
     "market": ("tools/market.py", "(library) a page's target-market figures measured from the country rows, next to the estimate and its assumption"),
     "aliases": ("tools/aliases.py", "show each page's old addresses (growth.json page_aliases, redirects_file) that the tracker adds together"),
