@@ -7,6 +7,7 @@ import datetime as dt
 import re
 import sqlite3
 
+import paths  # kit/tools/paths.py: one form of a site path
 from techseo.c_schema import main_types
 from techseo.dom import find, find_all
 
@@ -610,7 +611,7 @@ def in_folds(ctx):
 @check("seo.kept", "74", types=ALL, what="a changed title, description or H1 vs the live page has a journal entry with the reason", needs="project")
 def kept(ctx):
     inv = ctx.need_file(ctx.project / "inventory" / "inventory.json", "growth inventory")
-    live = next((p for p in json.loads(inv.read_text())["pages"] if p["path"] == ctx.need_path()), None)
+    live = next((p for p in json.loads(inv.read_text())["pages"] if paths.key(p["path"]) == paths.key(ctx.need_path())), None)
     if live is None:
         ctx.ok("a new page: nothing live to keep")
         return
