@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
 
 TITLE = "Project setup"
 OWNER_WORDS = "Set the project up: every setup step doctor lists, in order, ticked with its proof."
@@ -45,16 +49,30 @@ def _load(f: Path, project: Path, cfg: dict) -> dict:
 
 def _save(f: Path, db: dict, cfg: dict) -> None:
     db["updated"] = _now(cfg)
-    f.parent.mkdir(parents=True, exist_ok=True)
-    tmp = f.with_suffix(".tmp")
-    tmp.write_text(json.dumps(db, indent=2, ensure_ascii=False) + "\n")
-    tmp.replace(f)
+    atomic.write_json(f, db)
+
+
+def _locked(fn):
+    """Run fn(project, ...) with the task list locked, so its read-change-write never loses another writer's change."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(project, *args, **kw):
+        project = Path(project)
+        try:
+            cfg = json.loads((project / "growth.json").read_text())
+        except (OSError, ValueError):
+            cfg = {}
+        with atomic.locked(_file(project, cfg)):
+            return fn(project, *args, **kw)
+    return wrapper
 
 
 def find(db: dict) -> dict | None:
     return next((t for t in db.get("tasks", []) if t.get("title") == TITLE), None)
 
 
+@_locked
 def ensure(project, cfg: dict | None = None) -> str:
     """Open the setup task (or add the steps a newer doctor has and it lacks). Returns its id. Never changes a step's status."""
     project = Path(project)
@@ -75,6 +93,7 @@ def ensure(project, cfg: dict | None = None) -> str:
     return task["id"]
 
 
+@_locked
 def sync(project, results, cfg: dict | None = None) -> bool:
     """results: [(step name as doctor prints it, state "OK  "|"BUSY"|"TODO"|"FAIL", result line)]. Ticks done steps with the
     line as proof, un-ticks the others. Returns True when the file changed. Does nothing when there is no setup task."""

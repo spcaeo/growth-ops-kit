@@ -22,11 +22,10 @@ RESEARCH_NAME = rf"-(research-check|fact-check|claims)\b|-research-{DATE}"
 
 
 def at(e, tz):
-    """A journal entry's time as an aware datetime."""
-    try:
-        return dt.datetime.strptime(e.get("at", "")[:16], "%Y-%m-%d %H:%M").replace(tzinfo=tz)
-    except ValueError:
-        return None
+    """A journal entry's time as an aware datetime (journal.parse_at: one reader for the time and its zone). None when the
+    time is missing or has no real zone: such an entry is not counted. `tz` is kept for the callers' signature."""
+    import journal
+    return journal.parse_at(e.get("at"))
 
 
 def tz(ctx):

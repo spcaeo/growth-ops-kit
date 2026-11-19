@@ -30,6 +30,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, DOCS, PROJECT, TZ as _TZ  # noqa: E402
 import research_gate  # noqa: E402
+import atomic  # noqa: E402
 import checkpoints  # noqa: E402  (the one proof rule)
 
 DATA = DOCS / "tasks.json"  # the project's task list (growth.json: project_docs)
@@ -46,10 +47,18 @@ def load() -> dict:
 
 
 def save(db: dict) -> None:
+    """Whole-file write, atomic (kept for callers that already hold a loaded copy; the tool itself uses update())."""
     db["updated"] = now()
-    tmp = DATA.with_suffix(".tmp")
-    tmp.write_text(json.dumps(db, indent=2, ensure_ascii=False) + "\n")
-    tmp.replace(DATA)
+    atomic.write_json(DATA, db)
+
+
+def update(change):
+    """Read-change-write of the task list under the file lock: two agents ticking steps at once never lose a write."""
+    def wrapped(db):
+        change(db)
+        db["updated"] = now()
+        return db
+    return atomic.update_json(DATA, wrapped)
 
 
 def find(db: dict, tid: str) -> dict:
@@ -109,7 +118,18 @@ def main(argv: list) -> None:
         print(__doc__)
         return
     cmd, args = argv[0], argv[1:]
-    db = load()
+    if cmd in {"add", "step", "tick", "status", "ask"}:
+        out = []
+        update(lambda db: out.append(_run(db, cmd, args)))
+        if out and out[0]:
+            print(out[0])
+        return
+    _run(load(), cmd, args)
+
+
+def _run(db: dict, cmd: str, args: list):
+    """One command on a loaded task list; a changing command is run inside update(), so it is saved by the caller.
+    Returns text for the caller to print after the save (a new id)."""
     if cmd == "list":
         for t in db["tasks"]:
             print(f'{t["id"]:<4} {t["status"]:<14} {t["title"]}')
@@ -147,8 +167,7 @@ def main(argv: list) -> None:
         if kind != "page":
             task["type"] = kind
         db["tasks"].append(task)
-        save(db)
-        print(tid)
+        return tid
     elif cmd == "step":
         status = opt(args, "--status", "todo")   # a new step is todo: it is done only once it has proof (#24)
         output = opt(args, "--output")
@@ -169,7 +188,6 @@ def main(argv: list) -> None:
         if (output or "").strip() and status == "done":
             set_proof(st, output)
         t["steps"].append(st)
-        save(db)
     elif cmd == "tick":
         t = find(db, args[0])
         n = int(args[1])
@@ -186,7 +204,6 @@ def main(argv: list) -> None:
         if status == "done" and not st.get("output"):
             sys.exit("a done step needs --output with its proof (file, commit or journal id)")
         st["status"], st["at"] = status, now()
-        save(db)
     elif cmd == "status":
         force = opt(args, "--force-reason")
         t = find(db, args[0])
@@ -200,13 +217,11 @@ def main(argv: list) -> None:
             print(f"{t['id']} closed with {len(open_steps)} open step(s); reason logged on the task")
         t["status"] = args[1]
         t["finished"] = now() if args[1] == "done" else None
-        save(db)
     elif cmd == "ask":
         task = opt(args, "--task")
         qid = f'Q{len(db["questions"]) + 1}'
         db["questions"].append({"id": qid, "question": args[0], "task": task, "asked": now(), "answer": None})
-        save(db)
-        print(qid)
+        return qid
     elif cmd == "answer":
         # the owner's answer is the owner's act: typed in their own terminal and logged (growth approve answer)
         import approvals

@@ -94,7 +94,7 @@ def main():
                 out["unverified_numbers"] = check(text, digest)
         except subprocess.TimeoutExpired:
             out["error"] = "claude took longer than 5 minutes; no AI summary today."
-    json.dump(out, open(os.path.join(HERE, "insights.json"), "w", encoding="utf-8"), indent=1)
+    config.save_json(os.path.join(HERE, "insights.json"), out, indent=1)
     md = f"# AI summary, {out['date']}\n\nAI summary, check the numbers on the dashboard.\n\n" + (out.get("text") or out.get("error", ""))
     if out.get("unverified_numbers"):
         md += "\n\nNumbers not found in the data: " + ", ".join(out["unverified_numbers"])
@@ -131,7 +131,7 @@ def clusters_main():
                 out["notes"][cid] = dict(text=line, unverified_numbers=check(line, text)) if line and not r.returncode else dict(error=f"claude exited {r.returncode}")
             except subprocess.TimeoutExpired:
                 out["notes"][cid] = dict(error="took longer than 3 minutes")
-    json.dump(out, open(os.path.join(HERE, "cluster-notes.json"), "w", encoding="utf-8"), indent=1)
+    config.save_json(os.path.join(HERE, "cluster-notes.json"), out, indent=1)
     print("cluster notes:", len(out["notes"]), out.get("error") or "")
 
 

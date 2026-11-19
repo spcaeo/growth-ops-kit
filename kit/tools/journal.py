@@ -14,11 +14,11 @@ Data (plain files, git-friendly, no server):
   growth journal add  --page /pricing --kind finding --tag pricing --title "..." --text "..." \\
                                 [--page /other] [--source "..."] [--recheck 2026-12-15]
   growth journal ask  --page /pricing --tag pricing "Question for the owner" [--recheck ...]
-  growth journal answer J0007 "The owner's answer" [--by owner]
+  growth journal answer J0007 "The owner's answer"   # the owner only: goes through growth approve answer (their own terminal)
   growth journal done J0007 "what was done"
   growth journal close J0007 --output "commit abc1234, the fix and its proof"   # closes a finding; the output is required
   growth journal run  --page /x --kind ai-answer --engine chatgpt --market US --query "..." \\
-                                --response-file answer.txt [--title "..."] [--named yes|no] [--recheck ...]
+                                --response-file answer.txt [--capture-method browser] [--title "..."] [--named yes|no] [--recheck ...]
   growth journal action --page /x --due 2026-11-30 --tag listings "What the owner must do" [--why "..."]
   growth journal actions              # the owner's own to-do list (also journal/OWNER-ACTIONS.md)
   growth journal show /pricing        # the page's note
@@ -175,6 +175,9 @@ def cmd_add(a, kind=None, text=None):
     append(e)
     render()
     print(e["id"])
+    if e["kind"] == "decision":
+        print(f"A decision counts only when the owner approves it: the owner runs   growth approve decision {e['id']}   "
+              "in their own terminal.")
 
 
 def cmd_ask(a):
@@ -214,8 +217,12 @@ def cmd_actions(a):
 
 
 def cmd_answer(a):
-    append({"of": a.id, "at": now(), "status": "answered", "answer": a.text, "answered_by": a.by, "answered_at": now()})
-    render()
+    """The owner's answer is the owner's act: typed in their own terminal and logged in the approvals log (growth approve
+    answer). The journal line is written by that approval, never by an agent's own command."""
+    if state().get(a.id) is None:
+        sys.exit(f"no entry {a.id}")
+    import approvals
+    approvals.main(["answer", a.id, a.text])
     print("ok")
 
 
@@ -242,16 +249,21 @@ def cmd_run(a):
     d = today().isoformat()
     folder = RUNS / d
     folder.mkdir(parents=True, exist_ok=True)
-    resp = Path(a.response_file).read_text() if a.response_file else (a.response or "")
+    import hashlib
+    raw = Path(a.response_file).read_bytes() if a.response_file else (a.response or "").encode()
+    resp = raw.decode("utf-8", errors="replace")
+    sha = hashlib.sha256(raw).hexdigest()
+    method = a.capture_method or ("response-file" if a.response_file else "typed-inline")
     market = a.market or CFG.get("market", {}).get("primary_country", "")
     run = {"id": rid, "at": now(), "kind": a.kind, "engine": a.engine, "market": market, "settings": a.settings or "",
-           "pages": norm_pages(a.page), "query": a.query, "named": a.named or "", "response": resp}
+           "pages": norm_pages(a.page), "query": a.query, "named": a.named or "", "response": resp,
+           "response_sha256": sha, "capture_method": method}
     rf = folder / f"{rid}-{a.engine}-{slug(norm_pages(a.page)[0])}.json"
     atomic.write_text(rf, json.dumps(run, ensure_ascii=False, indent=1) + "\n")
     e = {"id": rid, "at": run["at"], "kind": "run", "pages": run["pages"], "tags": (a.tag or []) + [a.kind, a.engine],
          "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
          "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
-         "by": "lead", "named": a.named or "", "market": market}
+         "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method}
     append(e)
     render()
     print(rid, rf.relative_to(PROJECT))
@@ -380,6 +392,7 @@ def main():
     s.add_argument("--market"); s.add_argument("--settings"); s.add_argument("--query", required=True)
     s.add_argument("--response-file"); s.add_argument("--response"); s.add_argument("--title")
     s.add_argument("--summary"); s.add_argument("--named"); s.add_argument("--recheck")
+    s.add_argument("--capture-method", help="how the answer was captured: browser, api, copied, ... (default: response-file or typed-inline)")
     s = sub.add_parser("action"); s.add_argument("task"); s.add_argument("--page", action="append")
     s.add_argument("--tag", action="append"); s.add_argument("--due"); s.add_argument("--why"); s.add_argument("--source")
     sub.add_parser("actions")

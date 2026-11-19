@@ -39,6 +39,10 @@ VIEW_WORDS = {"billing": r"\b(monthly|yearly|annual(?:ly)?|billed (?:monthly|ann
 def fetch(url: str, timeout=30) -> str:
     if urllib.parse.urlparse(url).scheme not in ("http", "https"):
         raise SystemExit("only http and https addresses")
+    import fetch_rule
+    from config import find_project
+    if find_project():                       # a vendor page is another host: only the site's own live host is refused
+        fetch_rule.assert_may_fetch(url)
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html,*/*"})
     with urllib.request.urlopen(req, timeout=timeout) as r:   # noqa: S310  a vendor's public page, plain GET
         return r.read().decode("utf-8", "replace")

@@ -187,3 +187,10 @@ def public():
                 tracking_start=TRACKING_START, variants=VARIANTS,
                 conversion_path=GROWTH.get("conversion_path") or "",
                 sources={k: source_on(k) for k in SOURCES}, ai_summary=bool(AI.get("on")))
+
+
+def save_json(path, obj, **dumps):
+    """Write a JSON state file in one atomic step (kit/tools/atomic.py): a crash or a second run never leaves half a file."""
+    sys.path.insert(0, os.path.join(os.path.dirname(CODE_DIR), "tools"))
+    import atomic
+    atomic.write_text(path, json.dumps(obj, **dumps) + "\n")

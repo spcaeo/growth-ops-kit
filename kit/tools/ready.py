@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
 from config import CFG, KIT_DIR, PROJECT, TZ  # noqa: E402
 
 LEDGER = PROJECT / "journal" / "ready.json"
@@ -91,7 +92,12 @@ def manual_problems(path, key):
     plan = plan if plan and plan.is_file() else PROJECT / "research" / f"{key}-checkpoints.md"
     if not plan.is_file():
         return []                        # no file: ev.preflight (rule 0a) is the check that wants one
-    return checkpoints.manual_status(plan.read_text())[2]
+    text = plan.read_text()
+    probs = checkpoints.manual_status(text, PROJECT, [r for r in [CFG.get("site_repo") and PROJECT / CFG["site_repo"], preview_repo()] if r])[2]
+    extra_file = CFG.get("checkpoints_extra") or ""
+    if extra_file and (PROJECT / extra_file).expanduser().is_file():
+        probs += checkpoints.missing_extra(text, checkpoints.extra_items((PROJECT / extra_file).expanduser()))
+    return probs
 
 
 GATE_LINE = re.compile(r"^Gate: (\d+) FAIL, (\d+) WARN, (\d+) OK, (\d+) SKIP, (\d+) BLOCKED-SKIP", re.M)
@@ -131,7 +137,11 @@ def gate_problem(r, ptype):
         return f"gate checks could not be loaded: {type(e).__name__}: {str(e)[:120]}"
     if int(summ[0][4]) or re.search(r"^BLOCKED-SKIP ", out, re.M):
         names = sorted({m for m in re.findall(r"^BLOCKED-SKIP ([\w.-]+):", out, re.M)})
-        return f"{int(summ[0][4])} required check(s) could not run ({', '.join(names[:6])}); install what they need or fix the setup, then run ready again"
+        import approvals
+        open_ = [n for n in names if not approvals.excuses_blocked_skip(PROJECT, CFG, n)[0]]
+        if open_ or len(names) != int(summ[0][4]):
+            return (f"{int(summ[0][4])} required check(s) could not run ({', '.join((open_ or names)[:6])}); install what they need "
+                    "or fix the setup, or have the owner approve a design exception (growth approve exception), then run ready again")
     got = {a or b for a, b in RESULT_LINE.findall(out)}
     if want - got:
         return f"gate did not report {len(want - got)} expected check(s): {', '.join(sorted(want - got)[:6])}"
@@ -198,17 +208,16 @@ def main():
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     held_lines = held_proposals(a.key)
-    d = ledger()
     if fails:
-        d.pop(path, None)
-        LEDGER.write_text(json.dumps(d, indent=1) + "\n")
+        atomic.update_json(LEDGER, lambda x: x.pop(path, None) and None, default={}, indent=1)
         print(f"NOT READY {path}: {len(fails)} FAIL, {oks} OK. The URL may not be shared with the owner.")
         for l in fails:
             print(" ", l[:200])
         print_held(held_lines)
         sys.exit(1)
-    d[path] = {"commit": head(repo), "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "ok": oks, "url": url}
-    LEDGER.write_text(json.dumps(d, indent=1) + "\n")
+    entry = {"commit": head(repo), "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "ok": oks, "url": url}
+    atomic.update_json(LEDGER, lambda x: x.update({path: entry}), default={}, indent=1)
+    d = {path: entry}
     print(f"READY {path}: 0 FAIL, {oks} OK at {d[path]['commit'][:7]}. It may be shared: {url}")
     print_held(held_lines)
 

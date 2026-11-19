@@ -106,9 +106,40 @@ def _parse_at(project: Path, text: str):
         return None
 
 
+def _checked(step: dict):
+    """The commit stored with a step's proof (tasks.checked_commit); the same rule if the tasks tool cannot load."""
+    try:
+        import tasks
+        return tasks.checked_commit(step)
+    except BaseException:  # noqa: BLE001  (config exits when there is no project)
+        return step.get("last_checked_commit")
+
+
+def cover_commit(tasks: list):
+    """The commit the project was at when the latest proof-bearing step of a page (work) task was recorded: work after
+    it is not covered. None when no step stored one (tasks from before the commit was stored)."""
+    best = (None, "")
+    for t in tasks:
+        if kind_of(t) != "work":
+            continue
+        for s in t.get("steps") or []:
+            sha = _checked(s)
+            if sha and s.get("status") == "done" and (s.get("output") or "").strip() and (s.get("at") or "") >= best[1]:
+                best = (sha, s.get("at") or "")
+    return best[0]
+
+
+def _commit_time(repo: Path, sha: str):
+    try:
+        res = subprocess.run(["git", "-C", str(repo), "show", "-s", "--format=%ct", sha], capture_output=True, text=True, timeout=20)
+        return float(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip() else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
 def cover_time(project: Path, tasks: list):
-    """When work was last under a page task: the latest proof-bearing step or finish of a page (work) task, plus the
-    minute the stamps round to. Without any, the start of the earliest task, else the last commit of the task list."""
+    """Fallback when no step stored a commit: when work was last under a page task (latest proof-bearing step or finish
+    of a page task), else the start of the earliest task, else the last commit of the task list."""
     stamps = []
     for t in tasks:
         if kind_of(t) != "work":
@@ -132,16 +163,27 @@ def cover_time(project: Path, tasks: list):
         return None
 
 
-def committed_files(project: Path, since) -> list:
-    """Paths committed (in the project or a site checkout) after `since` (epoch), bookkeeping left out. Committed work counts
-    as work: the dirty tree alone hides everything an agent commits before it stops."""
-    if since is None:
+def committed_files(project: Path, since, sha=None) -> list:
+    """Paths committed (in the project or a site checkout) after the cut-off, bookkeeping left out. With `sha` (the commit
+    stored with the last proof) the project's own history is cut exactly at that commit (sha..HEAD) and a site checkout
+    at that commit's time; else `since` (epoch). Committed work counts as work: the dirty tree alone hides everything an
+    agent commits before it stops."""
+    if since is None and not sha:
         return []
     out = []
     for r in roots_of(project):
+        cmd = ["git", "-C", str(r), "log", "--format=@@%ct", "--name-only", "-n", "300"]
+        cut = since
+        if sha:
+            if r == project.resolve() and _commit_time(r, sha) is not None:
+                cmd.insert(4, f"{sha}..HEAD")
+                cut = 0
+            else:
+                cut = _commit_time(project, sha) if _commit_time(project, sha) is not None else since
+        if cut is None:
+            continue
         try:
-            res = subprocess.run(["git", "-C", str(r), "log", "--format=@@%ct", "--name-only", "-n", "300"],
-                                 capture_output=True, text=True, timeout=30)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         except (OSError, subprocess.SubprocessError):
             continue
         if res.returncode != 0:
@@ -150,7 +192,7 @@ def committed_files(project: Path, since) -> list:
         for ln in res.stdout.splitlines():
             if ln.startswith("@@"):
                 ts = float(ln[2:] or 0)
-            elif ln.strip() and ts > since and not _skip(project, r, ln.strip()):
+            elif ln.strip() and ts > cut and not _skip(project, r, ln.strip()):
                 out.append(ln.strip() if r == project.resolve() else str(r / ln.strip()))
     return out
 
@@ -173,7 +215,8 @@ def problems(project: Path) -> list:
     if "work" in kinds:
         return out                                   # a page task is open: it covers the work
     dirty = changed_files(project)
-    committed = committed_files(project, cover_time(project, tasks))
+    sha = cover_commit(tasks)
+    committed = committed_files(project, None if sha else cover_time(project, tasks), sha)
     work = dirty + committed
     if "setup" in kinds:                             # the setup task covers the setup files and nothing else
         work = [f for f in work if f not in SETUP_FILES and not f.endswith("/.gitkeep") and f != ".gitkeep"]

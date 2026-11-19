@@ -234,6 +234,9 @@ def test_ready_lists_open_manual_items_and_passes_when_all_are_proven(demo_proje
     plan.write_text(merged(extra=["rule 530: click test"]))
     assert len(ready.manual_problems("/x", "x")) == 1
     plan.write_text(plan.read_text().replace("- [ ] rule 530: click test", "- [x] rule 530: click test -- J0028, 53/53"))
+    assert "does not exist" in ready.manual_problems("/x", "x")[0]          # the proof names a journal id that is not there
+    (demo_project / "journal").mkdir(exist_ok=True)
+    (demo_project / "journal" / "entries.jsonl").write_text(json.dumps({"id": "J0028"}) + "\n")
     assert ready.manual_problems("/x", "x") == []
     plan.unlink()
     assert ready.manual_problems("/x", "x") == []          # no file: ev.preflight is the check that wants it

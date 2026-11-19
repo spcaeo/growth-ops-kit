@@ -329,6 +329,21 @@ def approve(docs, kind: str, ref: str, content, summary: str, show: str = "", tt
     return e
 
 
+def _answer_journal(project, docs, jid: str, text: str, tty) -> int:
+    e = journal_entries(project).get(jid)
+    if not e or e.get("kind") not in ("question", "owner-action"):
+        raise SystemExit(f"no open question {jid} in the journal")
+    q = {"id": jid, "question": e.get("title") or e.get("text"), "answer": text}
+    a = approve(docs, "answer", jid, answer_content(q), f"answer to {jid}: {text[:80]}",
+                f"Question: {q['question']}\nAnswer:   {text}", tty)
+    import journal
+    when = journal.now()
+    journal.append({"of": jid, "at": when, "status": "answered", "answer": text, "answered_by": "owner", "answered_at": when,
+                    "approval": a["id"]})
+    journal.render()
+    return 0
+
+
 # ---- command line -------------------------------------------------------------------------------------------------------
 def _project():
     from config import find_project
@@ -427,6 +442,8 @@ def main(argv=None, tty=None) -> int:
     elif what == "answer":
         if len(rest) < 2:
             raise SystemExit('growth approve answer <Q-id> "the answer"')
+        if re.fullmatch(r"J\d+", rest[0], re.I):               # a question filed in the journal (growth journal ask)
+            return _answer_journal(project, docs, rest[0].upper(), " ".join(rest[1:]), tty)
         f = docs / "tasks.json"
         db = _json(f)
         q = next((x for x in db.get("questions", []) if x.get("id", "").lower() == rest[0].lower()), None)

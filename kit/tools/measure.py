@@ -27,6 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "page-tracker"))   # the tracker's verdict rules (insights.verdict): one set of rules
+import atomic  # noqa: E402
 import research  # noqa: E402
 
 WINDOWS = (7, 14, 28, 56)
@@ -172,8 +173,7 @@ def main(argv=None):
     res = run_all(PROJECT / "page-tracker" / "tracker.db", pk, rec, rel, windows, today)
     show(res)
     out = PROJECT / "research" / f"{a.key}-measure.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(res, indent=1, ensure_ascii=False) + "\n")
+    atomic.write_json(out, res, indent=1)
     print(f"wrote {out.relative_to(PROJECT)}")
     if a.task:
         done = [w for w in res["page_numbers"] if w["status"] == "measured"]
