@@ -93,6 +93,8 @@
     "never_claims_allow": [],
     "_no_customers_allow_paths": "Globs of pages that may use the words 'case study' in their own H1, nav and breadcrumb (a path holding 'case-stud' always may). Customer names stay banned.",
     "no_customers_allow_paths": [],
+    "_implied_proof_allow": "Implied-proof wording the owner approved for this site (logged in BRAND.md's permission log): [{\"pattern\": \"trusted by\", \"why\": \"reason\"}]. The pattern is one of the kit's built-in ones (\"trusted by\", \"case stud(y|ies)\", \"teams like yours\", \"customers love\", \"award[- ]winning\", \"★\") or a regex for the matched words; a pattern \"aggregateRating\" lets structured data carry a rating. An entry without a why is a FAIL. Customer names stay banned: words.hidden_customers is always checked, also after an allowed 'trusted by'. Empty = nothing changes.",
+    "implied_proof_allow": [],
     "hidden_customers": [],
     "hype": null,
     "no_price": false,

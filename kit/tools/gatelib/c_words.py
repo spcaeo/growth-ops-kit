@@ -184,16 +184,36 @@ def hype(ctx):
     ctx.verdict(probs, "no hype words", "use plain words (BRAND.md voice): name the unit, the place, the problem")
 
 
+def implied_allow(ctx):
+    """([(pattern, why)], problems): growth.json words.implied_proof_allow, the implied-proof wording the owner approved for
+    this site (logged in BRAND.md). "pattern" is one of the IMPLIED_PROOF patterns or a regex for the matched words; "why" is
+    required. Customer names stay banned (words.hidden_customers), so an allowed "trusted by" never covers a hidden name."""
+    allow, probs = [], []
+    for e in wcfg(ctx, "implied_proof_allow", []) or []:
+        pat = (e.get("pattern") or "").strip() if isinstance(e, dict) else ""
+        why = (e.get("why") or "").strip() if isinstance(e, dict) else ""
+        if not pat or not why:
+            probs.append(f"growth.json words.implied_proof_allow entry {e!r} needs a 'pattern' and a 'why' (the reason, in words)")
+        else:
+            allow.append((pat, why))
+    return allow, probs
+
+
 @check("words.no-customers", "2", what="no hidden case-study customers, 'trusted by' or implied customer lists (BRAND proof rules)", needs="live")
 def no_customers(ctx):
     sitemap = "sitemap" in (ctx.path or "").lower()      # a sitemap page headlines each section by its name
     t = text_without(ctx, lambda n: section_link(n) or (sitemap and re.fullmatch(r"h[2-6]", n.tag or "") and len(domx.text(n).split()) <= 4))
     own = page_text_without_own_name(ctx) if case_study_page(ctx) else t
-    probs = [f"'{h}'" for p in IMPLIED_PROOF for h in word_hits(own if p == CASE_STUDY else t, p)]
+    allow, probs = implied_allow(ctx)
+    for p in IMPLIED_PROOF:
+        for m in re.finditer(r"(?i)(?<![\w-])" + p + r"(?![\w-])", own if p == CASE_STUDY else t):
+            if not any(a == p or re.search(a, m.group(0), re.I) for a, _ in allow):
+                probs.append(f"'{ctx_window(own if p == CASE_STUDY else t, m)}'")
     probs += [f"'{h}'" for p in wcfg(ctx, "hidden_customers", []) for h in word_hits(t, p)]       # customer names are never allowed
+    rated = [a for a, _ in allow if re.search(a, "aggregateRating", re.I) or re.fullmatch(a, "review", re.I)]            # a separate allow, as before it was always a FAIL
     for n in domx.jsonld(ctx.root()):
         for x in domx.walk_json(n):
-            if any(k in x for k in ("aggregateRating", "review")):
+            if any(k in x for k in ("aggregateRating", "review")) and not rated:
                 probs.append("structured data carries a rating or review")
     ctx.verdict(probs, "no customer names, ratings or 'trusted by' claims",
                 "remove it, or add the customer to BRAND.md (permission log) with the owner's yes first")

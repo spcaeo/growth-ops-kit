@@ -88,7 +88,7 @@ STAT_PATTERNS = (
     ("duration", re.compile(rf"(?<![\w.])({NUM})[- ]{UNITS}\b", re.I)),
     ("year", re.compile(r"(?<![\w.$,])((?:19|20)\d{2})(?![\w,]\d|\d)")),
     ("count", re.compile(rf"(?<![\w.$,#-])((?:\d{{1,3}}(?:,\d{{3}})+|\d{{2,}})(?:\.\d+)?)\s+(?!(?:am|pm|and|or|of|to|in|on|at|by)\b)[a-z]{{3,}}", re.I)),
-    ("source", re.compile(r"\baccording to\b|\bstud(?:y|ies)\b|\bsurvey(?:s|ed)?\b|\breports? (?:that|shows?|showed|found|says|stated)\b|\b(?:annual|industry) reports?\b", re.I)),
+    ("source", re.compile(r"\baccording to\b|(?<!case )(?<!case-)\bstud(?:y|ies)\b|\bsurvey(?:s|ed)?\b|\breports? (?:that|shows?|showed|found|says|stated)\b|\b(?:annual|industry) reports?\b", re.I)),
 )
 MONEY_RE = None  # filled lazily from research.MONEY
 
@@ -104,6 +104,25 @@ def _money():
 SENTENCE_MIN_WORDS = 8          # "study", "survey" and "report" name a source only inside a sentence of at least this many words
 
 
+# Postal addresses and phone numbers hold numbers that are no stat: a street number, a ZIP code, a phone number.
+CONTACT_PATTERNS = (
+    re.compile(r"\+\d[\d\s().-]{7,}\d"),                                         # +1 (623) 555-0100, +44 20 555 0100
+    re.compile(r"\(\d{3}\)\s?\d{3}[-.\s]\d{4}"),                                  # (623) 555-0100
+    re.compile(r"(?<![\w.])\d{3}[-.\s]\d{3}[-.\s]\d{4}(?![\w])"),                  # 623-555-0100
+    re.compile(r"\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b"),                                 # AZ 85201 (state code, then a US ZIP)
+    re.compile(r"\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b"),                                    # K1A 0B1 (Canadian postal code)
+    re.compile(r"\b\d{1,6}\s+(?:[A-Za-z.]+\s+){0,3}?(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Way|Ct|Court|Pl|Place|Pkwy|Parkway|Hwy|Highway)\b\.?"),  # 222 East Main St
+    re.compile(r"\b(?:Suite|Ste|Unit|Floor|Room|Rm)\.?\s*#?[\w-]+", re.I),                  # Suite B-2, Suite 200
+)
+
+
+def without_contact(sentence: str) -> str:
+    """The sentence with postal addresses and phone numbers blanked (same length), so their numbers are never read as stats."""
+    for rx in CONTACT_PATTERNS:
+        sentence = rx.sub(lambda m: " " * len(m.group(0)), sentence)
+    return sentence
+
+
 def page_sentences(root, domx) -> list[tuple[str, bool]]:
     """[(sentence, is_prose)] of the page's main text: no nav, header or footer chrome, no breadcrumb, no byline, no copyright
     line, no hidden text, and nothing that is only link text (a sitemap list, a menu). A heading is not prose."""
@@ -112,11 +131,16 @@ def page_sentences(root, domx) -> list[tuple[str, bool]]:
     for n in main.iter():
         if n.tag not in BLOCKS or domx.in_chrome(n):
             continue
+        if any(a.tag == "address" for a in [n, *n.ancestors()]):
+            continue                        # a postal address: street number, ZIP and phone are no stats
         if any(a.tag == "time" or BYLINE_CLS.search(a.get("class") or "") or BYLINE_CLS.search(a.get("id") or "") for a in [n, *n.ancestors()]):
             continue
         if any(c is not n and c.tag in BLOCKS for c in n.iter()):
             continue                        # an outer block (a list item that holds paragraphs): its inner blocks are read instead
         t = domx.text(n)
+        for a in n.iter():
+            if a.tag == "a" and (a.get("href") or "").strip().lower().startswith("tel:") and domx.text(a):
+                t = t.replace(domx.text(a), " ")          # a phone link is no stat
         links = " ".join(domx.text(a) for a in n.iter() if a.tag == "a")
         if links and re.sub(r"\W+", "", links) == re.sub(r"\W+", "", t):
             continue                        # only link text: a menu or sitemap entry names a section, it states no fact
@@ -154,7 +178,7 @@ def stats_in(sentence: str, prose: bool = True) -> list[dict]:
     """[{text, num, kind}] for every stat in one sentence (a sentence with a stat word but no number has num None).
     A full date ("2026-11-10", "Nov 10, 2026") is a date, not a stat, and is left out."""
     out, spans = [], []
-    sentence = DATE.sub(lambda m: " " * len(m.group(0)), sentence)
+    sentence = without_contact(DATE.sub(lambda m: " " * len(m.group(0)), sentence))
 
     def add(kind, m, num):
         if any(m.start() < e and s < m.end() for s, e in spans) and kind in ("year", "count", "duration"):

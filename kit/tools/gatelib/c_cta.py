@@ -42,6 +42,17 @@ def primaries(ctx, root, include_header=True):
     return out
 
 
+def block_text(cur):
+    """The text in a block that is not inside a link or a button (what a reason line is made of)."""
+    parts = []
+    for n in cur.iter():
+        if n.tag in ("p", "span", "li", "small", "div") and not any(x.tag in ("a", "button") for x in [n, *n.ancestors()]):
+            own = " ".join(c for c in n.children if isinstance(c, str)).strip()
+            if own:
+                parts.append(own)
+    return " ".join(parts)
+
+
 def reason_for(a, words=REASON_WORDS):
     """The reason line beside a booking button: text in its block (3 levels up) that is not a link or a button."""
     cur = a
@@ -49,15 +60,50 @@ def reason_for(a, words=REASON_WORDS):
         cur = cur.parent
         if cur is None:
             break
-        parts = []
-        for n in cur.iter():
-            if n.tag in ("p", "span", "li", "small", "div") and not any(x.tag in ("a", "button") for x in [n, *n.ancestors()]):
-                own = " ".join(c for c in n.children if isinstance(c, str)).strip()
-                if own:
-                    parts.append(own)
-        txt = " ".join(parts)
+        txt = block_text(cur)
         if len(txt.split()) >= 8 and re.search(words, txt):
             return txt
+    return ""
+
+
+def conversion_page(ctx) -> bool:
+    """Is this page the conversion page (growth.json conversion_path, or cta.contact_path)?"""
+    here = (ctx.path or "").split("?")[0].split("#")[0].rstrip("/")
+    return bool(here) and here in ctx.booking_paths()
+
+
+def main_form_submit(root):
+    """The conversion page's main <form> (the body form with a submit button and most fields) and its submit button, or (None, None)."""
+    best = None
+    for f in find_all(root, "form"):
+        if domx.in_chrome(f) or (f.get("role") or "").lower() == "search":
+            continue
+        subs = [b for b in f.iter() if (b.tag == "button" and (b.get("type") or "submit").lower() == "submit")
+                or (b.tag == "input" and (b.get("type") or "").lower() in ("submit", "image"))]
+        if not subs:
+            continue
+        fields = len([x for x in f.iter() if x.tag in ("input", "select", "textarea") and (x.get("type") or "").lower() not in ("hidden", "submit")])
+        if best is None or fields > best[0]:
+            best = (fields, f, subs[-1])
+    return (best[1], best[2]) if best else (None, None)
+
+
+def reason_for_form(form, submit, words=REASON_WORDS):
+    """The reason line of a form's submit: the text before the submit inside the form or around it (reason_for), or the
+    text after the form (its next siblings, then its parent's next siblings)."""
+    txt = reason_for(submit, words)
+    if txt:
+        return txt
+    cur = form
+    for _ in range(2):
+        if cur is None or cur.parent is None:
+            break
+        sibs = cur.parent.children
+        after = [x for x in sibs[sibs.index(cur) + 1:][:3] if not isinstance(x, str) and x.tag not in ("form", "script", "style")]
+        t = " ".join(block_text(x) for x in after)
+        if len(t.split()) >= 8 and re.search(words, t):
+            return t
+        cur = cur.parent
     return ""
 
 
@@ -138,11 +184,15 @@ def label_same(ctx):
 def reason_line(ctx):
     root = ctx.root()
     btns = primaries(ctx, root, include_header=False)
-    if not btns:
+    form, submit = main_form_submit(root) if conversion_page(ctx) else (None, None)   # on the booking page its form is the primary action
+    if not btns and form is None:
         ctx.fail("no primary booking button in the page body", "add the page's booking button with its reason line (rule 32a)")
         return
     probs = [f"'{domx.label(a)}' ({a.get('href').split('cta=')[-1][:40]})" for a in btns if not reason_for(a, reason_words(ctx))]
-    ctx.verdict(probs, f"all {len(btns)} body booking buttons have a reason line beside them",
+    if form is not None and not reason_for_form(form, submit, reason_words(ctx)):
+        probs.append(f"the booking form's submit '{domx.text(submit) or submit.get('value') or 'Submit'}'")
+    n = len(btns) + (form is not None)
+    ctx.verdict(probs, f"all {n} body booking buttons have a reason line beside them",
                 "add one line beside the button from what the visit or call offers: what the reader gets, how long it takes, what it costs (rule 32a)")
 
 
