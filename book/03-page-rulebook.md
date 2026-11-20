@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.4.0
+version: 2.4.1
 updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.4.0 (generic edition) · 19 Nov 2026.**
+**Version 2.4.1 (generic edition) · 19 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-19 | 2.4.1 | Legal pages (rule 49) are exempt from the booking-button rules (32a) and the act fold and surface rhythm of 36f; the footer call row (140) accepts a secondary button and matches topic links with or without the trailing slash. |
 | 2026-11-19 | 2.4.0 | New rule 158a: measured design limits (white space between folds, hero height, column balance, picture size, card orphans, one primary button per screen, spacing of asks, quiet legal pages, one mechanic per page), read from a real browser by `layout.*`, `cta.*` and `engage.one-mechanic`. A design audit of a real site found these on pages that passed every other check. |
 | 2026-11-18 | 2.0.1 | Review fixes: fold attribute is `data-fold` and the surface is `geo-lines` (as the gate reads them); the page's main type can never be only the site's Organization (rule 36b, 95); checks renamed `repo.retired-410` (rule 76), `proc.remote-private` (a project may have a private remote) and `core.service-links` (rule 146); every rule text in the registry is copied from this file's headings. |
 | 2026-11-18 | 2.0.0 | Generic edition for any website: project facts moved to `BRAND.md` and `growth.json`; tool commands are `growth <tool>`; rules that read code are marked "(Next.js adapter)". Rule numbers and check tags unchanged. |
