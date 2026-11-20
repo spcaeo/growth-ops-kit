@@ -15,6 +15,8 @@ CASES = [
     ("e", "Final evidence shots", "sonnet", 0),
     ("rs", "Researcher: AU region vendor pages, verify facts", "sonnet", 0),  # a researcher is known (friction 45)
     ("rs", "Researcher: AU region vendor pages", "opus", 1),
+    ("ev", "page 4 evidence: account-to-account dossier", "sonnet", 0),   # friction 53: 'account' is not 'count'
+    ("x", "Count log lines", "haiku", 0),
 ]
 
 
