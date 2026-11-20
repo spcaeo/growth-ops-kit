@@ -116,6 +116,20 @@ def logos(ctx):
 def hub_cards(ctx):
     m = domx.main(ctx.root())
     cards = [n for n in m.iter() if domx.has_cls(n, r".*card") and find(n, "a") is not None]
+    # Only post cards: marked data-post-card, or linking into the hub's own cluster (its path is the prefix). Service
+    # cards to other hubs, ask, brief and form cards are not post cards (2.4.3).
+    hub = "/" + (ctx.need_path().strip("/").split("/")[0] if ctx.need_path().strip("/") else "") + "/"
+    marked = [n for n in m.iter() if "data-post-card" in n.attrs]
+    if marked:
+        cards = marked
+    else:
+        def into_cluster(n):
+            for a in find_all(n, "a"):
+                h = (ctx.internal_path(a.get("href")) or "").split("#")[0].split("?")[0]
+                if hub != "//" and h.startswith(hub) and h.rstrip("/") != hub.rstrip("/"):
+                    return True
+            return False
+        cards = [c for c in cards if into_cluster(c) and not any(x is not c and x in cards for x in c.ancestors())]
     bare = [c for c in cards if find(c, "img") is None]
     if not cards:
         ctx.fail("no post cards on the hub", "list the cluster's posts as cards with covers (rule 144)")
