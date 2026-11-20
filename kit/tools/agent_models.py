@@ -64,13 +64,20 @@ def settings():
     return roles, family(cfg.get("lead")), exempt
 
 
+def _is_tool_result(e):
+    c = (e.get("message") or {}).get("content")
+    return isinstance(c, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c)
+
+
 def agent_calls(transcript, all_turns=False, recent_only=True):
     """Agent tool calls made after the owner's last message (all of them with all_turns), each with the model of the
     session that made it: [(input, lead_model_at_that_time)]."""
     calls, lead = [], ""
     use_to_agent, stopped = {}, set()       # Agent tool_use id -> launched agent id; agent ids stopped with TaskStop
     for e in transcripts.entries(transcript):
-        if transcripts.owner_text(e) is not None and not all_turns:
+        # a new turn starts at any user entry that is not a tool result (the owner, a peer's message, a task notice):
+        # only helpers started in THIS turn are judged, so a finished helper never re-blocks later stops (issue #67)
+        if not all_turns and e.get("type") == "user" and not e.get("isSidechain") and not _is_tool_result(e):
             calls = []
         if e.get("type") == "assistant" and not e.get("isSidechain"):
             m = (e.get("message") or {}).get("model")
