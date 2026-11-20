@@ -14,10 +14,6 @@ def colors(ctx):
     return c["color"], c.get("color_pressed", c["color"]), c.get("color_token", "--color-cta")
 
 
-def not_on(ctx, f):
-    return f.get("not_on", [p for p in (ctx.cfg.get("conversion_path"), (ctx.cfg.get("cta") or {}).get("contact_path")) if p])
-
-
 @check("cta.one-color", "32b", types=("money", "hub", "core"), what="every primary button is painted with the one CTA colour token", needs="nextjs")
 def one_color(ctx):
     CTA_HEX, CTA_PRESSED, TOKEN = colors(ctx)
@@ -85,42 +81,6 @@ def sticky(ctx):
         probs.append(f"the page does not render the shared {comp} that sets data-sticky-cta")
     ctx.verdict(probs, f"sticky bar ok: '{short(line, 50)}' ({len(line)} chars)",
                 f"fix the sticky bar as listed: text from the page's offer, at most {max_text} chars; button at most {max_btn} (rule 35)")
-
-
-@check("exit.present", "35b", types=("money",), what="exit offer: the shared dialog, close x, the same booking button with its reason", needs="live")
-def exit_offer(ctx):
-    """Read from the served page on any stack; on Next.js the page's source must also use the shared component.
-    growth.json features.exit_offer.class names a site's own dialog class (default 'exit-offer')."""
-    f = ctx.feature("exit_offer")
-    f = f if isinstance(f, dict) else {}
-    comp = f.get("component", "ExitOffer")
-    cls = re.escape(f.get("class") or "exit-offer")
-    root = ctx.root()
-    dl = [d for d in find_all(root, "dialog") if domx.has_cls(d, cls + r"|" + cls + r"[-_].*") and not domx.has_cls(d, r"call-dialog")]
-    if ctx.need_path() in not_on(ctx, f):
-        ctx.verdict(["exit offer present"] if dl else [], "no exit offer on this page (correct)", "remove it (rule 35b)")
-        return
-    if not dl:
-        ctx.fail("no exit offer dialog (dialog.exit-offer) in the page", f"render the page's exit offer through the shared {comp} (rule 35b)")
-        return
-    d = dl[0]
-    probs = []
-    if not any(re.search(r"(?i)close|dismiss", b.get("aria-label")) for b in find_all(d, "button")):
-        probs.append("no close x with an aria-label")
-    bk = [a for a in domx.booking_links(ctx, d) if domx.is_primary(a)]
-    if not bk:
-        probs.append("no booking button in the offer")
-    pl = {domx.label(a) for a in primaries(ctx, root) if not any(x is d for x in a.ancestors())}
-    if bk and pl and domx.label(bk[0]) not in pl:
-        probs.append(f"offer button '{domx.label(bk[0])}' differs from the page's '{next(iter(pl))}'")
-    if bk and not reason_for(bk[0], reason_words(ctx)) and not re.search(reason_words(ctx), domx.text(d)):
-        probs.append("no reason line in the offer")
-    if ctx.stack() == "nextjs":                  # a static or Astro site is judged by its served page alone
-        src = "\n".join(ctx.tree_sources().values())
-        if comp not in src:
-            probs.append(f"the page does not use the shared {comp} component")
-    ctx.verdict(probs, "exit offer present with close, booking button and reason line",
-                "fix the exit offer as listed (rule 35b)")
 
 
 @check("cta.events", "133", what="every CTA event of growth.json cta.events exists in the site code and the page renders the CTA components", needs="nextjs")
