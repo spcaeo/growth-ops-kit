@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.3.0 - 2026-11-19
+
+- sticky.present (35), exit.present (35b) and page.surfaces (36f) now read the served page on every stack. They were in the Next.js adapter only, so on any other stack they printed SKIP and pages passed with no sticky bar, no exit offer and no fold surfaces (found on a real Astro site whose owner called the CTAs weak and the folds unbalanced). The code-level parts (the shared component in the page's source tree) still run on Next.js only. New `page_css(ctx)`: on other stacks it reads the page's inline styles and linked stylesheets from the same local server.
+- house.features (156, 161): a house feature switched off in growth.json `features` now counts as missing unless growth.json `features_dropped` gives its fit reason. A reader-visible feature is never dropped silently. The project template and the demo carry `features_dropped`.
+- Test: `tests/test_release_2_3_0_house_live.py`.
+
 ## 2.2.7 - 2026-11-19
 
 - claims.head-figures and claims.box-numbers skip drawn examples too (an `<svg>`, `aria-hidden="true"` or `data-example`), the same rule ev.fact-sources has had since 2.2.6. The rule now lives once in `domx.is_example` / `domx.in_example` and `domx.text(..., skip_examples=True)`. Test: `tests/test_release_2_2_7_examples.py`.

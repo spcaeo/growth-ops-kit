@@ -2,6 +2,8 @@
 reads their results (it runs last) and fails when any feature of the page's type is missing."""
 from __future__ import annotations
 
+import re
+
 from .core import check
 
 EVERY = ["layout.shared-frame", "crumbs.visible", "links.cards", "copy.shared", "schema.org-id", "cta.events", "seo.all", "footer.call-row"]
@@ -35,6 +37,15 @@ def house(ctx):
     notrun = [c for c in need if c not in got]
     missing = [c for c in need if got.get(c) == "FAIL"]
     skipped = [c for c in need if got.get(c) == "SKIP"]       # not applicable here (no adapter, feature off): counted apart
+    # Rule 161: a reader-visible house feature is never dropped silently. A feature switched off in growth.json
+    # "features" counts as missing unless growth.json "features_dropped" gives the fit reason for it (2.3.0).
+    dropped = ctx.cfg.get("features_dropped") or {}
+    whys = {line.cid: line.what for line in ctx.lines if line.level == "SKIP"}
+    for c in list(skipped):
+        m = re.match(r"feature '([\w-]+)' is off", whys.get(c, ""))
+        if m and not str(dropped.get(m.group(1), "")).strip():
+            skipped.remove(c)
+            missing.append(f"{c} (features.{m.group(1)} is off with no reason in growth.json features_dropped)")
     ctx.verdict([f"not run: {c}" for c in notrun] + [f"missing: {c}" for c in missing],
                 f"all {len(need) - len(skipped)} applicable house features of a {ctx.ptype} page present"
                 + (f" ({len(skipped)} skipped: not applicable to this site)" if skipped else ""),

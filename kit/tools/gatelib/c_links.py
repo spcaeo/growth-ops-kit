@@ -166,3 +166,51 @@ def phone(ctx):
                 "labels 12 px or more on screen (SVG text scales with its drawing: give phones their own larger labels); "
                 "footer and menu links 24 px tall (padding or min-height); a wide table stacks as cards on phones or "
                 "carries a visible scroll cue; re-run growth phone_check (rules 68, 70)")
+
+
+# ---- fold surfaces (36f): read from the served page on every stack (2.3.0; was Next.js only) ----
+@check("page.surfaces", "36f", what="every fold has its own surface (plain, tint, warm, light geometry, dark) chosen by its job in the reader's journey; no two folds in a row share one", needs="live")
+def surfaces(ctx):
+    html = ctx.need_html()
+    m = re.search(r"<main\b.*?</main>", html, re.S)
+    tags = re.findall(r"<section\b[^>]*\bdata-fold=[^>]*>", m.group(0) if m else html)
+    probs = []
+    if len(tags) < 3:
+        probs.append(f"only {len(tags)} folds found (sections with data-fold)")
+    seq = []
+    for t in tags:
+        stop = (re.search(r'data-fold="([^"]*)"', t) or [None, "?"])[1]
+        sf = (re.search(r'data-surface="([^"]*)"', t) or [None, ""])[1]
+        job = (re.search(r'data-job="([^"]*)"', t) or [None, ""])[1]
+        if sf not in SURFACES:
+            probs.append(f"fold '{stop}': data-surface '{sf or 'missing'}' (one of {', '.join(sorted(SURFACES))})")
+        if job not in JOBS:
+            probs.append(f"fold '{stop}': data-job '{job or 'missing'}' (one of {', '.join(sorted(JOBS))})")
+        seq.append((stop, sf, job))
+    for (a, sa, _), (b, sb, _) in zip(seq, seq[1:]):
+        if sa and sa == sb:
+            probs.append(f"folds '{a}' and '{b}' share the surface '{sa}'")
+    kinds = {s for _, s, _ in seq if s}
+    if seq and len(kinds) < 3:
+        probs.append(f"only {len(kinds)} surface kinds on the page (3 or more)")
+    darks = [i for i, (_, s, _) in enumerate(seq) if s == "dark"]
+    if len(darks) > 2:
+        probs.append(f"{len(darks)} dark folds (2 at most)")
+    if seq and not any(j == "act" for _, _, j in seq):
+        probs.append("no fold has the job 'act' (the call to action)")
+    from .c_cta import page_css
+    try:
+        css = page_css(ctx)
+    except Exception:
+        css = ""
+    geo = [s for s in kinds if s.startswith("geo-")]
+    for g in geo:
+        if not re.search(rf'\[data-surface="{g}"\]', css):
+            probs.append(f"no CSS for data-surface=\"{g}\"")
+    for sel, body in RULE.findall(css):
+        if "data-surface" in sel and "geo-" in sel:
+            for o in re.findall(r"opacity\s*:\s*([0-9.]+)", body):
+                if float(o) > 0.08:
+                    probs.append(f"{sel.strip()[-40:]}: pattern opacity {o} (0.08 at most, keep it faint)")
+    ctx.verdict(probs, f"{len(seq)} folds, {len(kinds)} surface kinds, no repeats in a row: " + " / ".join(f"{s}:{j}" for _, s, j in seq),
+                "give each fold data-surface and data-job from the shared set, alternate them, keep patterns faint (rule 36f)")

@@ -309,3 +309,107 @@ def footer(ctx):
     if miss:
         probs.append(f"topic links missing: {', '.join(miss)}")
     ctx.verdict(probs, "footer call row, topic links and Back to top present", "fix the shared footer as listed (rule 140)")
+
+
+def not_on(ctx, f):
+    return f.get("not_on", [p for p in (ctx.cfg.get("conversion_path"), (ctx.cfg.get("cta") or {}).get("contact_path")) if p])
+
+
+def page_css(ctx):
+    """The CSS the page uses: on Next.js the site's CSS files; on any other stack the served page's inline <style>
+    blocks plus its linked stylesheets, read from the same local server (2.3.0)."""
+    if ctx.stack() == "nextjs":
+        return ctx.css_text()
+    if "served_css" in ctx.cache:
+        return ctx.cache["served_css"]
+    import urllib.request
+    from urllib.parse import urljoin
+    html = ctx.need_html()
+    parts = re.findall(r"<style\b[^>]*>(.*?)</style>", html, re.S | re.I)
+    for tag in re.findall(r"<link\b[^>]*>", html, re.I):
+        if re.search(r"rel=[\"']?stylesheet", tag, re.I):
+            m = re.search(r"href=[\"']([^\"']+)", tag)
+            if m and ctx.url:
+                try:
+                    with urllib.request.urlopen(urljoin(ctx.url, m.group(1)), timeout=5) as r:
+                        parts.append(r.read().decode("utf-8", "replace"))
+                except Exception:
+                    pass
+    ctx.cache["served_css"] = "\n".join(parts)
+    return ctx.cache["served_css"]
+
+
+# ---- sticky call bar (35) and exit offer (35b): read from the served page on every stack (2.3.0; were Next.js only) ----
+@check("sticky.present", "35", types=("money",), what="sticky call bar: shared component, replaces the header, close x, progress line, text <= 70, button <= 30", needs="live")
+def sticky(ctx):
+    f = ctx.feature("sticky_cta")
+    comp, src_file = f.get("component", "StickyCta"), f.get("source", "components/sticky-cta.tsx")
+    max_text, max_btn = int(f.get("max_text", 70)), int(f.get("max_button", 30))
+    root = ctx.root()
+    bars = [n for n in root.iter() if domx.has_cls(n, r"sticky-cta")]
+    if ctx.need_path() in not_on(ctx, f):
+        ctx.verdict([f"{len(bars)} sticky bar(s) on {ctx.path}"] if bars else [], "no sticky bar on this page (correct)",
+                    "remove the sticky bar from this page (rule 35)")
+        return
+    if not bars:
+        ctx.fail("no sticky call bar (.sticky-cta) in the page", f"render the shared <{comp}> on the page (rule 35)")
+        return
+    bar = bars[0]
+    probs = []
+    btn = [a for a in domx.booking_links(ctx, bar)]
+    if not btn:
+        probs.append("no booking button in the bar")
+    if not any(b.get("aria-label") and re.search(r"(?i)dismiss|close", b.get("aria-label")) for b in find_all(bar, "button")):
+        probs.append("no close x with an aria-label")
+    if not any(domx.has_cls(n, r".*progress.*") for n in bar.iter()):
+        probs.append("no reading-progress line")
+    txt = next((n for n in bar.iter() if domx.has_cls(n, r"sticky-cta-text")), None)
+    line = domx.label(txt) if txt is not None else ""
+    if not line:
+        probs.append("no bar text")
+    elif len(line) > max_text:
+        probs.append(f"bar text is {len(line)} chars (max {max_text}): '{short(line, 60)}'")
+    if btn and len(domx.label(btn[0])) > max_btn:
+        probs.append(f"button label is {len(domx.label(btn[0]))} chars (max {max_btn})")
+    css = page_css(ctx)
+    if not re.search(r"\[data-sticky-cta\][^{]*\.site-header[^{]*\{[^}]*(display\s*:\s*none|visibility\s*:\s*hidden|transform)", css):
+        probs.append("no CSS rule hides .site-header under html[data-sticky-cta] (the bar must replace the header)")
+    if ctx.stack() == "nextjs":                      # the code-level part: only where the kit can read the page's component tree
+        src = "\n".join(ctx.tree_sources().values())
+        sticky_src = ctx.need_repo() / src_file
+        if f"<{comp}" not in src or not sticky_src.exists() or "data-sticky-cta" not in sticky_src.read_text():
+            probs.append(f"the page does not render the shared {comp} that sets data-sticky-cta")
+    ctx.verdict(probs, f"sticky bar ok: '{short(line, 50)}' ({len(line)} chars)",
+                f"fix the sticky bar as listed: text from the page's offer, at most {max_text} chars; button at most {max_btn} (rule 35)")
+
+
+@check("exit.present", "35b", types=("money",), what="exit offer: the shared dialog, close x, the same booking button with its reason", needs="live")
+def exit_offer(ctx):
+    f = ctx.feature("exit_offer")
+    comp = f.get("component", "ExitOffer")
+    root = ctx.root()
+    dl = [d for d in find_all(root, "dialog") if domx.has_cls(d, r"exit-offer") and not domx.has_cls(d, r"call-dialog")]
+    if ctx.need_path() in not_on(ctx, f):
+        ctx.verdict(["exit offer present"] if dl else [], "no exit offer on this page (correct)", "remove it (rule 35b)")
+        return
+    if not dl:
+        ctx.fail("no exit offer dialog (dialog.exit-offer) in the page", f"render the page's exit offer through the shared {comp} (rule 35b)")
+        return
+    d = dl[0]
+    probs = []
+    if not any(re.search(r"(?i)close|dismiss", b.get("aria-label")) for b in find_all(d, "button")):
+        probs.append("no close x with an aria-label")
+    bk = [a for a in domx.booking_links(ctx, d) if domx.is_primary(a)]
+    if not bk:
+        probs.append("no booking button in the offer")
+    pl = {domx.label(a) for a in primaries(ctx, root) if not any(x is d for x in a.ancestors())}
+    if bk and pl and domx.label(bk[0]) not in pl:
+        probs.append(f"offer button '{domx.label(bk[0])}' differs from the page's '{next(iter(pl))}'")
+    if bk and not reason_for(bk[0], reason_words(ctx)) and not re.search(reason_words(ctx), domx.text(d)):
+        probs.append("no reason line in the offer")
+    if ctx.stack() == "nextjs":
+        src = "\n".join(ctx.tree_sources().values())
+        if comp not in src:
+            probs.append(f"the page does not use the shared {comp} component")
+    ctx.verdict(probs, "exit offer present with close, booking button and reason line",
+                "fix the exit offer as listed (rule 35b)")

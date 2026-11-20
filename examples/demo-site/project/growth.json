@@ -48,7 +48,9 @@
   "tracker_port": 18700,
   "conversion_path": "/contact",
   "_conversion_path": "The one page every call to action leads to (booking, quote or contact).",
-  "booking_hosts": ["booking.brightline.example"],
+  "booking_hosts": [
+    "booking.brightline.example"
+  ],
   "_booking_hosts": "Extra outside booking hosts that must never be linked directly (a pasted booking link breaks rule 32). Well-known hosts (Calendly, Cal.com, Zoom, HubSpot meetings) are always checked.",
   "cta": {
     "_about": "The one call to action. label: the one text on every primary button. contact_path: the plain contact page. reason_words: words a reason line beside a button talks about (regex alternatives). events, components: dataLayer events and shared components the Next.js adapter looks for. color, color_pressed, color_token: the one CTA colour (Next.js adapter).",
@@ -160,5 +162,13 @@
   "_preview_url": "The one address the owner sees previews on. Empty = the golden-rule guard (ready, url_guard) is off.",
   "preview_repo": "",
   "new_pages": [],
-  "page_tracker": {}
+  "page_tracker": {},
+  "features_dropped": {
+    "_about": "A house feature switched off in features needs its fit reason here (rule 161), or house.features fails.",
+    "sticky_cta": "the demo site is a six-page static example of the gate; this shared component is out of its scope (rule 161 fit reason: the demo has no booking tool)",
+    "exit_offer": "the demo site is a six-page static example of the gate; this shared component is out of its scope (rule 161 fit reason: the demo has no booking tool)",
+    "call_dialog": "the demo site is a six-page static example of the gate; this shared component is out of its scope (rule 161 fit reason: the demo has no booking tool)",
+    "footer_call_row": "the demo site is a six-page static example of the gate; this shared component is out of its scope (rule 161 fit reason: the demo has no booking tool)",
+    "hints": "the demo site is a six-page static example of the gate; this shared component is out of its scope (rule 161 fit reason: the demo has no booking tool)"
+  }
 }
