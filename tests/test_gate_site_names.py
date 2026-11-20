@@ -101,3 +101,17 @@ def test_the_sticky_bar_is_found_by_the_sites_own_names():
     ln = line(ctx(page, cfg), "sticky.present")
     assert ln.level == "OK", ln.what
     assert line(ctx(page.replace("scta__progress", "x"), cfg), "sticky.present").level == "FAIL"   # a real gap still fails
+
+
+def test_a_legal_page_may_be_plain_next_to_plain():
+    legal = ('<html><body><main><section data-fold="policy" data-surface="plain" data-job="read"><h1>Privacy</h1></section>'
+             '<section data-fold="fold-2" data-surface="plain" data-job="read"><p>Text</p></section></main></body></html>')
+    from pathlib import Path
+    c = Ctx(project=Path("/nonexistent"), path="/privacy-policy/", key="p", ptype="core", cfg=CFG, html=legal,
+            url="http://127.0.0.1/privacy-policy/", status=200)
+    run_check(c, CHECKS["page.surfaces"])
+    assert c.lines[-1].level != "FAIL", c.lines[-1].what
+    c2 = Ctx(project=Path("/nonexistent"), path="/pricing/", key="p", ptype="money", cfg=CFG, html=legal,
+             url="http://127.0.0.1/pricing/", status=200)
+    run_check(c2, CHECKS["page.surfaces"])
+    assert c2.lines[-1].level == "FAIL"                       # a money page still may not repeat a surface
