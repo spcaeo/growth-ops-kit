@@ -46,8 +46,12 @@ MEASURE_JS = r"""
     if (s.display === 'contents') { walk(c, fn); continue; }
     if (!shown(c)) continue;
     if (isSvg(c) || MEDIA.has(c.tagName)) { fn(c); continue; }
-    const kids = [...c.children].filter(k => cs(k).display !== 'none' && (shown(k) || cs(k).display === 'contents'));
-    if (kids.length) { walk(c, fn); continue; }
+    // only children walk() would itself measure count as content: aria-hidden icons and positioned decoration do not
+    // make an element a container, so its own text is still measured (friction 56)
+    const kids = [...c.children].filter(k => k.getAttribute('aria-hidden') !== 'true' && flow(k) && cs(k).display !== 'none'
+                                             && (shown(k) || cs(k).display === 'contents'));
+    const ownText = [...c.childNodes].some(n => n.nodeType === 3 && n.textContent.trim().length > 0);
+    if (kids.length) { walk(c, fn); if (ownText) fn(c); continue; }
     if (FORM.has(c.tagName) || (c.textContent || '').trim().length > 0 || cs(c).backgroundImage !== 'none') fn(c);
   } };
   const extent = root => { let t = null, b = null; walk(root, e => { const r = abs(R(e));
