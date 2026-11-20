@@ -84,3 +84,21 @@ def test_only_recent_helpers_are_judged(tmp_path):
     t.write_text("".join(_j.dumps(r) + "\n" for r in rows))
     assert [c["description"] for c, _ in agent_calls(t)] == ["T41 builder"]
     assert len(agent_calls(t, recent_only=False)) == 2
+
+
+def test_a_helper_from_an_earlier_turn_is_not_judged_again(tmp_path):
+    # issue #67: a finished wrong-model helper kept blocking every later stop
+    import json as _j
+    from agent_models import agent_calls
+    def asst(desc, model):
+        return {"type": "assistant", "timestamp": "2026-11-20T07:00:00Z", "message": {"model": "claude-opus-5-5", "content": [
+            {"type": "tool_use", "id": desc, "name": "Agent", "input": {"description": desc, "model": model}}]}}
+    rows = [{"type": "user", "message": {"content": "go"}},
+            asst("T6 builder", "opus"),                                               # turn 1: wrong model
+            {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "T6 builder", "content": "launched"}]}},
+            {"type": "user", "message": {"content": "<cross-session-message>next job</cross-session-message>"}},   # turn 2
+            asst("T7 builder", "sonnet")]
+    t = tmp_path / "t.jsonl"
+    t.write_text("".join(_j.dumps(r) + "\n" for r in rows))
+    assert [c["description"] for c, _ in agent_calls(t)] == ["T7 builder"]
+    assert problems(agent_calls(t)) == []
