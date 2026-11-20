@@ -363,7 +363,12 @@ def task_steps(ctx):
     if not mine:
         ctx.fail("no task names this page", "growth tasks add '<job>: <path>' and copy the playbook steps in (rule 0)")
         return
-    task = mine[-1]
+    open_ = [x for x in mine if x.get("status") != "done"]
+    if not open_:                                 # issue #24: page work needs an OPEN task, not one closed on an earlier job
+        ctx.fail(f"no OPEN task names this page (only done: {', '.join(x.get('id', '?') for x in mine)})",
+                 "open a task for this job: growth tasks add '<job>: <path>' and copy the playbook steps in (rule 0)")
+        return
+    task = open_[-1]
     steps = task.get("steps", [])
     probs = []
     if len(steps) < 5:
