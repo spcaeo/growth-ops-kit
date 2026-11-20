@@ -216,3 +216,65 @@ def surfaces(ctx):
                     probs.append(f"{sel.strip()[-40:]}: pattern opacity {o} (0.08 at most, keep it faint)")
     ctx.verdict(probs, f"{len(seq)} folds, {len(kinds)} surface kinds, no repeats in a row: " + " / ".join(f"{s}:{j}" for _, s, j in seq),
                 "give each fold data-surface and data-job from the shared set, alternate them, keep patterns faint (rule 36f)")
+
+
+PAINT_JS = r"""
+() => {
+  const cs = e => getComputedStyle(e);
+  const solid = c => c && c !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(c);
+  const painted = e => {                      // the colour the reader sees behind the fold: its own, else the nearest ancestor's
+    for (let n = e; n; n = n.parentElement) { const c = cs(n).backgroundColor; if (solid(c)) return c; }
+    return 'rgb(255, 255, 255)';
+  };
+  const image = e => [cs(e), cs(e, '::before'), cs(e, '::after')].some(s => s.backgroundImage && s.backgroundImage !== 'none');
+  const main = document.querySelector('main') || document.body;
+  const page = painted(main);
+  return [...main.querySelectorAll('section[data-fold]')].filter(s => s.getBoundingClientRect().height > 2).map(s => ({
+    fold: s.dataset.fold, surface: s.dataset.surface || '', own: cs(s).backgroundColor,
+    paint: painted(s), image: image(s), page }));
+}
+"""
+
+
+@check("page.surfaces-paint", "36f", what="each fold's surface label matches what the reader sees: a non-plain label paints differently from the page, and no two folds in a row paint the same (issue #68)", needs="live")
+def surfaces_paint(ctx):
+    """Labels alone can lie (a fold labelled "tint" that paints transparent passed page.surfaces). Read each fold's painted
+    background in a real browser at 1366, light theme."""
+    ctx.need_html()
+    need_browser(ctx)
+    if not ctx.url:
+        raise Skip("no page URL to open in a browser", blocked=True)
+    from .c_layout import is_legal
+    legal = is_legal(ctx)
+    key = ("surfaces-paint", ctx.url)
+    if key not in ctx.cache:
+        from playwright.sync_api import sync_playwright
+        try:
+            with sync_playwright() as p:
+                b = p.chromium.launch(headless=True)
+                try:
+                    c = b.new_context(viewport={"width": 1366, "height": 900}, color_scheme="light", reduced_motion="reduce")
+                    pg = c.new_page()
+                    pg.goto(ctx.url, wait_until="load", timeout=60000)
+                    pg.wait_for_timeout(300)
+                    ctx.cache[key] = pg.evaluate(PAINT_JS)
+                    c.close()
+                finally:
+                    b.close()
+        except Exception as e:  # noqa: BLE001
+            if browser_failed(e):
+                raise Skip(f"no headless browser to measure the page ({str(e).splitlines()[0][:80]})", blocked=True)
+            raise
+    folds = ctx.cache[key]
+    if not folds:
+        raise Skip("no section[data-fold] on the page (page.surfaces reports it)")
+    probs = []
+    for f in folds:
+        if f["surface"] and f["surface"] != "plain" and f["paint"] == f["page"] and not f["image"]:
+            probs.append(f"fold '{f['fold']}' is labelled '{f['surface']}' but paints the page's own colour {f['paint']}")
+    if not legal:
+        for a, b in zip(folds, folds[1:]):
+            if a["paint"] == b["paint"] and a["image"] == b["image"]:
+                probs.append(f"folds '{a['fold']}' and '{b['fold']}' paint the same background ({a['paint']}) whatever their labels say")
+    ctx.verdict(probs, f"{len(folds)} folds: every label matches its paint, and neighbours differ",
+                "paint each fold with the surface it is labelled (the shared surfaces CSS), or label it what it paints (rule 36f)")
