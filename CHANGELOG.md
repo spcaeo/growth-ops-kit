@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.1 - 2026-11-19
+
+- footer.call-row (140): topic links match with or without the trailing slash, like core.service-links; a secondary-styled footer button counts, so the closing screen can keep one primary (158a).
+- cta.label-same and cta.reason-line (32a) skip legal paths (growth.json layout.legal_paths), and page.surfaces (36f) asks a legal page for no act fold, no 3-fold minimum and no 3 surface kinds: legal pages stay plain with a quiet contact link (rule 49).
+- Test: `tests/test_release_2_4_1_footer_legal.py`.
+
 ## 2.4.0 - 2026-11-19
 
 - New measured design checks in `kit/tools/gatelib/c_layout.py` (rule 158a, with 30, 32b and 49). One headless-browser pass opens the page at 1440x900 and 390x844 (reduced motion, animations off) and every check reads the same boxes. A design audit of a real site found white space, unbalanced columns and crowded buttons on pages that had passed every other check.

@@ -156,6 +156,9 @@ def one_path(ctx):
 
 @check("cta.label-same", "32a", types=("money", "hub", "core"), what="every primary booking button has the same label (growth.json cta.label when set)", needs="live")
 def label_same(ctx):
+    from .c_layout import is_legal
+    if is_legal(ctx):
+        raise Skip("legal page: a quiet contact link only, no booking button (rule 49; growth.json layout.legal_paths)")
     root = ctx.root()
     labels = {}
     # growth.json cta.header_label {label, why}: the site header's own short label, an owner-approved exception (it fits
@@ -182,6 +185,9 @@ def label_same(ctx):
 
 @check("cta.reason-line", "32a", types=("money", "hub", "core"), what="every primary booking button has a reason line in its block", needs="live")
 def reason_line(ctx):
+    from .c_layout import is_legal
+    if is_legal(ctx):
+        raise Skip("legal page: a quiet contact link only, no booking button (rule 49; growth.json layout.legal_paths)")
     root = ctx.root()
     btns = primaries(ctx, root, include_header=False)
     form, submit = main_form_submit(root) if conversion_page(ctx) else (None, None)   # on the booking page its form is the primary action
@@ -298,14 +304,18 @@ def footer(ctx):
         return
     probs = []
     bk = domx.booking_links(ctx, f)
-    if not any(domx.is_primary(a) for a in bk):
+    # a button-styled link counts, primary or secondary: next to the closing act fold the footer's button is secondary,
+    # so the screen keeps one primary (cta.one-per-view, rule 158a) (2.4.1)
+    btns = [a for a in bk if domx.is_primary(a) or domx.has_cls(a, r"(.*[-_])?(btn|button)([-_].*)?")]
+    if not btns:
         probs.append(f"no booking button in the footer (only {len(bk)} text link(s))")
-    elif not any(reason_for(a, reason_words(ctx)) for a in bk if domx.is_primary(a)):
+    elif not any(reason_for(a, reason_words(ctx)) for a in btns):
         probs.append("the footer booking button has no reason line")
     if not any(re.search(r"(?i)back to top", domx.text(a)) for a in find_all(f, "a")):
         probs.append("no 'Back to top' link")
-    hrefs = {ctx.internal_path(a.get("href")) for a in find_all(f, "a")}
-    miss = [s for s in ctx.cfg.get("silos", {}) if "/" + s not in hrefs]
+    import paths
+    hrefs = {paths.normalize(h) for h in (ctx.internal_path(a.get("href")) for a in find_all(f, "a")) if h}   # "/x/" and "/x" are one page (2.4.1)
+    miss = [s for s in ctx.cfg.get("silos", {}) if paths.normalize("/" + s) not in hrefs]
     if miss:
         probs.append(f"topic links missing: {', '.join(miss)}")
     ctx.verdict(probs, "footer call row, topic links and Back to top present", "fix the shared footer as listed (rule 140)")

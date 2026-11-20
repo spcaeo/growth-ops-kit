@@ -175,7 +175,9 @@ def surfaces(ctx):
     m = re.search(r"<main\b.*?</main>", html, re.S)
     tags = re.findall(r"<section\b[^>]*\bdata-fold=[^>]*>", m.group(0) if m else html)
     probs = []
-    if len(tags) < 3:
+    from .c_layout import is_legal
+    legal = is_legal(ctx)                 # a legal page stays plain (rule 49): no act fold and no surface rhythm needed (2.4.1)
+    if len(tags) < 3 and not legal:
         probs.append(f"only {len(tags)} folds found (sections with data-fold)")
     seq = []
     for t in tags:
@@ -191,12 +193,12 @@ def surfaces(ctx):
         if sa and sa == sb:
             probs.append(f"folds '{a}' and '{b}' share the surface '{sa}'")
     kinds = {s for _, s, _ in seq if s}
-    if seq and len(kinds) < 3:
+    if seq and len(kinds) < 3 and not legal:
         probs.append(f"only {len(kinds)} surface kinds on the page (3 or more)")
     darks = [i for i, (_, s, _) in enumerate(seq) if s == "dark"]
     if len(darks) > 2:
         probs.append(f"{len(darks)} dark folds (2 at most)")
-    if seq and not any(j == "act" for _, _, j in seq):
+    if seq and not legal and not any(j == "act" for _, _, j in seq):
         probs.append("no fold has the job 'act' (the call to action)")
     from .c_cta import page_css
     try:
