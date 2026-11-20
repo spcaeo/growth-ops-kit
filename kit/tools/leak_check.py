@@ -4,6 +4,7 @@
   growth leak_check                      # every file of the repo that is tracked or not ignored
   growth leak_check --staged             # only what is staged (the pre-commit hook)
   growth leak_check --message FILE       # one commit message (the commit-msg hook)
+  growth leak_check --text FILE          # an issue or PR body before posting: every line, Markdown headings too
   growth leak_check --history            # every commit of the repo: added lines, file names, messages, author and committer (before any push)
   growth leak_check --root DIR           # another folder (default: the git repo or folder the command runs in)
 
@@ -306,6 +307,7 @@ def main(argv=None):
     ap.add_argument("--staged", action="store_true", help="only the files staged for commit")
     ap.add_argument("--history", action="store_true", help="every commit, not just the files now")
     ap.add_argument("--message", default="", help="a commit message file (the commit-msg hook): keys and private words in it fail")
+    ap.add_argument("--text", default="", help="any text file (an issue or PR body, Markdown): every line is scanned, headings too")
     ap.add_argument("--private-words", default="", help="the private words file (default: <root>/.private-words)")
     a = ap.parse_args(argv)
     root = Path(a.root or ".").resolve()
@@ -314,12 +316,21 @@ def main(argv=None):
         root = Path(top)
     warns = []
     words = private_words(Path(a.private_words) if a.private_words else root / ".private-words")
-    if a.message:
-        text = "\n".join(l for l in Path(a.message).read_text(errors="replace").splitlines() if not l.startswith("#"))
+    if a.message or a.text:
+        f = Path(a.message or a.text)
+        if not f.is_file():
+            print(f"leak_check: {'--message' if a.message else '--text'} needs a readable FILE path, not the text itself "
+                  f"(got {str(f)[:60]!r}); write the text to a file first", file=sys.stderr)
+            return 2
+        lines = f.read_text(errors="replace").splitlines()
+        # a git commit message drops its '#' comment lines; any other text (Markdown headings!) is scanned in full (issue #65)
+        is_commit = bool(a.message)          # --message is a git commit message: its '#' lines are git comments
+        text = "\n".join(l for l in lines if not (is_commit and l.startswith("#")))
+        label, what = ("commit message", "the commit message") if a.message else (f.name, f.name)
         bad = [(n, kind, shown) for n, kind, shown in scan_text(text, words) if kind != "email address"]
         for n, kind, shown in bad:
-            print(f"FAIL commit message:{n} {kind}: {shown}")
-        print(f"leak_check: {len(bad)} hit(s) in the commit message ({len(words)} private word(s) checked).")
+            print(f"FAIL {label}:{n} {kind}: {shown}")
+        print(f"leak_check: {len(bad)} hit(s) in {what} ({len(words)} private word(s) checked).")
         return 1 if bad else 0
     if a.history:
         if not in_git(root):

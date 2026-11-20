@@ -212,3 +212,14 @@ def test_history_scan_fails_on_a_spaced_word_in_a_message_and_a_file(tmp_path):
     h = run("--history", cwd=tmp_path)
     assert h.returncode == 1
     assert "private word in the commit message" in h.stdout and "f.txt:1 private word: red fox" in h.stdout
+
+
+def test_text_mode_scans_markdown_headings_and_needs_a_file(tmp_path):
+    # issue #65: '--message' dropped every '#' line, so a private word in a Markdown heading passed
+    words = tmp_path / ".private-words"
+    words.write_text("acmeclient\n")
+    body = tmp_path / "issue.md"
+    body.write_text("## Example from AcmeClient\n\nAll good here.\n")
+    assert lc.main(["--root", str(tmp_path), "--private-words", str(words), "--text", str(body)]) == 1
+    assert lc.main(["--root", str(tmp_path), "--private-words", str(words), "--message", str(body)]) == 0   # commit mode: '#' = comment
+    assert lc.main(["--root", str(tmp_path), "--text", "this is the text itself, not a file"]) == 2
