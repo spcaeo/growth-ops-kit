@@ -31,8 +31,9 @@ DEFAULT_ROLES = [
     # a researcher reads sources and writes a research file (it may "verify facts"): mid model, before the reviewer pattern
     (r"(?i)\bresearch(er|ers|ing)?\b", {"sonnet"}),
     (r"(?i)review|audit|verif", {"opus"}),
-    (r"(?i)log|count|triage|summar|tally", {"haiku"}),
-    (r"(?i)evidence|shots|screenshot|click", {"sonnet"}),
+    # whole words only: "account" is not a count job, "catalog" not a log job (friction 53)
+    (r"(?i)\b(logs?|counts?|counting|triage|summar\w*|tally)\b", {"haiku"}),
+    (r"(?i)\b(evidence|shots?|screenshots?|click\w*)\b", {"sonnet"}),
 ]
 BUILDER = DEFAULT_ROLES[0][0]
 REVIEWER = r"(?i)review|audit|verif"   # the independent reviewer's pattern (matched by value, not by list position)
