@@ -26,16 +26,19 @@ import transcript as transcripts  # noqa: E402
 # "lead": "<model>" used only when the transcript names none, "exempt_types": ["Explore", ...]} replaces them).
 # role pattern -> allowed models, first match wins
 DEFAULT_ROLES = [
-    # a helper that fixes or builds is a builder even when its name says what it fixes ("review fixes builder")
-    (r"(?i)\bbuild(er|s|ing)?\b|\bfix(er|es|ing)?\b", {"sonnet"}),
+    # an explicit builder word wins ("review fixes builder" builds); then a researcher; then a REVIEW wins over the
+    # word "fix" ("T40 independent review: a2a truth fix" reviews, friction 54); a plain fixer is a builder
+    (r"(?i)\bbuild(er|ers|s|ing)?\b", {"sonnet"}),
     # a researcher reads sources and writes a research file (it may "verify facts"): mid model, before the reviewer pattern
     (r"(?i)\bresearch(er|ers|ing)?\b", {"sonnet"}),
     (r"(?i)review|audit|verif", {"opus"}),
+    (r"(?i)\bfix(er|ers|es|ing)?\b", {"sonnet"}),
     # whole words only: "account" is not a count job, "catalog" not a log job (friction 53)
     (r"(?i)\b(logs?|counts?|counting|triage|summar\w*|tally)\b", {"haiku"}),
     (r"(?i)\b(evidence|shots?|screenshots?|click\w*)\b", {"sonnet"}),
 ]
-BUILDER = DEFAULT_ROLES[0][0]
+BUILDER = r"(?i)\bbuild(er|ers|s|ing)?\b|^(?!.*(review|audit|verif)).*\bfix(er|ers|es|ing)?\b"   # who built (for the reviewer's comparison)
+RECENT_MINUTES = 120    # only helpers launched in the last two hours are judged; earlier ones were judged when they ran (friction 54)
 REVIEWER = r"(?i)review|audit|verif"   # the independent reviewer's pattern (matched by value, not by list position)
 DECLARED = re.compile(r"(?i)(review|audit|verif).*of opus-built|of opus-built.*(review|audit|verif)")
 EXEMPT_TYPES = {"fork", "explore", "plan", "claude-code-guide", "statusline-setup"}   # read-only or inherit by design
@@ -61,7 +64,7 @@ def settings():
     return roles, family(cfg.get("lead")), exempt
 
 
-def agent_calls(transcript, all_turns=False):
+def agent_calls(transcript, all_turns=False, recent_only=True):
     """Agent tool calls made after the owner's last message (all of them with all_turns), each with the model of the
     session that made it: [(input, lead_model_at_that_time)]."""
     calls, lead = [], ""
@@ -75,7 +78,7 @@ def agent_calls(transcript, all_turns=False):
                 lead = family(m)
         for b in transcripts.assistant_blocks(e):
             if b.get("type") == "tool_use" and b.get("name") in ("Agent", "Task"):
-                calls.append((b.get("input") or {}, lead, b.get("id")))
+                calls.append((b.get("input") or {}, lead, b.get("id"), e.get("timestamp") or ""))
             elif b.get("type") == "tool_use" and b.get("name") == "TaskStop":
                 stopped.add(str((b.get("input") or {}).get("task_id") or ""))
         content = (e.get("message") or {}).get("content") if e.get("type") == "user" else None
@@ -85,7 +88,19 @@ def agent_calls(transcript, all_turns=False):
                 if m:
                     use_to_agent[b.get("tool_use_id")] = m.group(1)
     # a helper the session stopped (TaskStop) is gone: it is not judged (friction 51)
-    return [(c, ld) for c, ld, uid in calls if use_to_agent.get(uid) not in stopped or not use_to_agent.get(uid)]
+    live = [(c, ld, ts) for c, ld, uid, ts in calls if use_to_agent.get(uid) not in stopped or not use_to_agent.get(uid)]
+    if not all_turns and recent_only:
+        import datetime as _dt
+        def when(ts):
+            try:
+                return _dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        stamps = [w for w in (when(ts) for _, _, ts in live) if w]
+        if stamps:
+            cut = max(stamps) - _dt.timedelta(minutes=RECENT_MINUTES)
+            live = [x for x in live if (when(x[2]) or cut) >= cut]
+    return [(c, ld) for c, ld, _ in live]
 
 
 def problems(calls, lead=None, roles=None, builders=None, exempt=None):
