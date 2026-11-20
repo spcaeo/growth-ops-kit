@@ -190,7 +190,7 @@ def surfaces(ctx):
             probs.append(f"fold '{stop}': data-job '{job or 'missing'}' (one of {', '.join(sorted(JOBS))})")
         seq.append((stop, sf, job))
     for (a, sa, _), (b, sb, _) in zip(seq, seq[1:]):
-        if sa and sa == sb:
+        if sa and sa == sb and not legal:     # a legal page is plain by design (rule 49): plain next to plain is honest there
             probs.append(f"folds '{a}' and '{b}' share the surface '{sa}'")
     kinds = {s for _, s, _ in seq if s}
     if seq and len(kinds) < 3 and not legal:
