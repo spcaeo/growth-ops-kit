@@ -10,7 +10,7 @@ from pathlib import Path
 _TOOLS = str(Path(__file__).resolve().parent.parent)           # kit/tools: holds config.py and techseo/
 if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
-from . import c_cta, c_engine, c_evidence, c_links, c_plan, c_page, c_process, c_release, c_research, c_seo, c_types, c_words  # noqa: F401
+from . import c_cta, c_engine, c_evidence, c_links, c_plan, c_layout, c_page, c_process, c_release, c_research, c_seo, c_types, c_words  # noqa: F401
 from . import c_house  # noqa: F401  (last: reads the feature checks' results)
 
 _KIT = str(Path(__file__).resolve().parent.parent.parent)      # the kit/ folder: holds adapters/

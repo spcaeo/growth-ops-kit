@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.0.1
-updated: 2026-11-18
+version: 2.4.0
+updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.0.1 (generic edition) · 18 Nov 2026.**
+**Version 2.4.0 (generic edition) · 19 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -353,6 +353,7 @@ says yes; until then the page simply goes without it.
 156. **A new or rebuilt page keeps every house feature of its type.** The list per page type is "House features" below the checklist. Before a page is called done, tick each one; a feature left out needs a reason in the pull request. A test per page type checks the built page for each feature's marker. [code: house.features, repo.guard-tests]
 157. **No two sibling pages share a hero, a fold design or an animation.** Rule 30 covers the folds inside one page; this covers the service pages, hubs and posts of one kind. Compare siblings side by side before showing any of them. [judgment: proxy hero.unique, layout.folds-distinct]
 158. **Before showing any page, look at every screen at 1366 and 390 px as a demanding designer:** no big blank gaps, no hollow cards, no empty state that looks broken, no picture shown larger than its file (blurry), and every card that sells has its own next step. Green tests are not good design. [judgment: proxy ev.shots-1366-390]
+158a. **The look of a page is measured in a real browser at 1440x900 and 390x844, and these limits fail the gate.** Limits live in `growth.json` `layout` (defaults here). **White space (rule 158):** the gap between the content of two neighbouring folds is at most 2 x the section step + 24 px (step 80, so 184 px); a fold's empty bottom is at most the step + 24 px (104 px); the hero is at most its content + 66 px, and at most 1,100 px tall at 390 (not on `layout.legal_paths`, default `/terms*`, `/privacy*`, `/cookie*`). **Balance (rule 158):** two columns side by side (each at least 200 px wide, tops within 60 px) differ in content height by at most 1.30 times, a column under 25% of the other is nearly empty, and their tops are within 8 px (not on legal paths); a picture next to a text block has at least 60% of the text block's area (money and core pages); the last row of a card grid is full, centred or one wide card. **Buttons (rule 32b, 49):** at most one primary button (`.book-cta`, or a `.btn` in the colour of `cta.color_token`) on any screen, counting in steps of the viewport height and not counting dialogs or the sticky bar; no two primary buttons in neighbouring folds (the sticky bar and the footer do not count); a legal page has no primary button and no sticky bar. **Mechanics (rule 30):** one mechanic class (`layout.mechanics`, default flip, tabs, accordion, slider) appears in at most 2 folds. A page that cannot be measured (no Playwright, no server) is BLOCKED-SKIP, never a pass. [code: layout.fold-gap, layout.hero-height, layout.column-ratio, layout.picture-text, layout.card-orphan, cta.one-per-view, cta.spacing, cta.legal-quiet, engage.one-mechanic]
 159. **Every product screenshot on a page has its capture date in the repo** (in its file name or the image map), **and when the product changes, its pictures change in the same round.** [code: img.capture-date]
 160. **Click every button, tab, slider and toggle on the page in a real browser before you show it.** A control that does nothing on click is a broken page. [judgment: proxy ev.click-test]
 161. **No rule is dropped because it is "not in our notes".** A rule is dropped only for a fit reason: it is tied to a tool, editor or server the project does not run, to another business's facts, brand or vendor, or to a kind of page the project does not have (say which). A feature the reader sees is never dropped for having been absent; it is adapted. Every drop is a row in the project's own "Dropped rules" table (see the end of this file) with its fit reason. [code: proc.dropped-reasons]
@@ -403,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-19 | 2.4.0 | New rule 158a: measured design limits (white space between folds, hero height, column balance, picture size, card orphans, one primary button per screen, spacing of asks, quiet legal pages, one mechanic per page), read from a real browser by `layout.*`, `cta.*` and `engage.one-mechanic`. A design audit of a real site found these on pages that passed every other check. |
 | 2026-11-18 | 2.0.1 | Review fixes: fold attribute is `data-fold` and the surface is `geo-lines` (as the gate reads them); the page's main type can never be only the site's Organization (rule 36b, 95); checks renamed `repo.retired-410` (rule 76), `proc.remote-private` (a project may have a private remote) and `core.service-links` (rule 146); every rule text in the registry is copied from this file's headings. |
 | 2026-11-18 | 2.0.0 | Generic edition for any website: project facts moved to `BRAND.md` and `growth.json`; tool commands are `growth <tool>`; rules that read code are marked "(Next.js adapter)". Rule numbers and check tags unchanged. |
 | 2026-11-18 | 1.6.16 | Rule 124a adds `repo.no-unused-code`: tsc `--noUnusedLocals --noUnusedParameters` on the files the branch changed. A sweep found unused names left by page rebuilds, one of them a fix helper imported but never called. |

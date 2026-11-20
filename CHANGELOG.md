@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.0 - 2026-11-19
+
+- New measured design checks in `kit/tools/gatelib/c_layout.py` (rule 158a, with 30, 32b and 49). One headless-browser pass opens the page at 1440x900 and 390x844 (reduced motion, animations off) and every check reads the same boxes. A design audit of a real site found white space, unbalanced columns and crowded buttons on pages that had passed every other check.
+- layout.fold-gap, layout.hero-height, layout.column-ratio, layout.picture-text, layout.card-orphan, cta.one-per-view, cta.spacing, cta.legal-quiet, engage.one-mechanic. Limits come from growth.json `layout` (section_step 80, hero_extra 66, hero_max_mobile 1100, column_ratio 1.30, nearly_empty 0.25, top_tolerance 8, picture_ratio 0.60, mechanics_max 2, legal_paths, mechanics). A page that cannot be measured is BLOCKED-SKIP, never a pass. They are not in the HOUSE lists.
+- Test: `tests/test_release_2_4_0_layout.py`.
+
 ## 2.3.0 - 2026-11-19
 
 - sticky.present (35), exit.present (35b) and page.surfaces (36f) now read the served page on every stack. They were in the Next.js adapter only, so on any other stack they printed SKIP and pages passed with no sticky bar, no exit offer and no fold surfaces (found on a real Astro site whose owner called the CTAs weak and the folds unbalanced). The code-level parts (the shared component in the page's source tree) still run on Next.js only. New `page_css(ctx)`: on other stacks it reads the page's inline styles and linked stylesheets from the same local server.
