@@ -49,6 +49,22 @@ def _git_has(repo, sha):
         return False
 
 
+def _git_blob(repo, sha, path):
+    """The bytes of `path` as committed in `sha` of `repo`, or None (no such file there, or not a path in that repo)."""
+    import subprocess
+    p = Path(path).expanduser()
+    if p.is_absolute():
+        try:
+            p = p.resolve().relative_to(Path(repo).resolve())
+        except ValueError:
+            return None
+    try:
+        r = subprocess.run(["git", "-C", str(repo), "show", f"{sha}:{p.as_posix()}"], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
 def _journal_ids(project):
     import json
     try:
@@ -74,11 +90,18 @@ def proof_refs(text, project=None, repos=()):
             out["commit"].append(sha)
         elif not roots and re.search(r"\d", sha) and re.search(r"[a-f]", sha):   # by shape: digits and letters
             out["commit"].append(sha)
+    # a proof that names a commit is about the files AS IN THAT COMMIT: work is done in a worktree on a branch, and the
+    # main checkout still holds the old file (issue #66). Hash from the commit where the file exists there.
+    in_commit = [(r, sha) for sha in out["commit"] for r in roots if _git_has(r, sha)]
     for f in FILE_RE.findall(bare):
         if re.fullmatch(r"\d+(\.\d+)+", f):          # 1.5, 53.0: a number, not a file
             continue
         if not roots:
             out["file"].append((f, ""))
+            continue
+        blob = next((b for b in (_git_blob(r, sha, f) for r, sha in in_commit) if b is not None), None)
+        if blob is not None:
+            out["file"].append((f, hashlib.sha256(blob).hexdigest()))
             continue
         for r in roots:
             cand = Path(f).expanduser()

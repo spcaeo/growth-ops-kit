@@ -81,3 +81,29 @@ def test_with_a_project_a_checkpoint_proof_must_exist(tmp_path):
     (tmp_path / "journal" / "entries.jsonl").write_text(json.dumps({"id": "J0028"}) + "\n")
     text = "## 5. Manual checks (2)\n\n- [x] rule 1: a -- J0028\n- [x] rule 2: b -- J0099\n"
     assert checkpoints.manual_status(text, tmp_path)[:2] == (2, 1)
+
+
+def test_a_file_named_with_a_commit_is_hashed_as_in_that_commit(tmp_path):
+    # issue #66: work done on a branch in a worktree was hashed from the main checkout's OLD file
+    import hashlib
+    import subprocess
+    import checkpoints
+    repo = tmp_path / "site"
+    repo.mkdir()
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, check=True, text=True).stdout.strip()  # noqa: E731
+    g("init", "-q")
+    g("config", "user.email", "t@example.com")
+    g("config", "user.name", "t")
+    (repo / "kit.css").write_text("old\n")
+    g("add", "-A")
+    g("commit", "-qm", "old")
+    g("checkout", "-qb", "fix/tabs")
+    (repo / "kit.css").write_text("new\n")
+    g("commit", "-qam", "new")
+    new_sha = g("rev-parse", "HEAD")[:8]
+    g("checkout", "-q", "-")                                       # the main checkout is back on the OLD file
+    refs = checkpoints.proof_refs(f"commit {new_sha} on fix/tabs: kit.css tabs wrap", repos=[repo])
+    assert refs["commit"] == [new_sha]
+    assert refs["file"] == [("kit.css", hashlib.sha256(b"new\n").hexdigest())]
+    plain = checkpoints.proof_refs("kit.css tabs wrap", repos=[repo])  # no commit named: the checkout's file, as before
+    assert plain["file"] == [("kit.css", hashlib.sha256(b"old\n").hexdigest())]
