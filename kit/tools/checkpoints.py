@@ -34,6 +34,8 @@ WEAK = {"", "proof", "todo", "tbd", "done", "ok", "..."}
 # command with its output line, or a web address. "x", "abc", "yes" and "done" are not proof (audit H1).
 PROOF_MIN = 4
 URL_RE = re.compile(r"https?://[^\s)>\]]+")
+# "rules 18, 32a, 36b re-read": a list of three or more rule ids is the proof of a re-read-checkpoints step (issue #25)
+RULES_RE = re.compile(r"(?i)\brules?\s+(\d+[a-z]?(?:\s*(?:,|and)\s*\d+[a-z]?){2,})")
 JOURNAL_RE = re.compile(r"\bJ-?\d{1,6}\b")
 COMMIT_RE = re.compile(r"(?<![\w/.-])[0-9a-f]{7,40}(?![\w/.-])")
 FILE_RE = re.compile(r"(?<![\w:/])(?:~?/|\./)?(?:[\w.@+-]+/)*[\w@+-][\w.@+-]*\.[A-Za-z0-9]{1,8}(?![\w/])")
@@ -78,7 +80,8 @@ def proof_refs(text, project=None, repos=()):
     "command": [...]}. Without a project, a file, commit or journal id counts by its shape alone."""
     import hashlib
     text = str(text or "")
-    out = {"url": URL_RE.findall(text), "command": [m.group(0) for m in CMD_RE.finditer(text)], "file": [], "commit": [], "journal": []}
+    out = {"url": URL_RE.findall(text), "command": [m.group(0) for m in CMD_RE.finditer(text)], "file": [], "commit": [], "journal": [],
+           "rules": [re.sub(r"\s+", " ", m.group(1)) for m in RULES_RE.finditer(text)]}
     bare = URL_RE.sub(" ", text)
     roots = [Path(r) for r in ((project,) if project else ()) + tuple(repos or ()) if r]
     jids = _journal_ids(project) if project else None
@@ -124,7 +127,7 @@ def proof_problem(text, project=None, repos=()):
     hint = " (it names a file, commit or journal id that does not exist)" if project and (
         FILE_RE.search(t) or COMMIT_RE.search(t) or JOURNAL_RE.search(t)) else ""
     return (f"'{t[:60]}' names nothing checkable{hint}: give a file that exists, a commit id, a journal id, a command with "
-            "its output line (growth gate page /x -> 0 FAIL), or a web address")
+            "its output line (growth gate page /x -> 0 FAIL), a web address, or the rule ids you re-read (rules 18, 32a, 36b)")
 
 
 def split_proof(text):
@@ -222,6 +225,7 @@ def manual_status(text, project=None, repos=()):
         k = kind_of(head)
         if k == "removed":
             continue
+        stage = f" [stage: {re.sub(r'\s*\(\d+\)\s*$', '', head or '')[:40]}]"     # which stage the item belongs to (issue #25)
         for ln in lines:
             m = ITEM.match(ln)
             if not m or (k == "generated" and GEN_ITEM.match(m.group(2))):
@@ -229,11 +233,11 @@ def manual_status(text, project=None, repos=()):
             total += 1
             rule, proof = split_proof(m.group(2))
             if m.group(1) == " ":
-                probs.append(f"unticked: {rule[:140]}")
+                probs.append(f"unticked: {rule[:140]}{stage}")
             elif proof.lower() in WEAK or len(proof) < 3:
-                probs.append(f"ticked with no proof (add ' -- <what you saw>'): {rule[:120]}")
+                probs.append(f"ticked with no proof (add ' -- <what you saw>'): {rule[:120]}{stage}")
             elif proof_problem(proof, project, repos):
-                probs.append(f"ticked with a proof that names nothing checkable ({proof_problem(proof, project, repos)[:120]}): {rule[:100]}")
+                probs.append(f"ticked with a proof that names nothing checkable ({proof_problem(proof, project, repos)[:120]}): {rule[:100]}{stage}")
             else:
                 done += 1
     return total, done, probs

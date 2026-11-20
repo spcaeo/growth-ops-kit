@@ -107,3 +107,13 @@ def test_a_file_named_with_a_commit_is_hashed_as_in_that_commit(tmp_path):
     assert refs["file"] == [("kit.css", hashlib.sha256(b"new\n").hexdigest())]
     plain = checkpoints.proof_refs("kit.css tabs wrap", repos=[repo])  # no commit named: the checkout's file, as before
     assert plain["file"] == [("kit.css", hashlib.sha256(b"old\n").hexdigest())]
+
+
+def test_rule_ids_are_proof_of_a_reread_and_problems_name_their_stage():
+    # issue #25: a re-read-checkpoints step is proved by the rule ids checked; unticked items say which stage they belong to
+    import checkpoints
+    assert checkpoints.proof_problem("rules 18, 32a and 36b re-read before the build") is None
+    assert checkpoints.proof_problem("rule 18 re-read") is not None          # one id is not a re-read of the checkpoints
+    text = "# Checkpoints\n\n## Manual checks: edit (2)\n- [ ] the hero answers first\n- [x] fold plan -- rules 18, 32a, 36b\n"
+    total, done, probs = checkpoints.manual_status(text)
+    assert total == 2 and done == 1 and probs[0].startswith("unticked") and probs[0].endswith("[stage: Manual checks: edit]")
