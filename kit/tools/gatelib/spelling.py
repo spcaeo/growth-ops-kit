@@ -121,6 +121,10 @@ def allowlist(cfg: dict, project: Path | None) -> set[str]:
 def problems(text: str, loc: str, allow: set[str] = frozenset()) -> list[str]:
     bad = correct_for(loc)
     out, seen = [], set()
+    # an allowed PHRASE (a product's own name, e.g. "Trust Center") is masked before words are checked, so the word
+    # itself ("center") is still caught everywhere else
+    for ph in sorted((a for a in allow if " " in a), key=len, reverse=True):
+        text = re.sub(r"(?i)(?<![\w-])" + re.escape(ph) + r"(?![\w-])", " ", text)
     for m in re.finditer(r"(?i)(?<![\w-])([a-z]+)(?![\w-])", text):
         w = m.group(1).lower()
         if w in bad and w not in allow:

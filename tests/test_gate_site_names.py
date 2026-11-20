@@ -69,3 +69,22 @@ def test_the_header_label_exception_is_honoured_only_with_a_reason():
     assert line(ctx(page, cfg), "cta.label-same").level == "OK"
     cfg2 = {**CFG, "cta": {**CFG["cta"], "header_label": {"label": "Book a call"}}}       # no reason: not honoured
     assert line(ctx(page, cfg2), "cta.label-same").level == "FAIL"
+
+
+def test_an_allowed_phrase_keeps_its_word_caught_elsewhere():
+    from gatelib import spelling
+    t = "monday.com Trust Center lists it. Our help center answers."
+    probs = spelling.problems(t, "en-CA", {"trust center"})
+    assert probs and "x1" in probs[0]                      # only "help center" is still flagged
+    assert not spelling.problems("monday.com Trust Center", "en-CA", {"trust center"})
+
+
+def test_the_exit_offer_is_judged_from_the_served_page_on_a_static_site():
+    import gatelib  # noqa: F401
+    import adapters.nextjs.c_cta  # noqa: F401  (registers the check)
+    cfg = {**CFG, "stack": "static", "features": {**CFG["features"], "exit_offer": {"class": "exit"}}}
+    page = BODY.replace("</main>", '</main><dialog class="exit"><button aria-label="Close">x</button>'
+                        '<p>Leave with clear next steps on a free 30-minute call with us, whatever you decide.</p>'
+                        '<a class="btn btn--primary" href="/contact-us/?cta=exit">Book a free call</a></dialog>')
+    assert line(ctx(page, cfg), "exit.present").level == "OK"
+    assert line(ctx(BODY, cfg), "exit.present").level == "FAIL"          # no exit dialog at all

@@ -87,12 +87,16 @@ def sticky(ctx):
                 f"fix the sticky bar as listed: text from the page's offer, at most {max_text} chars; button at most {max_btn} (rule 35)")
 
 
-@check("exit.present", "35b", types=("money",), what="exit offer: the shared dialog, close x, the same booking button with its reason", needs="nextjs")
+@check("exit.present", "35b", types=("money",), what="exit offer: the shared dialog, close x, the same booking button with its reason", needs="live")
 def exit_offer(ctx):
+    """Read from the served page on any stack; on Next.js the page's source must also use the shared component.
+    growth.json features.exit_offer.class names a site's own dialog class (default 'exit-offer')."""
     f = ctx.feature("exit_offer")
+    f = f if isinstance(f, dict) else {}
     comp = f.get("component", "ExitOffer")
+    cls = re.escape(f.get("class") or "exit-offer")
     root = ctx.root()
-    dl = [d for d in find_all(root, "dialog") if domx.has_cls(d, r"exit-offer") and not domx.has_cls(d, r"call-dialog")]
+    dl = [d for d in find_all(root, "dialog") if domx.has_cls(d, cls + r"|" + cls + r"[-_].*") and not domx.has_cls(d, r"call-dialog")]
     if ctx.need_path() in not_on(ctx, f):
         ctx.verdict(["exit offer present"] if dl else [], "no exit offer on this page (correct)", "remove it (rule 35b)")
         return
@@ -111,9 +115,10 @@ def exit_offer(ctx):
         probs.append(f"offer button '{domx.label(bk[0])}' differs from the page's '{next(iter(pl))}'")
     if bk and not reason_for(bk[0], reason_words(ctx)) and not re.search(reason_words(ctx), domx.text(d)):
         probs.append("no reason line in the offer")
-    src = "\n".join(ctx.tree_sources().values())
-    if comp not in src:
-        probs.append(f"the page does not use the shared {comp} component")
+    if ctx.stack() == "nextjs":                  # a static or Astro site is judged by its served page alone
+        src = "\n".join(ctx.tree_sources().values())
+        if comp not in src:
+            probs.append(f"the page does not use the shared {comp} component")
     ctx.verdict(probs, "exit offer present with close, booking button and reason line",
                 "fix the exit offer as listed (rule 35b)")
 
