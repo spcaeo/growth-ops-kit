@@ -159,6 +159,8 @@ def label_same(ctx):
     from .c_layout import is_legal
     if is_legal(ctx):
         raise Skip("legal page: a quiet contact link only, no booking button (rule 49; growth.json layout.legal_paths)")
+    if conversion_page(ctx):
+        raise Skip("the conversion page: its form is the action (rule 38), there is no booking button to label")
     root = ctx.root()
     labels = {}
     # growth.json cta.header_label {label, why}: the site header's own short label, an owner-approved exception (it fits
@@ -264,8 +266,9 @@ def call_dialog(ctx):
     root = ctx.root()
     cls = f.get("class", "call-dialog")
     d = [x for x in find_all(root, "dialog") if domx.has_cls(x, cls)]
+    import paths
     off = f.get("not_on", [ctx.cfg.get("conversion_path", ""), (ctx.cfg.get("cta") or {}).get("contact_path", "")])
-    if ctx.need_path() in off:
+    if paths.normalize(ctx.need_path()) in {paths.normalize(x) for x in off if x}:      # "/x/" and "/x" are one page (2.4.2)
         ctx.verdict(["call dialog present"] if d else [], "no call dialog on this page (correct)", "remove it here (rule 132)")
         return
     if not d:

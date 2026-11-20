@@ -24,6 +24,9 @@ LIMITS = {
     "mechanics_max": 2,           # folds one mechanic may appear in
     "legal_paths": ["/terms*", "/privacy*", "/cookie*"],
     "mechanics": ["flip", "tabs", "accordion", "slider"],
+    # inside these, rows and grids are a tool's or a menu's own layout, not the page's folds (2.4.2): a reading desk's
+    # table of contents beside the text, a calculator's option grid, a form
+    "exempt": "nav, form, fieldset, [data-tool], [role=tablist], [role=radiogroup], .toc, [data-layout-exempt]",
 }
 
 MEASURE_JS = r"""
@@ -80,7 +83,8 @@ MEASURE_JS = r"""
   for (const e of main.querySelectorAll('*')) {
     if (isSvg(e) || !shown(e)) continue;
     const kids = [...e.children].filter(k => !isSvg(k) && shown(k) && flow(k));
-    if (kids.length === 2) {
+    if (e.closest(args.exempt)) continue;
+    if (kids.length === 2 && !kids.some(k => k.matches(args.exempt) || cs(k).position === 'sticky' || k.querySelector('.toc, nav'))) {
       const [a, b] = kids.map(k => R(k));
       if (a.width >= 200 && b.width >= 200 && Math.abs(a.top - b.top) <= 60 && (a.right <= b.left + 1 || b.right <= a.left + 1))
         rows.push({fold: names[foldOf(e)] || '', cols: kids.map(colInfo)});
@@ -142,7 +146,8 @@ def measure(ctx):
     need_browser(ctx)
     if not ctx.url:
         raise Skip("no page URL to open in a browser", blocked=True)
-    args = {"token": (ctx.cfg.get("cta") or {}).get("color_token", "--color-cta"), "mechanics": limits(ctx)["mechanics"]}
+    args = {"token": (ctx.cfg.get("cta") or {}).get("color_token", "--color-cta"), "mechanics": limits(ctx)["mechanics"],
+            "exempt": limits(ctx)["exempt"]}
     from playwright.sync_api import sync_playwright
     out = {}
     try:
@@ -202,6 +207,9 @@ def fold_gap(ctx):
 def hero_height(ctx):
     if is_legal(ctx):
         raise Skip("legal page: no hero limit (growth.json layout.legal_paths)")
+    from .c_cta import conversion_page
+    if conversion_page(ctx):
+        raise Skip("the conversion page: its form is the first fold (rule 38), so it is as tall as the form")
     L, probs = limits(ctx), []
     for w, d in measure(ctx).items():
         if not _folds(d, w, probs):

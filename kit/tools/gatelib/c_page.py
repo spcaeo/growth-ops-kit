@@ -349,13 +349,20 @@ def title_query(ctx):
         return
     root = ctx.root()
     t = domx.text(domx.page_title(root)) if domx.page_title(root) is not None else ""
-    top = gsc_top(ctx)
-    src = "Search Console"
     # Too little data to choose from (one real case: 3 tracked searches with 1 view each, one a rival's domain, the rest
     # hidden by Google): use the target searches the page's plan names (dossier section 31).
-    if not top or max(i for _, i in top) < THIN:
-        plan = ctx.project / "research" / "plans" / f"{ctx.key}.json"
-        tgt = json.loads(plan.read_text()).get("target_searches", []) if ctx.key and plan.exists() else []
+    plan = ctx.project / "research" / "plans" / f"{ctx.key}.json"
+    pj = json.loads(plan.read_text()) if ctx.key and plan.exists() else {}
+    # The page's Search Console searches belong to another page by the duplication register (a hire page that ranks for
+    # its hub's search): the plan names the page's own targets with a reason (2.4.2).
+    use = pj.get("use_target_searches") or {}
+    planned = bool(pj.get("target_searches")) and isinstance(use, dict) and len(str(use.get("why") or "")) >= 10
+    if planned:
+        top, src = [(q, "plan") for q in pj["target_searches"][:2]], f"plan: {short(str(use['why']), 60)}"
+    else:
+        top, src = gsc_top(ctx), "Search Console"
+    if not planned and (not top or max(i for _, i in top) < THIN):
+        tgt = pj.get("target_searches", [])
         if not tgt:
             ctx.fail(f"Search Console has too little data (top search under {THIN} views) and the plan names no target_searches",
                      f"add \"target_searches\": [...] (from the dossier's target searches) to research/plans/{ctx.key}.json (rule 81)")

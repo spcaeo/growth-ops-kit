@@ -61,6 +61,8 @@ PAGES = {
     "view": page(HERO, FILL("a"), header=f"<header style='height:40px'>{CTA}</header>"),
     "space": page(HERO, sec("a", block(900) + CTA)),
     "mech": page(HERO, *[sec(n, '<div class="flip-card">x</div>' + block(100)) for n in "abc"]),
+    "toc": page(HERO, sec("desk", cols('<nav class="toc">' + block(60) + '</nav>', block(900))),
+                sec("tool", '<div data-tool>' + grid(4) + '</div>' + block(300))),
     "terms-good": page(sec("text", block(300))),
     "terms-bad": page(sec("text", block(300) + CTA), extra='<div class="sticky-cta"><p>Call us</p></div>'),
 }
@@ -154,3 +156,9 @@ def test_legal_pages(run):
 def test_no_browser_blocks_never_passes(run):
     ln = run("good", "layout.fold-gap", no_browser=True)
     assert ln.level == "SKIP" and ln.blocked
+
+
+def test_toc_column_and_tool_grid_are_exempt(run):
+    """2.4.2: a reading desk's contents column and a tool's own option grid are not page layout."""
+    assert run("toc", "layout.column-ratio").level == "OK"
+    assert run("toc", "layout.card-orphan").level == "OK"

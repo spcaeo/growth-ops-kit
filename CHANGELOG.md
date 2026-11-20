@@ -4,6 +4,13 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.2 - 2026-11-20
+
+- layout.column-ratio and layout.card-orphan (158a) leave out a tool's or a menu's own layout: rows and grids inside growth.json `layout.exempt` (default: nav, form, fieldset, [data-tool], [role=tablist], [role=radiogroup], .toc, [data-layout-exempt]), and a two-column row whose side column is a table of contents or sticky.
+- The conversion page (rule 38: its form is the first fold) skips layout.hero-height and cta.label-same; dialog.call matches the contact path with or without the slash.
+- seo.title-query (81): a plan with `target_searches` and `use_target_searches: {"why": ...}` is judged on its own targets, for a page whose Search Console searches the duplication register gives to another page.
+- Tests: `tests/test_release_2_4_2_contact_toc_title.py`, one more case in `tests/test_release_2_4_0_layout.py`.
+
 ## 2.4.1 - 2026-11-19
 
 - footer.call-row (140): topic links match with or without the trailing slash, like core.service-links; a secondary-styled footer button counts, so the closing screen can keep one primary (158a).
