@@ -502,14 +502,14 @@ def text_without_node(ctx, index):
 def box_numbers(ctx):
     m = domx.main(ctx.root())
     boxes = [n for n in m.iter() if (n.tag == "aside" or domx.has_cls(n, r".*(takeaway|stat|sidenote|side-note|callout|highlight).*"))
-             and not design.ignored(ctx, n)]   # computed (data-calculator) or shared components (growth.json box_ignore)
+             and not design.ignored(ctx, n) and not domx.in_example(n)]   # computed (data-calculator), shared components (box_ignore) or a drawn example
     if not boxes:
         ctx.ok("no takeaway, stat or side boxes")
         return
     order = list(m.iter())
     probs = []
     for b in boxes:
-        bt = domx.text(b)
+        bt = domx.text(b, skip_examples=True)
         rest = text_without_node(ctx, order.index(b))          # the page's text without THIS box only: a copy of its number in the prose still counts
         for num in {x.rstrip(".,") if not x.endswith("%") else x for x in re.findall(r"\b\d[\d,.]*%?", bt)}:
             if num not in rest:

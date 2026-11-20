@@ -45,14 +45,29 @@ INLINE = {"a", "span", "b", "strong", "em", "i", "small", "sup", "sub", "abbr", 
 SKIP = {"script", "style", "noscript", "template", "head", "title", "svg"}
 
 
-def text(n):
-    """Visible text; block elements are separated by a space so words of two blocks never run together."""
+def is_example(n) -> bool:
+    """A drawn example (an SVG scene, an aria-hidden picture, or anything marked data-example): its numbers are made up
+    for the drawing, never claims (2.2.6/2.2.7)."""
+    tag = str(n.tag or "").rsplit("}", 1)[-1].lower()
+    return tag == "svg" or (n.get("aria-hidden") or "").strip().lower() == "true" or "data-example" in n.attrs
+
+
+def in_example(n) -> bool:
+    """The node or one of its ancestors is a drawn example."""
+    return any(getattr(a, "tag", None) and is_example(a) for a in [n, *n.ancestors()])
+
+
+def text(n, skip_examples=False):
+    """Visible text; block elements are separated by a space so words of two blocks never run together. With
+    skip_examples, text inside a drawn example (is_example) is left out too."""
     if n is None:
         return ""
     parts = []
 
     def walk(x):
         if x.tag in SKIP and x is not n or "hidden" in x.attrs or re.search(r"display\s*:\s*none", x.get("style")):
+            return
+        if skip_examples and x is not n and is_example(x):
             return
         block = x.tag not in INLINE
         if block:

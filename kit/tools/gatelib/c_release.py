@@ -81,6 +81,8 @@ def head_and_body(ctx):
             continue
         if n.tag == "h2":
             seen_h2 = True
+        if domx.in_example(n):
+            continue                        # a drawn example screen: its made-up balance is part of the picture (2.2.7)
         in_v = id(n) in vid or any(id(a) in vid for a in n.ancestors())
         t = n.own_text()
         if t:
