@@ -10,7 +10,7 @@ import fact_sources  # noqa: E402
 
 
 def test_reading_time_is_no_stat():
-    s = fact_sources.without_contact("By Rakesh Patel Published August 14, 2026 \u00b7 Updated October 20, 2026 \u00b7 11 min read")
+    s = fact_sources.without_contact("By Ann Lee Published August 14, 2026 \u00b7 Updated October 20, 2026 \u00b7 11 min read")
     assert "11" not in s
     assert "4" not in fact_sources.without_contact("Contents 4 min left")
     assert "6" not in fact_sources.without_contact("Reading time: 6 minutes")
