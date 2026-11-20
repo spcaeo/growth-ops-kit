@@ -74,6 +74,13 @@ def banned_problem(url, cfg=None) -> str | None:
 
 
 # ---- the stat sentences of a page -------------------------------------------------------------------------------------------
+def is_example(n) -> bool:
+    """A drawn example (an SVG scene, an aria-hidden picture, or anything marked data-example): its numbers are made up
+    for the drawing, never claims."""
+    tag = str(n.tag).rsplit("}", 1)[-1].lower()
+    return tag == "svg" or (n.get("aria-hidden") or "").strip().lower() == "true" or "data-example" in n.attrs
+
+
 BLOCKS = {"p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th", "dd", "dt", "blockquote", "figcaption", "caption", "summary"}
 BYLINE_CLS = re.compile(r"byline|author|posted|published|updated|post-meta|entry-meta|breadcrumb|copyright|\btoc\b|table-of-contents|read-?time|reading-?time", re.I)
 BYLINE_TEXT = re.compile(r"^\s*(by|posted|published|updated|last (updated|reviewed|modified)|reviewed by|written by|©|copyright)\b", re.I)
@@ -134,6 +141,8 @@ def page_sentences(root, domx) -> list[tuple[str, bool]]:
     for n in main.iter():
         if n.tag not in BLOCKS or domx.in_chrome(n):
             continue
+        if any(is_example(a) for a in [n, *n.ancestors()]):
+            continue                        # a drawn example screen: "You owe $42.10" is part of the picture, not a claim
         if any(a.tag == "address" for a in [n, *n.ancestors()]):
             continue                        # a postal address: street number, ZIP and phone are no stats
         if any(a.tag == "time" or BYLINE_CLS.search(a.get("class") or "") or BYLINE_CLS.search(a.get("id") or "") for a in [n, *n.ancestors()]):
@@ -141,6 +150,9 @@ def page_sentences(root, domx) -> list[tuple[str, bool]]:
         if any(c is not n and c.tag in BLOCKS for c in n.iter()):
             continue                        # an outer block (a list item that holds paragraphs): its inner blocks are read instead
         t = domx.text(n)
+        for a in n.iter():
+            if a is not n and is_example(a) and domx.text(a):
+                t = t.replace(domx.text(a), " ")          # a drawn example inside a block is no stat either
         for a in n.iter():
             if a.tag == "a" and (a.get("href") or "").strip().lower().startswith("tel:") and domx.text(a):
                 t = t.replace(domx.text(a), " ")          # a phone link is no stat
