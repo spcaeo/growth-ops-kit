@@ -25,3 +25,4 @@ playwright-report/
 .DS_Store
 # per-project working data (each project keeps its own, outside the kit or git-ignored)
 /project/
+kit/rules/*.lock
