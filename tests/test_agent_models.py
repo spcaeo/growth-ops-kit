@@ -59,3 +59,28 @@ def test_a_helper_stopped_with_taskstop_is_not_judged(tmp_path):
     calls = agent_calls(t)
     assert [c["description"] for c, _ in calls] == ["page 1 researcher: Curia"]
     assert problems(calls) == []
+
+
+def test_a_review_wins_over_the_word_fix_but_a_builder_word_wins_over_review():
+    assert problems([{"name": "r", "description": "T40 independent review: a2a truth fix", "model": "opus"}]) == []
+    assert problems([{"name": "pp-fixer", "description": "Pricing page review fixes builder", "model": "sonnet"}]) == []
+    assert problems([{"name": "f", "description": "T41 hero fix", "model": "sonnet"}]) == []
+    from agent_models import BUILDER
+    import re as _re
+    assert not _re.search(BUILDER, "T40 independent review: a2a truth fix")
+    assert _re.search(BUILDER, "T41 hero fix")
+
+
+def test_only_recent_helpers_are_judged(tmp_path):
+    import json as _j
+    from agent_models import agent_calls
+    def asst(ts, desc, model):
+        return {"type": "assistant", "timestamp": ts, "message": {"model": "claude-opus-5-5", "content": [
+            {"type": "tool_use", "id": desc, "name": "Agent", "input": {"description": desc, "model": model}}]}}
+    rows = [{"type": "user", "message": {"content": "go"}},
+            asst("2026-11-19T10:00:00Z", "T6 builder", "opus"),          # long ago: judged when it ran
+            asst("2026-11-19T22:00:00Z", "T41 builder", "sonnet")]
+    t = tmp_path / "t.jsonl"
+    t.write_text("".join(_j.dumps(r) + "\n" for r in rows))
+    assert [c["description"] for c, _ in agent_calls(t)] == ["T41 builder"]
+    assert len(agent_calls(t, recent_only=False)) == 2
