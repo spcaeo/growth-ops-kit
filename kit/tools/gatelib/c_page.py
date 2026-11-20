@@ -427,13 +427,25 @@ def frame_type(ctx):
     ctx.verdict(probs, f"frame fits a {ctx.ptype} page", "use the frame of the page's type (rule 49)")
 
 
+WRAPPERS = {"div", "span", "aside", "nav"}
+
+
 def signature(sec):
-    """A fold's shape: its child tags and classes two levels down, ignoring text."""
+    """A fold's shape: its child tags three levels down, ignoring text. Markup that changes nothing for the reader does
+    not count (2.4.3): a wrapper with one element child collapses into that child, and plain wrapper tags (div, span,
+    aside, nav) are one generic box, so wrapping sentences in extra tags cannot make two look-alike folds 'distinct'."""
+    def solid(n):
+        while len(n.elements()) == 1 and (n.tag in WRAPPERS or n is not sec and not (n.own_text() or "").strip()):
+            n = n.elements()[0]
+        return n
+
     def sig(n, d):
+        n = solid(n) if n is not sec else n
+        tag = "box" if n.tag in WRAPPERS else n.tag
         if d == 0:
-            return n.tag
-        return n.tag + "(" + ",".join(sig(c, d - 1) for c in n.elements()[:8]) + ")"
-    return sig(sec, 3)
+            return tag
+        return tag + "(" + ",".join(sig(c, d - 1) for c in n.elements()[:8]) + ")"
+    return sig(sec, 5)
 
 
 @check("layout.folds-distinct", "30", types=("money", "hub"), what="no two folds of the page share the same structure", needs="live")

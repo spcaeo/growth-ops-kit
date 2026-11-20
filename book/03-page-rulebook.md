@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.4.2
+version: 2.4.3
 updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.4.2 (generic edition) · 19 Nov 2026.**
+**Version 2.4.3 (generic edition) · 19 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-20 | 2.4.3 | Rule 144 judges only a hub's post cards; rule 30's fold shape ignores wrapper-only markup (a builder had wrapped sentences in extra tags to pass it). |
 | 2026-11-20 | 2.4.2 | Rule 158a leaves out a tool's or a menu's own rows and grids (a table of contents beside the text, a calculator's options); the contact page keeps its form first (38) without a hero limit. |
 | 2026-11-19 | 2.4.1 | Legal pages (rule 49) are exempt from the booking-button rules (32a) and the act fold and surface rhythm of 36f; the footer call row (140) accepts a secondary button and matches topic links with or without the trailing slash. |
 | 2026-11-19 | 2.4.0 | New rule 158a: measured design limits (white space between folds, hero height, column balance, picture size, card orphans, one primary button per screen, spacing of asks, quiet legal pages, one mechanic per page), read from a real browser by `layout.*`, `cta.*` and `engage.one-mechanic`. A design audit of a real site found these on pages that passed every other check. |

@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.3 - 2026-11-20
+
+- hub.cards (144) judges only the hub's post cards: cards marked `data-post-card`, else cards linking into the hub's own cluster path. Service cards to other hubs and ask, brief and form cards are no longer counted.
+- layout.folds-distinct (30): the fold signature ignores markup that changes nothing for the reader. A single-child wrapper collapses into its child and div/span/aside/nav are one generic box, so extra wrapper tags cannot make look-alike folds pass. The signature now reads 5 levels.
+- Test: `tests/test_release_2_4_3_cards_folds.py`.
+
 ## 2.4.2 - 2026-11-20
 
 - layout.column-ratio and layout.card-orphan (158a) leave out a tool's or a menu's own layout: rows and grids inside growth.json `layout.exempt` (default: nav, form, fieldset, [data-tool], [role=tablist], [role=radiogroup], .toc, [data-layout-exempt]), and a two-column row whose side column is a table of contents or sticky.
