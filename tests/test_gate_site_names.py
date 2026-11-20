@@ -88,3 +88,16 @@ def test_the_exit_offer_is_judged_from_the_served_page_on_a_static_site():
                         '<a class="btn btn--primary" href="/contact-us/?cta=exit">Book a free call</a></dialog>')
     assert line(ctx(page, cfg), "exit.present").level == "OK"
     assert line(ctx(BODY, cfg), "exit.present").level == "FAIL"          # no exit dialog at all
+
+
+def test_the_sticky_bar_is_found_by_the_sites_own_names():
+    cfg = {**CFG, "features": {**CFG["features"], "sticky_cta": {"class": "scta", "text_class": "scta__text",
+                                                                 "header_class": "sitehead", "state_attr": "data-sticky-cta"}}}
+    bar = ('<div class="scta" data-sticky-cta><p class="scta__text">Moving monday.com? See RhinoMove.</p>'
+           '<a class="scta__btn" href="/contact-us/?cta=sticky">Book a free call</a>'
+           '<button aria-label="Hide this bar">x</button><div class="scta__progress"></div></div>'
+           '<style>[data-sticky-cta] .sitehead{transform:translateY(-100%)}</style>')
+    page = BODY.replace("</main>", "</main>" + bar)
+    ln = line(ctx(page, cfg), "sticky.present")
+    assert ln.level == "OK", ln.what
+    assert line(ctx(page.replace("scta__progress", "x"), cfg), "sticky.present").level == "FAIL"   # a real gap still fails

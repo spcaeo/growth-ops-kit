@@ -355,25 +355,31 @@ def sticky(ctx):
     f = ctx.feature("sticky_cta")
     comp, src_file = f.get("component", "StickyCta"), f.get("source", "components/sticky-cta.tsx")
     max_text, max_btn = int(f.get("max_text", 70)), int(f.get("max_button", 30))
+    # a site names its own parts: features.sticky_cta {class, text_class, header_class, state_attr}
+    f = f if isinstance(f, dict) else {}
+    bar_cls = re.escape(f.get("class") or "sticky-cta")
+    text_cls = re.escape(f.get("text_class") or "sticky-cta-text")
+    head_cls = re.escape(f.get("header_class") or "site-header")
+    state = re.escape(f.get("state_attr") or "data-sticky-cta")
     root = ctx.root()
-    bars = [n for n in root.iter() if domx.has_cls(n, r"sticky-cta")]
+    bars = [n for n in root.iter() if domx.has_cls(n, bar_cls)]
     if ctx.need_path() in not_on(ctx, f):
         ctx.verdict([f"{len(bars)} sticky bar(s) on {ctx.path}"] if bars else [], "no sticky bar on this page (correct)",
                     "remove the sticky bar from this page (rule 35)")
         return
     if not bars:
-        ctx.fail("no sticky call bar (.sticky-cta) in the page", f"render the shared <{comp}> on the page (rule 35)")
+        ctx.fail(f"no sticky call bar (.{f.get('class') or 'sticky-cta'}) in the page", f"render the shared <{comp}> on the page (rule 35)")
         return
     bar = bars[0]
     probs = []
     btn = [a for a in domx.booking_links(ctx, bar)]
     if not btn:
         probs.append("no booking button in the bar")
-    if not any(b.get("aria-label") and re.search(r"(?i)dismiss|close", b.get("aria-label")) for b in find_all(bar, "button")):
+    if not any(b.get("aria-label") and re.search(r"(?i)dismiss|close|hide", b.get("aria-label")) for b in find_all(bar, "button")):
         probs.append("no close x with an aria-label")
     if not any(domx.has_cls(n, r".*progress.*") for n in bar.iter()):
         probs.append("no reading-progress line")
-    txt = next((n for n in bar.iter() if domx.has_cls(n, r"sticky-cta-text")), None)
+    txt = next((n for n in bar.iter() if domx.has_cls(n, text_cls)), None)
     line = domx.label(txt) if txt is not None else ""
     if not line:
         probs.append("no bar text")
@@ -382,8 +388,9 @@ def sticky(ctx):
     if btn and len(domx.label(btn[0])) > max_btn:
         probs.append(f"button label is {len(domx.label(btn[0]))} chars (max {max_btn})")
     css = page_css(ctx)
-    if not re.search(r"\[data-sticky-cta\][^{]*\.site-header[^{]*\{[^}]*(display\s*:\s*none|visibility\s*:\s*hidden|transform)", css):
-        probs.append("no CSS rule hides .site-header under html[data-sticky-cta] (the bar must replace the header)")
+    if not re.search(r"\[" + state + r"\][^{]*\." + head_cls + r"[^{]*\{[^}]*(display\s*:\s*none|visibility\s*:\s*hidden|transform)", css):
+        probs.append(f"no CSS rule hides .{f.get('header_class') or 'site-header'} under [{f.get('state_attr') or 'data-sticky-cta'}] "
+                     "(the bar must replace the header)")
     if ctx.stack() == "nextjs":                      # the code-level part: only where the kit can read the page's component tree
         src = "\n".join(ctx.tree_sources().values())
         sticky_src = ctx.need_repo() / src_file
