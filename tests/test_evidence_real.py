@@ -170,3 +170,12 @@ def test_lead_sign_off_under_a_delegation(tmp_path):
     assert not lead_signs_off(Ctx(project=p, path="/x", key="x", cfg={}, docs=p / "docs"))
     q = project(tmp_path / "q", [])
     assert not lead_signs_off(Ctx(project=q, path="/x", key="x", cfg=good, docs=q / "docs"))   # no verdict filed
+
+
+def test_page_work_needs_an_open_task_not_a_finished_one(tmp_path):
+    # issue #24: a page whose only task was closed on an earlier job passed ev.task-steps
+    p = project(tmp_path)
+    steps = [{"n": i, "what": f"Step {i}. thing", "status": "done", "output": "growth gate page /x -> 0 FAIL"} for i in range(1, 7)]
+    (p / "docs" / "tasks.json").write_text(json.dumps({"tasks": [{"id": "T1", "title": "Rebuild: /x", "status": "done", "steps": steps}]}))
+    ln = line(Ctx(project=p, path="/x", key="x", cfg={}, docs=p / "docs"), "ev.task-steps")
+    assert ln.level == "FAIL" and "no OPEN task" in ln.what
