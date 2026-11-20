@@ -4,6 +4,10 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.2.7 - 2026-11-19
+
+- claims.head-figures and claims.box-numbers skip drawn examples too (an `<svg>`, `aria-hidden="true"` or `data-example`), the same rule ev.fact-sources has had since 2.2.6. The rule now lives once in `domx.is_example` / `domx.in_example` and `domx.text(..., skip_examples=True)`. Test: `tests/test_release_2_2_7_examples.py`.
+
 ## 2.2.6 - 2026-11-19
 
 - ev.fact-sources: text inside a drawn example (an `<svg>`, an element with `aria-hidden="true"`, or one marked `data-example`) is not a claim, so made-up numbers in an example screen ("You owe $42.10") need no source. Test: `tests/test_release_2_2_6_examples.py`.
