@@ -90,7 +90,13 @@ MEASURE_JS = r"""
         rows.push({fold: names[foldOf(e)] || '', cols: kids.map(colInfo)});
     }
     const s = cs(e);
-    if (kids.length >= 3 && (s.display.includes('grid') || (s.display.includes('flex') && s.flexWrap !== 'nowrap'))) {
+    // A wrapping flex row of plain text (a post's author / date / read-time line) is not a card grid: skip it when no
+    // child draws a box (border, background or shadow). Real grids (display:grid) are always measured.
+    const boxed = k => { const t = cs(k); return parseFloat(t.borderTopWidth) > 0 || parseFloat(t.borderLeftWidth) > 0 || t.boxShadow !== 'none'
+                         || (t.backgroundColor !== 'rgba(0, 0, 0, 0)' && t.backgroundColor !== 'transparent') || t.backgroundImage !== 'none'; };
+    const isFlexWrap = s.display.includes('flex') && s.flexWrap !== 'nowrap';
+    if (isFlexWrap && !s.display.includes('grid') && !kids.some(boxed)) continue;
+    if (kids.length >= 3 && (s.display.includes('grid') || isFlexWrap)) {
       const rs = kids.map(k => ({r: R(k)})).sort((p, q) => p.r.top - q.r.top || p.r.left - q.r.left), lines = [];
       rs.forEach(k => { const l = lines[lines.length - 1]; if (l && Math.abs(l[0].r.top - k.r.top) <= 10) l.push(k); else lines.push([k]); });
       if (lines.length >= 2) {

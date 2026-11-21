@@ -58,6 +58,10 @@ PAGES = {
     "cols": page(HERO, sec("a", cols(block(300), block(600)))),
     "pic": page(HERO, sec("a", cols(block(300), svg(50, 50)))),
     "cards": page(HERO, sec("a", grid(4))),
+    "meta": page(HERO, sec("a", '<div style="display:flex;flex-wrap:wrap;width:300px">'
+                 + "".join(f'<span style="width:90px">Meta {i}</span>' for i in range(5)) + '</div>')),
+    "boxcards": page(HERO, sec("a", '<div style="display:flex;flex-wrap:wrap;width:300px">'
+                 + "".join(f'<div style="width:90px;border:1px solid #999">Card {i}</div>' for i in range(5)) + '</div>')),
     "view": page(HERO, FILL("a"), header=f"<header style='height:40px'>{CTA}</header>"),
     "space": page(HERO, sec("a", block(900) + CTA)),
     "mech": page(HERO, *[sec(n, '<div class="flip-card">x</div>' + block(100)) for n in "abc"]),
@@ -162,3 +166,10 @@ def test_toc_column_and_tool_grid_are_exempt(run):
     """2.4.2: a reading desk's contents column and a tool's own option grid are not page layout."""
     assert run("toc", "layout.column-ratio").level == "OK"
     assert run("toc", "layout.card-orphan").level == "OK"
+
+
+def test_text_meta_row_is_not_a_card_grid(run):
+    """2.x: a wrapping flex line of plain text (post author / date / read time) has no boxes, so it is not cards;
+    the same row with bordered children still fails."""
+    assert run("meta", "layout.card-orphan").level == "OK"
+    assert run("boxcards", "layout.card-orphan").level == "FAIL"
