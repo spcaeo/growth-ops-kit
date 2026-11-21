@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.4 - 2026-11-21
+
+- page.surfaces and page.surfaces-paint (36f) on posts: neighbouring folds whose job is `read` (the article body, one per heading) may share the plain surface, and 2 surface kinds are enough; the header and the closing call still differ from their neighbours. Money and service pages keep the full rhythm.
+- layout.card-orphan (158a) skips a wrapping flex row whose children draw no box (a post's author / date / read-time line); display:grid is always measured.
+- Tests: `tests/test_release_2_3_0_house_live.py::test_post_body_folds_may_share_plain`, `tests/test_release_2_4_0_layout.py::test_text_meta_row_is_not_a_card_grid`.
+
 ## 2.4.3 - 2026-11-20
 
 - hub.cards (144) judges only the hub's post cards: cards marked `data-post-card`, else cards linking into the hub's own cluster path. Service cards to other hubs and ask, brief and form cards are no longer counted.

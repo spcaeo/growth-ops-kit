@@ -169,6 +169,12 @@ def phone(ctx):
 
 
 # ---- fold surfaces (36f): read from the served page on every stack (2.3.0; was Next.js only) ----
+def _reading_pair(ctx, ja, jb):
+    """A post is one reading column (rule 49): its body folds (job 'read', one per heading) may share the plain surface.
+    The header, the closing call and anything else still stand apart from their neighbours (2.4.4)."""
+    return ctx.ptype == "post" and ja == "read" and jb == "read"
+
+
 @check("page.surfaces", "36f", what="every fold has its own surface (plain, tint, warm, light geometry, dark) chosen by its job in the reader's journey; no two folds in a row share one", needs="live")
 def surfaces(ctx):
     html = ctx.need_html()
@@ -189,12 +195,13 @@ def surfaces(ctx):
         if job not in JOBS:
             probs.append(f"fold '{stop}': data-job '{job or 'missing'}' (one of {', '.join(sorted(JOBS))})")
         seq.append((stop, sf, job))
-    for (a, sa, _), (b, sb, _) in zip(seq, seq[1:]):
-        if sa and sa == sb and not legal:     # a legal page is plain by design (rule 49): plain next to plain is honest there
+    for (a, sa, ja), (b, sb, jb) in zip(seq, seq[1:]):
+        if sa and sa == sb and not legal and not _reading_pair(ctx, ja, jb):     # a legal page is plain by design (rule 49): plain next to plain is honest there
             probs.append(f"folds '{a}' and '{b}' share the surface '{sa}'")
     kinds = {s for _, s, _ in seq if s}
-    if seq and len(kinds) < 3 and not legal:
-        probs.append(f"only {len(kinds)} surface kinds on the page (3 or more)")
+    need_kinds = 2 if ctx.ptype == "post" else 3      # a post: the plain reading body plus a set-apart header or close
+    if seq and len(kinds) < need_kinds and not legal:
+        probs.append(f"only {len(kinds)} surface kinds on the page ({need_kinds} or more)")
     darks = [i for i, (_, s, _) in enumerate(seq) if s == "dark"]
     if len(darks) > 2:
         probs.append(f"{len(darks)} dark folds (2 at most)")
@@ -230,7 +237,7 @@ PAINT_JS = r"""
   const main = document.querySelector('main') || document.body;
   const page = painted(main);
   return [...main.querySelectorAll('section[data-fold]')].filter(s => s.getBoundingClientRect().height > 2).map(s => ({
-    fold: s.dataset.fold, surface: s.dataset.surface || '', own: cs(s).backgroundColor,
+    fold: s.dataset.fold, surface: s.dataset.surface || '', job: s.dataset.job || '', own: cs(s).backgroundColor,
     paint: painted(s), image: image(s), page }));
 }
 """
@@ -274,7 +281,7 @@ def surfaces_paint(ctx):
             probs.append(f"fold '{f['fold']}' is labelled '{f['surface']}' but paints the page's own colour {f['paint']}")
     if not legal:
         for a, b in zip(folds, folds[1:]):
-            if a["paint"] == b["paint"] and a["image"] == b["image"]:
+            if a["paint"] == b["paint"] and a["image"] == b["image"] and not _reading_pair(ctx, a.get("job"), b.get("job")):
                 probs.append(f"folds '{a['fold']}' and '{b['fold']}' paint the same background ({a['paint']}) whatever their labels say")
     ctx.verdict(probs, f"{len(folds)} folds: every label matches its paint, and neighbours differ",
                 "paint each fold with the surface it is labelled (the shared surfaces CSS), or label it what it paints (rule 36f)")

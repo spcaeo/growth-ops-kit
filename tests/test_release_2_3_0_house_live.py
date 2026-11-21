@@ -59,3 +59,21 @@ def test_feature_off_without_reason_fails_house(monkeypatch):
     run_check(c2, CHECKS["sticky.present"])
     run_check(c2, CHECKS["house.features"])
     assert "features.sticky_cta" not in c2.lines[-1].what
+
+
+def _post(html, cid):
+    c = Ctx(project=Path("/nonexistent"), path="/blog/x/", key="x", ptype="post", cfg=CFG, html=html, url="http://127.0.0.1:9/blog/x/", status=200)
+    run_check(c, CHECKS[cid])
+    return c.lines[-1]
+
+
+def test_post_body_folds_may_share_plain():
+    """2.4.4: a post's reading folds may share plain; its header and close must still stand apart."""
+    good = "".join(f'<section data-fold="f{i}" data-surface="{s}" data-job="{j}"></section>'
+                   for i, (s, j) in enumerate([("tint", "hook"), ("plain", "read"), ("plain", "read"), ("plain", "read"), ("tint", "act")]))
+    assert _post(page(good), "page.surfaces").level == "OK"
+    bad = "".join(f'<section data-fold="f{i}" data-surface="{s}" data-job="{j}"></section>'
+                  for i, (s, j) in enumerate([("plain", "hook"), ("plain", "read"), ("plain", "read"), ("plain", "act")]))
+    ln = _post(page(bad), "page.surfaces")
+    assert ln.level == "FAIL" and "share the surface" in ln.what
+    assert lines(page(good), "page.surfaces")[-1].level == "FAIL"   # a money page still needs the full rhythm
