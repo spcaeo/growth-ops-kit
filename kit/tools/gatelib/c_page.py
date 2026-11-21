@@ -533,7 +533,7 @@ def box_numbers(ctx):
         for num in {x.rstrip(".,") if not x.endswith("%") else x for x in re.findall(r"\b\d[\d,.]*%?", bt)}:
             if num not in rest:
                 probs.append(f"'{num}' only in a box")
-    ctx.verdict(sorted(set(probs)), "box numbers are all in the text", "state the number in the text with its source, or drop it from the box (rule 10)")
+    ctx.verdict(sorted(set(probs)), "box numbers are all in the text", "keep the number and state it in the text too, with its source; never delete a true, approved number to pass this check (rule 10)")
 
 
 @check("icons.no-emoji", "57", what="no emoji in the interface or tables", needs="live")
