@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.4.9
+version: 2.4.10
 updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.4.9 (generic edition) · 21 Nov 2026.**
+**Version 2.4.10 (generic edition) · 21 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-22 | 2.4.10 | Rule 20's check tells yes/no questions from what/how questions: the second need a direct first line, not yes or no. |
 | 2026-11-22 | 2.4.9 | A kept live title (rule 74) turns a missing title query into an owner proposal; the question-title check skips the byline. |
 | 2026-11-22 | 2.4.8 | Evidence may be judged fresh on the page's own markup (evidence.fresh_on page_html), so one page's merge does not stale every page. |
 | 2026-11-22 | 2.4.7 | A research record may give a written reason (queries_none) when Search Console hides every query of a page. |

@@ -29,3 +29,12 @@ def test_question_title_skips_the_byline():
             "<p class='byline'>By Rakesh Patel, updated 20 Nov 2026, eleven minute read</p>"
             "<p>Yes, when it is validated on local data and a clinician stays in the loop.</p></section></main></body></html>")
     assert last("words.question-title", html).level == "OK"
+
+
+def test_what_question_needs_a_direct_answer_not_yes_no():
+    """2.4.10: 'What is FHIR?' is answered by a direct line, not yes/no; a preamble still fails."""
+    ok = ("<html><body><main><section><h1>What Is FHIR?</h1>"
+          "<p>FHIR is the HL7 standard for exchanging health records through web APIs.</p></section></main></body></html>")
+    assert last("words.question-title", ok).level == "OK"
+    bad = ok.replace("FHIR is the HL7 standard", "In this guide we explain the HL7 standard")
+    assert last("words.question-title", bad).level == "FAIL"

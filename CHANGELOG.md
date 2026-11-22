@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.10 - 2026-11-22
+
+- words.question-title (20): only a yes/no question H1 ("Is ...?", "Can ...?") must open with yes, no or "it depends". A what/how/why H1 ("What Is FHIR?") passes with a direct first line and fails on a preamble ("In this guide...", "Let's...", a question). (#80)
+- Test: `tests/test_release_2_4_9_title_question.py`.
+
 ## 2.4.9 - 2026-11-22
 
 - seo.title-query (81) vs rule 74: when the page still shows its live title (inventory/inventory.json) and the only problem is the missing query, the check warns with a proposal for the owner instead of failing. Rule 74 keeps a ranking title until the owner approves a change. (#79)
