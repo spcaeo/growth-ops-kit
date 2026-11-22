@@ -492,6 +492,18 @@ def brief(ctx):
         ctx.fail("no generated brief", f"growth brief {ctx.need_path()} --type {ctx.ptype} --task <id> --out research/briefs/{ctx.key}.md")
         return
     log = ctx.need_docs() / "steps-log.md"
+    # Only a row that sets or changes a rule makes a brief stale. A row whose "What was done" says "(no new rule)" (a
+    # question, a status request) does not: one owner question once dropped every READY page (2.4.6).
+    rows = [r for r in log.read_text().splitlines() if re.match(r"\|\s*I-\d+\s*\|", r)] if log.exists() else []
+    rule_rows = [r for r in rows if "no new rule" not in r.lower()]
+    if rows:
+        newest = re.match(r"\|\s*(I-\d+)", rule_rows[-1]).group(1) if rule_rows else None
+        ids = {int(x) for x in re.findall(r"\bI-(\d+)\b", b.read_text())}
+        stale = newest is not None and (not ids or max(ids) < int(newest[2:]))
+        ctx.verdict(["brief is older than the newest owner instruction that sets a rule (" + newest + ")"] if stale else [],
+                    f"brief {b.name} is current" + (f" (holds the rules up to {newest})" if newest else ""),
+                    "regenerate it with growth brief and send the new rows to the helper (rule 0)")
+        return
     ctx.verdict([] if mtime(b) >= mtime(log) - 1 else ["brief is older than the newest owner instruction"],
                 f"brief {b.name} is current", f"regenerate it with growth brief and send the new rows to the helper (rule 0)")
 

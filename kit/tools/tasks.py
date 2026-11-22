@@ -118,6 +118,9 @@ def main(argv: list) -> None:
         print(__doc__)
         return
     cmd, args = argv[0], argv[1:]
+    if "-h" in args or "--help" in args:            # help never runs the command: `tasks add --help` once created a task (2.4.6)
+        print(__doc__)
+        return
     if cmd in {"add", "step", "tick", "status", "ask"}:
         out = []
         update(lambda db: out.append(_run(db, cmd, args)))

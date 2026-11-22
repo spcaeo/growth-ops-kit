@@ -39,6 +39,19 @@ def load(path):
         return None
 
 
+PLACEHOLDER = re.compile(r"(?i)^(tbd|todo|tba|\?+|-+|x|same|same as above|see above|later|wip|na|n/a|none|\.{2,})$")
+
+
+def answered(v: str) -> bool:
+    """A field is answered by a real answer, short or long ("plain", "sage tint"), or "n/a: <reason>". Placeholders
+    (tbd, todo, ?, -, same, see above, bare n/a or none) are not answers (2.4.6: the old 12-character floor rejected
+    true short answers)."""
+    v = v.strip()
+    if v.lower().startswith("n/a:"):
+        return len(v) > 5
+    return len(v) >= 4 and not PLACEHOLDER.match(v)
+
+
 def problems(plan, page_folds):
     """List what is missing from a plan, against the folds actually on the page (their data-fold names)."""
     out = []
@@ -54,13 +67,13 @@ def problems(plan, page_folds):
     for f in folds:
         for k in FOLD_FIELDS:
             v = str(f.get(k, "")).strip()
-            if len(v) < 12 and not v.lower().startswith("n/a:"):
+            if not answered(v):
                 out.append(f"fold '{f.get('fold', '?')}': '{k}' not answered")
     sh = plan.get("shared") or {}
     for s in SHARED:
         for k in SHARED_FIELDS:
             v = str((sh.get(s) or {}).get(k, "")).strip()
-            if len(v) < 12 and not v.lower().startswith("n/a:"):
+            if not answered(v):
                 out.append(f"shared '{s}': '{k}' not answered")
     if not str(plan.get("goal", "")).strip():
         out.append("no page goal")
