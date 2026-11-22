@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.4.4
+version: 2.4.5
 updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.4.4 (generic edition) · 21 Nov 2026.**
+**Version 2.4.5 (generic edition) · 21 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-22 | 2.4.5 | Rule 36f's paint check sees surfaces drawn on ::before/::after (#72); rule 144 accepts a drawn cover (#73). |
 | 2026-11-21 | 2.4.4 | Rule 36f on posts: body folds with the job `read` may share the plain surface and 2 surface kinds are enough; the header and the closing call still differ from their neighbours. Rule 158a's card-orphan check skips wrapping text rows with no boxed children (a post's meta line). |
 | 2026-11-20 | 2.4.3 | Rule 144 judges only a hub's post cards; rule 30's fold shape ignores wrapper-only markup (a builder had wrapped sentences in extra tags to pass it). |
 | 2026-11-20 | 2.4.2 | Rule 158a leaves out a tool's or a menu's own rows and grids (a table of contents beside the text, a calculator's options); the contact page keeps its form first (38) without a hero limit. |

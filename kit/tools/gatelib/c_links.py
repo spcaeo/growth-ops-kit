@@ -227,7 +227,7 @@ def surfaces(ctx):
 
 PAINT_JS = r"""
 () => {
-  const cs = e => getComputedStyle(e);
+  const cs = (e, p) => getComputedStyle(e, p || null);   // keep the pseudo argument: ::before/::after layers paint surfaces too (#72)
   const solid = c => c && c !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(c);
   const painted = e => {                      // the colour the reader sees behind the fold: its own, else the nearest ancestor's
     for (let n = e; n; n = n.parentElement) { const c = cs(n).backgroundColor; if (solid(c)) return c; }

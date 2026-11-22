@@ -13,7 +13,8 @@ from gatelib import CHECKS
 from gatelib.core import Ctx, run_check
 
 CSS = ('body{margin:0;background:#fff}[data-surface=tint]{background:#eef}[data-surface=warm]{background:#fdf6ec}'
-       'section{min-height:200px}')
+       'section{min-height:200px}[data-surface=geo-grid]::before{content:"";position:absolute;inset:0;'
+       'background-image:linear-gradient(#000 1px,transparent 1px);opacity:.07}')
 
 
 def page(folds):
@@ -24,6 +25,7 @@ def page(folds):
 PAGES = {
     "honest": page([("a", "plain", ""), ("b", "tint", ""), ("c", "warm", "")]),
     "lying": page([("a", "plain", ""), ("b", "tint", "background:transparent"), ("c", "warm", "")]),
+    "before": page([("a", "plain", ""), ("b", "geo-grid", "position:relative"), ("c", "tint", "")]),
     "same": page([("a", "tint", ""), ("b", "warm", "background:#eef"), ("c", "plain", "")]),
 }
 
@@ -75,3 +77,9 @@ def test_a_tint_label_that_paints_nothing_fails(base):
 def test_two_neighbours_that_paint_alike_fail_whatever_their_labels(base):
     ln = level(base, "same")
     assert ln.level == "FAIL" and "paint the same background" in ln.what
+
+
+def test_a_surface_painted_only_on_before_counts(base):
+    """#72: the pseudo argument reaches getComputedStyle, so a ::before pattern is seen."""
+    ln = level(base, "before")
+    assert ln.level == "OK", ln.what
