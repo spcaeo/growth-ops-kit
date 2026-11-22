@@ -96,7 +96,8 @@ def test_a10_and_a12_expect_the_stage_hook(tmp_path):
     cfg = settings(folder)
     cfg["hooks"]["PostToolUse"] = [{"matcher": "Bash", "hooks": [{"type": "command", "command": 'GROWTH_PROJECT=x "${GROWTH_KIT:-/nowhere/kit}/growth" hook stage'}]}]
     (folder / ".claude" / "settings.json").write_text(json.dumps(cfg))
-    assert next(l for l in growth(tmp_path, "doctor", cwd=folder, PATH="/usr/bin:/bin").stdout.splitlines() if "A12" in l).startswith("FAIL")
+    # GROWTH_KIT="" : a kit path exported in the caller's shell must not make the hook resolve (it made this test flaky)
+    assert next(l for l in growth(tmp_path, "doctor", cwd=folder, PATH="/usr/bin:/bin", GROWTH_KIT="").stdout.splitlines() if "A12" in l).startswith("FAIL")
 
 
 def test_git_hooks_are_installed_only_with_a_yes_and_a13_checks_them(tmp_path):
