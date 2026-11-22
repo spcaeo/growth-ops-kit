@@ -343,7 +343,13 @@ def question_title(ctx):
         ctx.ok("the H1 is not a question")
         return
     sec = domx.first_section(root)
-    ps = [domx.text(p) for p in find_all(sec, "p")] if sec is not None else []
+    # the first line under the H1: a byline, breadcrumb, kicker or reading-time line is not that line (2.4.9)
+    meta = re.compile(r"(?i)byline|author|posted|published|updated|post-meta|entry-meta|breadcrumb|kicker|eyebrow|read-?time|reading-?time|\btoc\b")
+    order = list(sec.iter()) if sec is not None else []
+    after = order.index(h1) if h1 in order else 0
+    ps = [domx.text(p) for p in order[after:] if p.tag == "p"
+          and not any(meta.search((a.get("class") or "") + " " + (a.get("id") or "")) or a.tag in ("nav", "time", "address")
+                      for a in [p, *p.ancestors()])]
     ps = [p for p in ps if len(p.split()) > 4]
     if ps and re.match(r"(?i)(yes|no|it depends|only|not)\b", ps[0]):
         ctx.ok("the first line answers the question")

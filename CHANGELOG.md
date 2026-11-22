@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.9 - 2026-11-22
+
+- seo.title-query (81) vs rule 74: when the page still shows its live title (inventory/inventory.json) and the only problem is the missing query, the check warns with a proposal for the owner instead of failing. Rule 74 keeps a ranking title until the owner approves a change. (#79)
+- words.question-title (20): the first line under a question H1 skips bylines, breadcrumbs, kickers and reading-time lines. (#79)
+- Test: `tests/test_release_2_4_9_title_question.py`.
+
 ## 2.4.8 - 2026-11-22
 
 - Evidence freshness: growth.json `evidence.fresh_on: "page_html"` keeps a page's shots, click test and share preview current while its own markup is unchanged, even when the shared CSS/JS bundles were rebuilt by another page's merge. The default `"built"` stays strict. Fingerprints now also store `page` (the markup with hashed asset names neutralised); old fingerprints fall back to `html`. The measured layout checks still run live on every gate. (#78)

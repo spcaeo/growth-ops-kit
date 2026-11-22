@@ -339,6 +339,20 @@ def gsc_top(ctx, n=2):
     return sorted(merged.items(), key=lambda kv: -kv[1])[:n]
 
 
+def norm_title(s):
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", (s or "").lower())).strip()
+
+
+def live_title(ctx):
+    """The page's title on the live site, from inventory/inventory.json (growth inventory), or "" when unknown."""
+    try:
+        inv = json.loads((ctx.project / "inventory" / "inventory.json").read_text())
+    except (OSError, ValueError):
+        return ""
+    want = paths.normalize(ctx.need_path())
+    return next((p.get("title") or "" for p in inv.get("pages", []) if paths.normalize(p.get("path", "")) == want), "")
+
+
 @check("seo.title-query", "81", types=("money", "hub", "post"), what="the title holds one of the page's top-2 Search Console queries and fits 60 characters", needs="live")
 def title_query(ctx):
     hold = (ctx.cfg.get("holds") or {}).get("title")
@@ -374,6 +388,13 @@ def title_query(ctx):
     tl = re.sub(r"[^a-z0-9 ]", " ", t.lower())
     if not any(re.sub(r"\s+", " ", q.lower()) in re.sub(r"\s+", " ", tl) for q, _ in top):
         probs.append("title holds neither " + " nor ".join(f"'{q}' ({i} impr.)" for q, i in top))
+    # Rule 74 keeps a live page's title unless the owner approves a change. When the page still shows its live title, a
+    # missing query is a proposal for the owner, not a fault of the build (2.4.9).
+    live = live_title(ctx)
+    if probs and live and norm_title(live) == norm_title(t) and all(p.startswith("title holds neither") for p in probs):
+        ctx.warn(f"title kept from the live page (rule 74): '{t}'; " + probs[0],
+                 f"propose a title that starts with '{top[0][0]}' to the owner; it ships only with their yes (rules 74, 81)")
+        return
     ctx.verdict(probs, f"title '{t}' ({len(t)} chars) holds a top query ({src})",
                 f"rewrite the title to start with '{top[0][0]}' and stay at or under 60 characters (rule 81)")
 
