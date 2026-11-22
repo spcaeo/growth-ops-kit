@@ -351,11 +351,19 @@ def question_title(ctx):
           and not any(meta.search((a.get("class") or "") + " " + (a.get("id") or "")) or a.tag in ("nav", "time", "address")
                       for a in [p, *p.ancestors()])]
     ps = [p for p in ps if len(p.split()) > 4]
-    if ps and re.match(r"(?i)(yes|no|it depends|only|not)\b", ps[0]):
-        ctx.ok("the first line answers the question")
-    else:
-        ctx.fail("the H1 is a question but the first line does not start with the answer",
+    # A yes/no question ("Is ...?", "Can ...?") is answered with yes, no or "it depends". A what/how/why question is
+    # answered by a direct first line, never by a preamble ("In this guide...", "Let's look at...") (2.4.10)
+    yes_no = re.match(r"(?i)\s*(is|are|was|were|can|could|do|does|did|should|will|would|has|have|had|must|may)\b", domx.text(h1))
+    if not ps:
+        ctx.fail("the H1 is a question but no first line follows it", "answer it in the first line under the H1 (rule 20)")
+    elif yes_no and not re.match(r"(?i)(yes|no|it depends|only|not)\b", ps[0]):
+        ctx.fail("the H1 is a yes/no question but the first line does not start with the answer",
                  "start the first line with yes, no, or 'yes, but only this way' (rule 20)")
+    elif not yes_no and re.match(r"(?i)(in this (guide|post|article)|this (guide|post|article)|let'?s|we('ll| will)|read on|here('s| is) what|have you|are you|wondering)\b|.*\?$", ps[0]):
+        ctx.fail(f"the H1 asks a question but the first line is a preamble: '{ps[0][:60]}'",
+                 "make the first line the answer itself, e.g. 'FHIR is ...' (rule 20)")
+    else:
+        ctx.ok("the first line answers the question")
 
 
 @check("words.no-location", "36k", what="no country or city for the business or its people, on the page or (Next.js) in the site's own code (growth.json never_say_location)", needs="live")
