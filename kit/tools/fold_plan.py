@@ -39,7 +39,8 @@ def main():
     ap.add_argument("--repo", default="", help="the site checkout (accepted for a uniform command line; not needed here)")
     a = ap.parse_args()
     f = PROJECT / "research" / "plans" / f"{a.key}.json"
-    folds = page_folds(fetch(a.url)) if a.url else [n.strip() for n in a.folds.split(";") if n.strip()]
+    # --folds (the planned names) wins: a new page's --url is not built yet and cannot be read (2.4.6)
+    folds = [n.strip() for n in a.folds.split(";") if n.strip()] or (page_folds(fetch(a.url)) if a.url else [])
     if a.cmd == "init":
         old = load(f) if f.exists() else None
         if f.exists() and (old or {}).get("folds"):

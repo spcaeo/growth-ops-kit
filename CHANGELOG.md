@@ -4,6 +4,14 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.6 - 2026-11-22
+
+- ev.brief (0): only a steps-log row that sets or changes a rule makes a page's brief stale. A row whose "What was done" says "(no new rule)" (a question, a status request) does not; the check compares the newest rule row's ID with the IDs the brief holds. One owner question had dropped every READY page.
+- Fold plans: a true short answer ("plain", "sage tint") counts; placeholders (tbd, todo, ?, -, same, see above, a bare n/a) do not. It was a 12-character floor.
+- `growth fold_plan init --folds` wins over `--url`, so a new page's plan can be written before the page is built.
+- `growth tasks <command> --help` prints help and never runs the command (`tasks add --help` created a task).
+- Test: `tests/test_release_2_4_6_brief_plan_tasks.py`.
+
 ## 2.4.5 - 2026-11-22
 
 - page.surfaces-paint (36f): the browser helper drops no pseudo argument, so a surface painted on `::before` or `::after` is seen (#72). It was a false FAIL on every geometry fold of a site that draws its patterns on `::before`.

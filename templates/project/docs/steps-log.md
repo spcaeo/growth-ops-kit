@@ -8,6 +8,7 @@ happened; **Where** names the file, task or commit.
 
 Example of one row (do not copy it as it is): `| I-1 | 2026-11-18 | "Our one button on every page is 'Get a quote'." | Recorded the CTA label in BRAND.md section 4 and in growth.json; the gate checks it (rules 32a, 33). | BRAND.md, growth.json, task T1 |`
 Dates are YYYY-MM-DD. Numbers go up by one, with no gaps.
+A row that only answers a question (no rule set or changed) says "(no new rule)" in What was done, so page briefs stay current (ev.brief).
 
 | ID | Date | What the owner said | What was done | Where |
 | --- | --- | --- | --- | --- |
