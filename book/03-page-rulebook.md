@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.4.10
+version: 2.4.11
 updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.4.10 (generic edition) · 21 Nov 2026.**
+**Version 2.4.11 (generic edition) · 21 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -248,7 +248,7 @@ and box (149).
 81. **A title is 30 to 60 characters and 580px wide or less; a meta description is 120 to 155 characters and 990px or less, a full sentence, with no Markdown or HTML.** A title cut off mid-word in a result loses clicks. Do the check on the real text (`metaTitle`, `metaDescription`); if they are empty the site falls back to the title and the excerpt, so check those too. The title holds one of the page's top 2 Search Console searches; when the most-shown one has under 10 views (too little data), it holds one of the first 2 `target_searches` in the page's plan (`research/plans/<key>.json`, from the dossier). [code: seo.title-desc, seo.title-query]
 82. **Each title and description is its own.** Never copy another page's description into this one, and never leave one stale after you changed the page. `og:title` and `og:description` follow the meta text unless there is a reason. [code: seo.unique-meta]
 83. **Every indexable page has a meta description, a title that fits, exactly one H1 and a share image.** A hub, a money page or a list page shows a main picture at least 480px wide as well. [code: seo.basics]
-84. **Exactly one H1.** A line that looks like a heading is a heading; body headings under the H1 start at H2 and never skip a level. A key figure drawn big ("19 min") is emphasis, not a heading. [code: seo.headings]
+84. **Exactly one H1.** A line that looks like a heading is a heading; body headings under the H1 start at H2 and never skip a level. A key figure drawn big ("19 min") is emphasis, not a heading. The H1 reads once: a highlight marks words already in it, never a second phrase glued on. [code: seo.headings, words.h1-clean]
 85. **Keep old heading ids so old `#section` links still land.** Heading ids are an address too. [code: seo.heading-ids]
 86. **A page of a list after the first has its own title, description and H1** ("Blog, page 2 of 6"). Every list page is one click from page 1, and its previous and next links are in the page. A list that repeats another list is not indexed twice: canonical to the first or noindex. Page 1 of an indexable list opens with a short intro (150 to 250 words) that says what it covers, who it is for and where to start, and links its best posts, using only facts the site already holds. [judgment: proxy seo.title-desc, seo.canonical]
 87. **The sitemap lists only pages you want as search landing pages:** status 200, indexable, its own canonical, no `.md` or JSON file. Note how many URLs the sitemap lists today (in `SETUP.md`) and check the count before and after a change. [code: seo.sitemap]
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-22 | 2.4.11 | Rule 84: the H1 reads once (words.h1-clean), after a template glued a highlight label onto 32 titles. |
 | 2026-11-22 | 2.4.10 | Rule 20's check tells yes/no questions from what/how questions: the second need a direct first line, not yes or no. |
 | 2026-11-22 | 2.4.9 | A kept live title (rule 74) turns a missing title query into an owner proposal; the question-title check skips the byline. |
 | 2026-11-22 | 2.4.8 | Evidence may be judged fresh on the page's own markup (evidence.fresh_on page_html), so one page's merge does not stale every page. |
