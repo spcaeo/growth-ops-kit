@@ -32,3 +32,10 @@ def test_folds_that_differ_only_by_wrappers_are_the_same():
     assert ln.level == "FAIL", ln.what
     c = "<section><h2>C</h2><ul><li>x</li><li>y</li><li>z</li></ul></section>"
     assert last("layout.folds-distinct", page(a + c), path="/x/", ptype="money").level == "OK"
+
+
+def test_drawn_cover_counts():
+    """#73: an inline svg or sprite <use> is the post's cover on a drawn theme."""
+    cards = ("<div class='post-card'><svg><use href='/s.svg#a'></use></svg><a href='/hub-x/a/'>A</a></div>"
+             "<div class='post-card'><span data-cover></span><a href='/hub-x/b/'>B</a></div>")
+    assert last("hub.cards", page(cards)).level == "OK"

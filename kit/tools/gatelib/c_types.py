@@ -130,7 +130,8 @@ def hub_cards(ctx):
                     return True
             return False
         cards = [c for c in cards if into_cluster(c) and not any(x is not c and x in cards for x in c.ancestors())]
-    bare = [c for c in cards if find(c, "img") is None]
+    # a drawn cover counts: an image, a picture, an inline svg (a sprite <use> too) or an element marked data-cover (#73)
+    bare = [c for c in cards if not any(n.tag in ("img", "picture", "svg") or "data-cover" in n.attrs for n in c.iter())]
     if not cards:
         ctx.fail("no post cards on the hub", "list the cluster's posts as cards with covers (rule 144)")
         return

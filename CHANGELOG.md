@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.5 - 2026-11-22
+
+- page.surfaces-paint (36f): the browser helper drops no pseudo argument, so a surface painted on `::before` or `::after` is seen (#72). It was a false FAIL on every geometry fold of a site that draws its patterns on `::before`.
+- hub.cards (144): a drawn cover counts, whether an inline svg, a sprite `<use>`, a `<picture>` or an element marked `data-cover` (#73).
+- Tests: `tests/test_surfaces_paint.py` (a `::before`-only surface), `tests/test_release_2_4_3_cards_folds.py`.
+
 ## 2.4.4 - 2026-11-21
 
 - page.surfaces and page.surfaces-paint (36f) on posts: neighbouring folds whose job is `read` (the article body, one per heading) may share the plain surface, and 2 surface kinds are enough; the header and the closing call still differ from their neighbours. Money and service pages keep the full rhythm.
