@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.4.6
+version: 2.4.8
 updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.4.6 (generic edition) · 21 Nov 2026.**
+**Version 2.4.8 (generic edition) · 21 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,8 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-22 | 2.4.8 | Evidence may be judged fresh on the page's own markup (evidence.fresh_on page_html), so one page's merge does not stale every page. |
+| 2026-11-22 | 2.4.7 | A research record may give a written reason (queries_none) when Search Console hides every query of a page. |
 | 2026-11-22 | 2.4.6 | A brief goes stale only on an owner row that sets a rule; fold-plan short answers count; tool help never runs a command. |
 | 2026-11-22 | 2.4.5 | Rule 36f's paint check sees surfaces drawn on ::before/::after (#72); rule 144 accepts a drawn cover (#73). |
 | 2026-11-21 | 2.4.4 | Rule 36f on posts: body folds with the job `read` may share the plain surface and 2 surface kinds are enough; the header and the closing call still differ from their neighbours. Rule 158a's card-orphan check skips wrapping text rows with no boxed children (a post's meta line). |

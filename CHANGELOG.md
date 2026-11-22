@@ -4,6 +4,17 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.8 - 2026-11-22
+
+- Evidence freshness: growth.json `evidence.fresh_on: "page_html"` keeps a page's shots, click test and share preview current while its own markup is unchanged, even when the shared CSS/JS bundles were rebuilt by another page's merge. The default `"built"` stays strict. Fingerprints now also store `page` (the markup with hashed asset names neutralised); old fingerprints fall back to `html`. The measured layout checks still run live on every gate. (#78)
+- Test: `tests/test_release_2_4_8_fresh_on.py`.
+
+## 2.4.7 - 2026-11-22
+
+- Research records: a page with Search Console impressions but only anonymised queries passes the search section with a written `queries_none` reason (`growth research none <path> --key K queries "why"`), the way `paa_none` works. The record still needs the window. Before, such a page could never be READY without invented query rows.
+- tests/test_harness.py: a kit path exported in the shell no longer makes the A12 test pass by accident (it failed the pre-commit run whenever GROWTH_KIT was set).
+- Test: `tests/test_release_2_4_7_queries_none.py`.
+
 ## 2.4.6 - 2026-11-22
 
 - ev.brief (0): only a steps-log row that sets or changes a rule makes a page's brief stale. A row whose "What was done" says "(no new rule)" (a question, a status request) does not; the check compares the newest rule row's ID with the IDs the brief holds. One owner question had dropped every READY page.

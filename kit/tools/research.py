@@ -25,7 +25,8 @@ Record layout (every date is YYYY-MM-DD):
   ai_answers    [{engine, market, query, seen_on, summary}]           what an AI answer said when we looked
   paa           [{question, status: chosen|declined, reason, answered_in}]   People also ask questions
   vendor_facts  [{vendor, fact, value, shown_as, view, how_read: raw|browser|summary, source_url, quote, read_on}]
-  *_none        a reason for an empty section ("paa_none": "no People also ask box for this search")
+  *_none        a reason for an empty section ("paa_none": "no People also ask box for this search"; "queries_none":
+                "8 impressions, every query anonymised by Search Console")
   other_numbers [{value, why}]  numbers on the page that are not a vendor fact (the business's own, a law's)
   baseline      the page's numbers before the change, taken from the search section when the baseline is frozen
 """
@@ -151,8 +152,12 @@ def problems(rec, today: dt.date, cfg: dict | None = None, project=None) -> list
             out.append(f"{what} {v} is after today: a date in the future is never fresh research")
     sr = rec.get("search") or {}
     w = sr.get("window") or {}
-    if not (day(w.get("from")) and day(w.get("to"))) or not sr.get("queries"):
-        out.append("search: no window (from, to) and queries; fill it with growth research search")
+    # a page with impressions but only anonymised queries (Search Console hides rare searches) has a window and no query
+    # rows: a written reason ("queries_none") stands in for them, like paa_none (2.4.7)
+    no_q = not sr.get("queries") and len(str(rec.get("queries_none", "")).strip()) < 8
+    if not (day(w.get("from")) and day(w.get("to"))) or no_q:
+        out.append("search: no window (from, to) and queries; fill it with growth research search"
+                   + ("" if sr.get("queries") else ", or give 'queries_none' (growth research none <path> --key K queries \"why\")"))
     elif sr.get("scope") != "page":
         out.append("search: scope must be 'page' (site-wide numbers go in site_search)")
     elif age(w.get("to"), today) is None or age(w["to"], today) > s["search_days"]:
@@ -448,9 +453,9 @@ def _command(a):
         rec["vendor_facts"].append(row)
     elif a.cmd == "none":
         sec, why = (a.rest + [""])[0], " ".join(a.rest[1:])
-        if sec not in SECTIONS:
-            sys.exit("name the section: paa, ai or vendor_facts")
-        rec[{"paa": "paa_none", "ai": "ai_none", "vendor_facts": "vendor_facts_none"}[sec]] = why
+        if sec not in SECTIONS and sec != "queries":
+            sys.exit("name the section: paa, ai, vendor_facts or queries")
+        rec[{"paa": "paa_none", "ai": "ai_none", "vendor_facts": "vendor_facts_none", "queries": "queries_none"}[sec]] = why
     elif a.cmd == "show":
         print(json.dumps(rec, indent=1, ensure_ascii=False))
         return 0
