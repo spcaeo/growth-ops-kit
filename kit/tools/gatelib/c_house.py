@@ -46,6 +46,10 @@ def house(ctx):
         if m and not str(dropped.get(m.group(1), "")).strip():
             skipped.remove(c)
             missing.append(f"{c} (features.{m.group(1)} is off with no reason in growth.json features_dropped)")
+    unchecked = [c for c in skipped if "no adapter for" in whys.get(c, "")]
+    if unchecked:          # a reader-visible feature this stack cannot check yet: say so, never count it as present (2.5.0)
+        ctx.warn(f"not checked on this stack ({ctx.stack()}): {', '.join(unchecked)}",
+                 "check these by eye on the shots until the kit reads them from the served page (rule 161)")
     ctx.verdict([f"not run: {c}" for c in notrun] + [f"missing: {c}" for c in missing],
                 f"all {len(need) - len(skipped)} applicable house features of a {ctx.ptype} page present"
                 + (f" ({len(skipped)} skipped: not applicable to this site)" if skipped else ""),

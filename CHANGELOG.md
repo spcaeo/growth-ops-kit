@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.5.0 - 2026-11-22
+
+- hero.unique (157) reads the served page on every stack and now covers posts too. It compares the first screen with its siblings on the same preview: the same depth and either the same cluster or the same kind of page across clusters (every .../experts). A shared hero design (the composition: the tag and class tree plus each drawing's shape list), the same picture, or the same animation fails. A hero with no picture, tool or motion of its own fails. It used to be Next.js only, and a static site shipped 128 pages on 14 hero designs. (#85)
+- house.features (156, 161) warns about house features the stack cannot check yet, instead of counting them as passed in silence.
+- Test: `tests/test_release_2_5_0_hero_unique.py`.
+
 ## 2.4.11 - 2026-11-22
 
 - New check words.h1-clean (84): the visible H1 reads once. It fails when one element's text runs into the next with no space ("...and CostFeatures, Compliance, Cost") or a 3-4 word phrase is shown twice; aria-hidden decoration is left out. A live H1 kept by rule 74 (inventory h1) that repeats a phrase only warns. A hero template had appended its highlight label inside the H1 on 32 pages that passed every other check. (#84)

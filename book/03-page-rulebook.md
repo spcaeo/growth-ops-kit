@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.4.11
+version: 2.5.0
 updated: 2026-11-19
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.4.11 (generic edition) · 21 Nov 2026.**
+**Version 2.5.0 (generic edition) · 21 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-22 | 2.5.0 | Rule 157 is checked on the served page for every stack: siblings may not share a hero design, picture or animation. |
 | 2026-11-22 | 2.4.11 | Rule 84: the H1 reads once (words.h1-clean), after a template glued a highlight label onto 32 titles. |
 | 2026-11-22 | 2.4.10 | Rule 20's check tells yes/no questions from what/how questions: the second need a direct first line, not yes or no. |
 | 2026-11-22 | 2.4.9 | A kept live title (rule 74) turns a missing title query into an owner proposal; the question-title check skips the byline. |

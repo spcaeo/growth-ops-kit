@@ -224,24 +224,6 @@ def no_libs(ctx):
     ctx.verdict(probs, "no animation library; reduced motion handled", "build motion with CSS + IntersectionObserver; honor prefers-reduced-motion (rule 58)")
 
 
-@check("hero.unique", "157", types=("money", "hub"), what="the page's hero component is used by no sibling page", needs="nextjs")
-def hero_unique(ctx):
-    tree = ctx.tree_sources()
-    heroes = [f for f in tree if re.search(r"hero", f.name, re.I)]
-    if not heroes:
-        ctx.fail("no hero component in the page's source tree", "give the page its own hero component (rules 147, 157)")
-        return
-    probs = []
-    repo = ctx.repo
-    for h in heroes:
-        rel = str(h.relative_to(repo)).rsplit(".", 1)[0]
-        users = [str(f.relative_to(repo)) for f in ctx.repo_files(("app/**/page.tsx", "components/**/*.tsx"))
-                 if f not in tree and (("@/" + rel) in f.read_text(errors="replace"))]
-        if users:
-            probs.append(f"{rel} also used by {users[:3]}")
-    ctx.verdict(probs, f"hero {', '.join(h.name for h in heroes)} is this page's own", "build a hero for this page; never share a sibling's (rule 157)")
-
-
 @check("css.scroll-padding", "99", what="html { scroll-padding-top } is set for the sticky header", needs="nextjs")
 def scroll_padding(ctx):
     if re.search(r"html\s*\{[^}]*scroll-padding-top\s*:", ctx.css_text()):
