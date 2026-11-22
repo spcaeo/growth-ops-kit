@@ -420,3 +420,46 @@ def named_author(ctx):
         probs.append(f"structured-data author is not {a['name']} ({short(flat, 80)})")
     ctx.verdict(probs, f"byline links to {a['path']} and the structured data names {a['name']} as author",
                 "link the byline to the author page and set the page's author to that Person in the structured data (rule 36l)")
+
+
+# ---- the H1 reads once, cleanly (2.4.11) ------------------------------------------------------------------------------
+def _pieces(n, out, skip):
+    """(text, element) pieces of n in reading order; aria-hidden and hidden parts are left out."""
+    for c in n.children:
+        if isinstance(c, str):
+            out.append((c, n))
+        elif not (c.get("aria-hidden") == "true" or "hidden" in c.attrs or c.tag in skip):
+            _pieces(c, out, skip)
+    return out
+
+
+@check("words.h1-clean", "84", what="the visible H1 reads once: no phrase glued on without a space, no phrase shown twice", needs="live")
+def h1_clean(ctx):
+    """From a real site: a hero template appended a highlight label inside the H1 ("... Compliance and CostFeatures,
+    Compliance, Cost"), so readers saw the title's words twice, glued together. Thirty pages passed every other check."""
+    h1 = find(ctx.root(), "h1")
+    if h1 is None:
+        raise Skip("no H1 (words.question-title and seo checks report it)")
+    ps = [(t, e) for t, e in _pieces(h1, [], {"script", "style", "svg", "template"}) if t.strip()]
+    probs = []
+    for (a, ea), (b, eb) in zip(ps, ps[1:]):
+        if ea is not eb and re.search(r"[A-Za-z0-9%)]$", a) and re.match(r"^[A-Za-z0-9(]", b):
+            probs.append(f"'{short(a.strip(), 30)}' runs into '{short(b.strip(), 30)}' with no space")
+    words = re.findall(r"[a-z0-9%]+", " ".join(t for t, _ in ps).lower())
+    for n in (4, 3):
+        grams = [tuple(words[i:i + n]) for i in range(len(words) - n + 1)]
+        dup = next((g for i, g in enumerate(grams) if g in grams[i + n:]), None)
+        if dup:
+            probs.append(f"the phrase '{' '.join(dup)}' is shown twice in the H1")
+            break
+    if probs and all("shown twice" in p for p in probs):
+        try:                                     # the live page's own H1, kept by rule 74 until the owner approves a change
+            inv = json.loads((ctx.project / "inventory" / "inventory.json").read_text())
+            live = next((x.get("h1") or "" for x in inv.get("pages", []) if paths.normalize(x.get("path", "")) == paths.normalize(ctx.need_path())), "")
+        except (OSError, ValueError):
+            live = ""
+        if live and re.sub(r"\W+", " ", live).strip().lower() == " ".join(words):
+            ctx.warn(f"the live H1 repeats a phrase ({probs[0]}); kept by rule 74", "propose a cleaner H1 to the owner (rules 74, 84)")
+            return
+    ctx.verdict(probs, "the H1 reads once, cleanly",
+                "a highlight marks words already in the H1 (wrap them) or sits outside it as aria-hidden decoration; never a second phrase inside the H1 (rule 84)")

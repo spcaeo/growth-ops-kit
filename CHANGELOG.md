@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.4.11 - 2026-11-22
+
+- New check words.h1-clean (84): the visible H1 reads once. It fails when one element's text runs into the next with no space ("...and CostFeatures, Compliance, Cost") or a 3-4 word phrase is shown twice; aria-hidden decoration is left out. A live H1 kept by rule 74 (inventory h1) that repeats a phrase only warns. A hero template had appended its highlight label inside the H1 on 32 pages that passed every other check. (#84)
+- Test: `tests/test_release_2_4_11_h1_clean.py`.
+
 ## 2.4.10 - 2026-11-22
 
 - words.question-title (20): only a yes/no question H1 ("Is ...?", "Can ...?") must open with yes, no or "it depends". A what/how/why H1 ("What Is FHIR?") passes with a direct first line and fails on a preamble ("In this guide...", "Let's...", a question). (#80)
