@@ -77,12 +77,29 @@ def make(html: str, read_asset, src: str) -> dict:
         except Exception:  # noqa: BLE001  (an unreadable file is part of the fingerprint, not a crash)
             b = None
         assets[h] = sha(b) if b is not None else "unreadable"
-    return {"src": src, "html": sha(normalize_html(html)), "assets": assets}
+    return {"src": src, "html": sha(normalize_html(html)), "page": sha(page_only(html)), "assets": assets}
 
 
-def same(a, b) -> bool:
-    """True only when both fingerprints exist, come from the same kind of source, and every part is equal."""
-    return bool(a and b and a.get("src") == b.get("src") and a.get("html") == b.get("html") and a.get("assets") == b.get("assets"))
+def page_only(html: str) -> str:
+    """The page's own markup: normalize_html with every linked CSS/JS address replaced by one placeholder, so a shared
+    bundle that was rebuilt (its hashed file name changed) does not change it (2.4.8)."""
+    out = normalize_html(html)
+    for h in asset_refs(html):
+        out = out.replace(h, "ASSET")
+    return re.sub(r"/_astro/[\w.-]+\.(?:css|js)", "ASSET", out)
+
+
+def same(a, b, mode: str = "built") -> bool:
+    """True only when both fingerprints exist, come from the same kind of source, and every part is equal.
+    mode "page_html" (growth.json evidence.fresh_on): the page's own markup must be equal; the shared CSS/JS bundles may
+    differ, because every new page merged into a site rebuilds them. Old fingerprints without "page" use "html"."""
+    if not (a and b and a.get("src") == b.get("src")):
+        return False
+    if mode == "page_html":
+        if a.get("page") and b.get("page"):
+            return a["page"] == b["page"]
+        return a.get("html") == b.get("html")
+    return a.get("html") == b.get("html") and a.get("assets") == b.get("assets")
 
 
 def build_root(cfg: dict, project: Path, repo: Path | None) -> Path | None:

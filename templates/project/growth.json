@@ -205,7 +205,9 @@
   "page_tracker": {},
   "evidence": {
     "shared_paths": null,
-    "content_globs": []
+    "content_globs": [],
+    "fresh_on": "built",
+    "_fresh_on": "When evidence (shots, click test, share preview) counts as current: 'built' (default) = the page and every CSS/JS file it links are unchanged; 'page_html' = the page's own markup is unchanged, shared bundles may differ (a site where every merged page rebuilds one shared bundle). The measured layout checks still run live on every gate."
   },
   "_evidence": "What makes a page's screenshots, click-test and share preview stale: the newest commit that touched the page's own content file(s) (page_tracker.page_sources or content_globs, or evidence.content_globs, each {glob, address, values}) or shared code that renders it. shared_paths (null = the default: src/components, src/layouts, src/styles, styles, src/lib, src/data, astro.config.*) replaces that list. A commit that only touches other pages' content does not count. A page whose own files cannot be found falls back to the newest commit of the whole checkout.",
   "thin_ok_paths": [],
@@ -232,7 +234,16 @@
     "top_tolerance": 8,
     "picture_ratio": 0.6,
     "mechanics_max": 2,
-    "legal_paths": ["/terms*", "/privacy*", "/cookie*"],
-    "mechanics": ["flip", "tabs", "accordion", "slider"]
+    "legal_paths": [
+      "/terms*",
+      "/privacy*",
+      "/cookie*"
+    ],
+    "mechanics": [
+      "flip",
+      "tabs",
+      "accordion",
+      "slider"
+    ]
   }
 }

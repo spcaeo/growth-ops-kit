@@ -278,7 +278,8 @@ class Ctx:
         """Is the page's built output the same as the fingerprint `then` stored with the evidence? False when there is none
         (old evidence: the caller keeps the commit-based rule) or the page cannot be read now."""
         import fingerprint
-        return bool(then) and fingerprint.same(then, self.fingerprint_now())
+        mode = ((self.cfg.get("evidence") or {}).get("fresh_on") or "built")   # "page_html": shared bundles may change (2.4.8)
+        return bool(then) and fingerprint.same(then, self.fingerprint_now(), mode)
 
     def last_change_time(self):
         """Unix time of the page's last change, so evidence (screenshots, click-through, share preview) can be checked
