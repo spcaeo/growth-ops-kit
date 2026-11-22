@@ -57,7 +57,7 @@ def flags_of(ctx, names):
     return [f"{f}: {t}" for f, t in link_check(ctx).get(ctx.need_path(), []) if f in names]
 
 
-@check("links.cards", "36c", what="'+' link previews: data-link-cards on the content container, the shared LinkCards, its guard test", needs="nextjs")
+@check("links.cards", "36c", what="'+' link previews: data-link-cards on the content container, the shared LinkCards, its guard test", needs="repo")
 def link_cards(ctx):
     root = ctx.root()
     probs = []
@@ -109,7 +109,7 @@ def link_cards(ctx):
                 "skip only site chrome in SKIP_ZONE (a header or footer inside <main> is content) (rule 36c)")
 
 
-@check("links.inbound", "88", what="at least two other pages link here from their content; a post links up to its hub, sits on its guide list and links to 2+ siblings", needs="nextjs")
+@check("links.inbound", "88", what="at least two other pages link here from their content; a post links up to its hub, sits on its guide list and links to 2+ siblings", needs="repo")
 def inbound(ctx):
     d = link_map(ctx, "inbound")
     srcs = {l["src"] for l in d.get("links", []) if l.get("where") in ("body", "hub-list") and l.get("src") != ctx.path}
@@ -120,7 +120,7 @@ def inbound(ctx):
                 f"add content links from its cluster (growth link_map suggest {ctx.path}; check with link_map.py check {ctx.path}) (rule 88)")
 
 
-@check("links.plan", "88a", types=("money", "hub"), what="the internal-link plan is filed: journal entries tagged internal-link against source pages", needs="nextjs")
+@check("links.plan", "88a", types=("money", "hub"), what="the internal-link plan is filed: journal entries tagged internal-link against source pages", needs="repo")
 def link_plan(ctx):
     p = ctx.need_path()
     ents = [e for e in ctx.journal() if "internal-link" in (e.get("tags") or [])]
@@ -140,7 +140,7 @@ def link_plan(ctx):
     ctx.verdict(probs, f"{len(planned)} planned links filed in the journal", f"growth link_map suggest {p}; file each with growth journal add --page <source> --tag internal-link (rule 88a)")
 
 
-@check("links.no-redirect", "75", what="no internal link points at a redirect, a 410, a draft or an unknown address", needs="nextjs")
+@check("links.no-redirect", "75", what="no internal link points at a redirect, a 410, a draft or an unknown address", needs="repo")
 def no_redirect(ctx):
     d = link_map(ctx, "outbound")
     moved = [f"{l['to']} -> {l['final']}" for l in d.get("links", []) if l.get("moved") or (l.get("final") and l.get("final") != l.get("to"))]
@@ -149,13 +149,13 @@ def no_redirect(ctx):
                 "point the link at its final, live address (growth link_map check <path>) (rule 75)")
 
 
-@check("links.anchor-unique", "90", what="no link words on this page also go to a different page anywhere on the site", needs="nextjs")
+@check("links.anchor-unique", "90", what="no link words on this page also go to a different page anywhere on the site", needs="repo")
 def anchor_unique(ctx):
     ctx.verdict(flags_of(ctx, ("dup-anchor",)), "every anchor on this page goes to one page only",
                 "give each target its own words (growth link_map check --all lists every shared anchor) (rule 90)")
 
 
-@check("links.up-across", "89", types=("money", "post"), what="a money page links down to 2+ of its posts; a post links up to its money page and across to 2+ siblings", needs="nextjs")
+@check("links.up-across", "89", types=("money", "post"), what="a money page links down to 2+ of its posts; a post links up to its money page and across to 2+ siblings", needs="repo")
 def up_across(ctx):
     d = link_map(ctx, "outbound")
     body = [l.get("final") or l.get("to") for l in d.get("links", []) if l.get("where") == "body"]
@@ -175,7 +175,7 @@ def up_across(ctx):
     ctx.verdict(probs, f"links to {len(posts)} posts of its cluster", "add contextual links up/down/across from sentences that name the target (rule 89)")
 
 
-@check("links.no-utm", "34", what="no utm_ on internal links, in the HTML or the page's source", needs="nextjs")
+@check("links.no-utm", "34", what="no utm_ on internal links, in the HTML or the page's source", needs="repo")
 def no_utm(ctx):
     root = ctx.root()
     probs = [a.get("href")[:60] for a in find_all(root, "a") if ctx.internal_path(a.get("href")) and "utm_" in a.get("href")]
@@ -183,7 +183,7 @@ def no_utm(ctx):
     ctx.verdict(probs, "no utm_ on internal links", "name the CTA with a data attribute or event, not a utm_ parameter (rule 34)")
 
 
-@check("copy.shared", "131", what="one shared copy component: no other file touches the clipboard; emails, phones and shown URLs have copy buttons", needs="nextjs")
+@check("copy.shared", "131", what="one shared copy component: no other file touches the clipboard; emails, phones and shown URLs have copy buttons", needs="repo")
 def copy_shared(ctx):
     probs = []
     for f in ctx.repo_files():
@@ -204,7 +204,7 @@ def copy_shared(ctx):
     ctx.verdict(probs, "one shared copy component, every email/phone has a copy button", "use components/copy-button.tsx (rule 131)")
 
 
-@check("state.url", "79", types=("money", "hub"), what="the page's own interactive element keeps its state in the URL", needs="nextjs")
+@check("state.url", "79", types=("money", "hub"), what="the page's own interactive element keeps its state in the URL", needs="repo")
 def state_url(ctx):
     src = "\n".join(ctx.tree_sources().values())
     if re.search(r"useSearchParams|URLSearchParams|history\.(replaceState|pushState)|router\.(replace|push)\(", src):
@@ -213,7 +213,7 @@ def state_url(ctx):
         ctx.fail("no URL state in the page's components", "keep the tool's state in the query string (useSearchParams/replaceState) (rule 79)")
 
 
-@check("motion.no-libs", "58", what="motion with CSS and a little script: no animation library; reduced motion respected", needs="nextjs")
+@check("motion.no-libs", "58", what="motion with CSS and a little script: no animation library; reduced motion respected", needs="repo")
 def no_libs(ctx):
     pkg = ctx.need_file(ctx.need_repo() / "package.json", "check --repo")
     deps = json.loads(pkg.read_text())
@@ -224,7 +224,7 @@ def no_libs(ctx):
     ctx.verdict(probs, "no animation library; reduced motion handled", "build motion with CSS + IntersectionObserver; honor prefers-reduced-motion (rule 58)")
 
 
-@check("css.scroll-padding", "99", what="html { scroll-padding-top } is set for the sticky header", needs="nextjs")
+@check("css.scroll-padding", "99", what="html { scroll-padding-top } is set for the sticky header", needs="repo")
 def scroll_padding(ctx):
     if re.search(r"html\s*\{[^}]*scroll-padding-top\s*:", ctx.css_text()):
         ctx.ok("scroll-padding-top is set on html")
@@ -232,15 +232,16 @@ def scroll_padding(ctx):
         ctx.fail("no html { scroll-padding-top }", "set it to the sticky header height plus a gap in app/globals.css (rule 99)")
 
 
-@check("repo.file-size", "124", what="no source file of the page or the branch is over 1,000 lines", needs="nextjs")
+@check("repo.file-size", "124", what="no source file of the page or the branch is over 1,000 lines", needs="repo")
 def file_size(ctx):
     repo = ctx.need_repo()
-    files = set(ctx.tree_sources()) | {repo / f for f in ctx.branch_files() if (repo / f).is_file() and f.endswith((".ts", ".tsx", ".css", ".mjs", ".py"))}
+    code = (".ts", ".tsx", ".css", ".mjs", ".js", ".jsx", ".py", ".astro", ".svelte", ".vue")
+    files = {f for f in ctx.tree_sources() if f.suffix in code} | {repo / f for f in ctx.branch_files() if (repo / f).is_file() and f.endswith(code)}
     probs = [f"{f.relative_to(repo)} {n} lines" for f in sorted(files) if (n := len(f.read_text(errors='replace').splitlines())) > 1000]
     ctx.verdict(probs, f"{len(files)} files, all under 1,000 lines", "split the file into smaller modules (rule 124)")
 
 
-@check("repo.no-secrets", "119", what="no key, token or old export file in the branch", needs="nextjs")
+@check("repo.no-secrets", "119", what="no key, token or old export file in the branch", needs="repo")
 def no_secrets(ctx):
     repo = ctx.need_repo()
     probs = []
@@ -253,7 +254,7 @@ def no_secrets(ctx):
     ctx.verdict(probs, f"{len(ctx.branch_files())} changed files, no secrets", "remove the secret, rotate the key, keep keys in ~/.config only (rule 119)")
 
 
-@check("repo.commit-identity", "118", what="every commit on the branch uses the repo's commit identity (growth.json commit_identity.email; else a noreply address)", needs="nextjs")
+@check("repo.commit-identity", "118", what="every commit on the branch uses the repo's commit identity (growth.json commit_identity.email; else a noreply address)", needs="repo")
 def commit_identity(ctx):
     out = ctx.git("log", ctx.base_ref() + "..HEAD", "--format=%h %ae %ce")
     rows = [l.split() for l in out.splitlines() if l.strip()]
@@ -263,9 +264,10 @@ def commit_identity(ctx):
     ctx.verdict(bad, f"{len(rows)} branch commit(s), all {ctx.identity_rule()}", fix + "; fix with git rebase --exec 'git commit --amend --reset-author --no-edit'")
 
 
-@check("repo.commit-style", "123", what="every branch commit has a one-line subject and the co-author line", needs="nextjs")
+@check("repo.commit-style", "123", what="every branch commit has a one-line subject and the co-author line", needs="repo")
 def commit_style(ctx):
-    out = ctx.git("log", ctx.base_ref() + "..HEAD", "--format=%h%x1f%s%x1f%b%x1e")
+    since = str((ctx.cfg.get("commit_style") or {}).get("since") or "")      # commits before it are history: not rewritten (2.6.0)
+    out = ctx.git("log", ctx.base_ref() + "..HEAD", *(["--since=" + since] if since else []), "--format=%h%x1f%s%x1f%b%x1e")
     probs = []
     for rec in out.split("\x1e"):
         if not rec.strip():
@@ -278,7 +280,7 @@ def commit_style(ctx):
     ctx.verdict(probs, "branch commits are one plain sentence with the co-author line", "commit by path with one sentence and the co-author line (rule 123)")
 
 
-@check("repo.branch", "114", what="the work is on a branch with an allowed prefix (growth.json branch_prefixes; default page/, article/, fix/, design/) that is not merged into the production branch", needs="nextjs")
+@check("repo.branch", "114", what="the work is on a branch with an allowed prefix (growth.json branch_prefixes; default page/, article/, fix/, design/) that is not merged into the production branch", needs="repo")
 def branch(ctx):
     b = ctx.git("rev-parse", "--abbrev-ref", "HEAD").strip()
     base = ctx.base_ref()
@@ -293,7 +295,7 @@ def branch(ctx):
     ctx.verdict(probs, f"on branch {b}, not merged", "work on a branch with an allowed prefix (growth.json branch_prefixes); merge only on the owner's yes (rule 114)")
 
 
-@check("repo.content-reader", "104", what="only the one named module reads the content files (growth.json content_reader)", needs="nextjs")
+@check("repo.content-reader", "104", what="only the one named module reads the content files (growth.json content_reader)", needs="repo")
 def content_reader(ctx):
     reader = ctx.nx("content_reader")
     if not reader:
@@ -310,7 +312,7 @@ def content_reader(ctx):
     ctx.verdict(probs, f"only {reader} reads the content files", f"read content through {reader} (rule 104)")
 
 
-@check("repo.static-build", "100", what="the page builds statically: no force-dynamic, no revalidate 0, no cookies()/headers() in its tree", needs="nextjs")
+@check("repo.static-build", "100", what="the page builds statically: no force-dynamic, no revalidate 0, no cookies()/headers() in its tree", needs="repo")
 def static_build(ctx):
     probs = []
     for f, s in ctx.tree_sources().items():
@@ -319,13 +321,13 @@ def static_build(ctx):
     ctx.verdict(probs, f"{len(ctx.tree_sources())} source files, all static-safe", "remove the dynamic call; the build stays fully static (rule 100)")
 
 
-@check("repo.no-random-ids", "102", what="no random ids in the page's markup (Math.random, randomUUID)", needs="nextjs")
+@check("repo.no-random-ids", "102", what="no random ids in the page's markup (Math.random, randomUUID)", needs="repo")
 def no_random(ctx):
     probs = [str(f.relative_to(ctx.repo)) for f, s in ctx.tree_sources().items() if re.search(r"Math\.random\(|randomUUID\(", s)]
     ctx.verdict(probs, "no random ids", "use React useId() or a stable key (rule 102)")
 
 
-@check("repo.scroll-test", "107", what="a regression test asserts scrollY === 0 after navigation", needs="nextjs")
+@check("repo.scroll-test", "107", what="a regression test asserts scrollY === 0 after navigation", needs="repo")
 def scroll_test(ctx):
     tests = ctx.repo_files(("tests/**/*.ts", "e2e/**/*.ts", "**/*.spec.ts"))
     if any("scrollY" in t.read_text(errors="replace") for t in tests):
@@ -334,7 +336,7 @@ def scroll_test(ctx):
         ctx.warn("no Playwright test asserting window.scrollY === 0", "add it once the owner allows Playwright in the site repo (rule 107; open)")
 
 
-@check("repo.guard-tests", "156", types=("money", "hub", "post"), what="a test checks the page's house features and its FAQ markup", needs="nextjs")
+@check("repo.guard-tests", "156", types=("money", "hub", "post"), what="a test checks the page's house features and its FAQ markup", needs="repo")
 def guard_tests(ctx):
     tests = ctx.repo_files(("lib/*.test.ts", "components/**/*.test.ts", "tests/**/*.ts"))
     key = ctx.need_key()
@@ -346,13 +348,13 @@ def guard_tests(ctx):
     ctx.verdict(probs, f"house-features test: {hf[0].name if hf else ''}", "add lib/<page>-house-features.test.ts (rules 110, 151, 156)")
 
 
-@check("repo.logo-untouched", "42", what="the branch does not change the approved logo files", needs="nextjs")
+@check("repo.logo-untouched", "42", what="the branch does not change the approved logo files", needs="repo")
 def logo(ctx):
     probs = [f for f in ctx.branch_files() if re.search(r"(?i)(^public/brand/|logo)", f)]
     ctx.verdict(probs, "logo files unchanged", "revert the logo change; the lockup is approved as is (rule 42)")
 
 
-@check("repo.tokens", "41", what="changed CSS uses tokens: no raw hex colour outside a custom property", needs="nextjs")
+@check("repo.tokens", "41", what="changed CSS uses tokens: no raw hex colour outside a custom property", needs="repo")
 def tokens(ctx):
     repo = ctx.need_repo()
     probs = []
@@ -369,7 +371,7 @@ def tokens(ctx):
     ctx.verdict(probs, "changed CSS uses tokens only", "move the colour into a token (--name: #hex) and use var(--name) (rule 41)")
 
 
-@check("repo.url-frozen", "73", what="the branch renames or deletes no route or content slug", needs="nextjs")
+@check("repo.url-frozen", "73", what="the branch renames or deletes no route or content slug", needs="repo")
 def url_frozen(ctx):
     out = ctx.git("diff", "--name-status", ctx.base_ref() + "...HEAD")
     dirs = "|".join(re.escape(d.strip("/")) for d in (ctx.nx("posts_dir", "content/posts"), ctx.nx("pages_dir", "content/pages")))
@@ -377,7 +379,7 @@ def url_frozen(ctx):
     ctx.verdict(probs, "no route or slug renamed or deleted", "keep the URL; a move needs one 301 and the owner's yes (rule 73)")
 
 
-@check("repo.redirects-untouched", "75", what="the branch does not touch the redirect config without a journal decision", needs="nextjs")
+@check("repo.redirects-untouched", "75", what="the branch does not touch the redirect config without a journal decision", needs="repo")
 def redirects(ctx):
     watched = set(ctx.nx("redirect_files", [])) | {"middleware.ts", "next.config.ts", "next.config.js", "next.config.mjs", "vercel.json", "netlify.toml"}
     touched = [f for f in ctx.branch_files() if f in watched]
@@ -386,7 +388,7 @@ def redirects(ctx):
                 "ask first; file the owner's yes with growth journal add --kind decision --tag redirect (rule 75)")
 
 
-@check("repo.retired-410", "76", what="retired page groups still answer 410 (growth.json retired_paths)", needs="nextjs")
+@check("repo.retired-410", "76", what="retired page groups still answer 410 (growth.json retired_paths)", needs="repo")
 def retired_410(ctx):
     paths = ctx.nx("retired_paths", [])
     if not paths:
@@ -399,7 +401,7 @@ def retired_410(ctx):
     ctx.verdict(lost, f"{len(paths)} retired group(s) still answer 410", "restore the 410 for the retired group (rule 76)")
 
 
-@check("repo.bulk-backup", "120", what="a bulk change (20+ content files or shared components) has a backup tag", needs="nextjs")
+@check("repo.bulk-backup", "120", what="a bulk change (20+ content files or shared components) has a backup tag", needs="repo")
 def bulk(ctx):
     files = ctx.branch_files()
     content = [f for f in files if f.startswith("content/")]
@@ -412,20 +414,20 @@ def bulk(ctx):
                 f"backup tag {tags[:1]}", "git tag backup-<date> <production branch> before the rollout; try one page first (rule 120)")
 
 
-@check("repo.no-migration", "122", what="the branch does not run or change one-off migration scripts", needs="nextjs")
+@check("repo.no-migration", "122", what="the branch does not run or change one-off migration scripts", needs="repo")
 def no_migration(ctx):
     probs = [f for f in ctx.branch_files() if re.search(r"(?i)scripts/.*(migrat|import)", f)]
     ctx.verdict(probs, "migration scripts untouched", "never re-run a one-off migration script over live content (rule 122)")
 
 
-@check("repo.temp-clean", "112", what="no leftover temp folders (test-results, playwright-report, .tmp) in the worktree", needs="nextjs")
+@check("repo.temp-clean", "112", what="no leftover temp folders (test-results, playwright-report, .tmp) in the worktree", needs="repo")
 def temp_clean(ctx):
     repo = ctx.need_repo()
     probs = [p.name for p in repo.iterdir() if p.name in ("test-results", "playwright-report", ".tmp", "tmp", "coverage")]
     ctx.verdict(probs, "no temp folders left", "remove the temp folder your check made (rule 112)")
 
 
-@check("repo.shared-components", "52", types=("money", "hub", "core"), what="the page uses the shared components, never its own copy", needs="nextjs")
+@check("repo.shared-components", "52", types=("money", "hub", "core"), what="the page uses the shared components, never its own copy", needs="repo")
 def shared(ctx):
     tree = ctx.tree_sources()
     src = "\n".join(tree.values())
@@ -442,7 +444,7 @@ def shared(ctx):
     ctx.verdict(probs, "shared components used", "use the shared component from components/ (rule 52)")
 
 
-@check("js.no-autoscroll", "67", what="nothing scrolls the page on load (no scrollTo/scrollIntoView in a mount effect)", needs="nextjs")
+@check("js.no-autoscroll", "67", what="nothing scrolls the page on load (no scrollTo/scrollIntoView in a mount effect)", needs="repo")
 def autoscroll(ctx):
     probs = []
     for f, s in ctx.tree_sources().items():
@@ -452,13 +454,13 @@ def autoscroll(ctx):
     ctx.verdict(probs, "no scroll on mount", "scroll only on a reader's action (rule 67)")
 
 
-@check("owner.waits-148", "148", what="no Markdown copies or llms.txt until the owner says yes", needs="nextjs")
+@check("owner.waits-148", "148", what="no Markdown copies or llms.txt until the owner says yes", needs="repo")
 def waits_148(ctx):
     added = [f for f in ctx.branch_files() if re.search(r"(^public/llms\.txt$|^app/llms\.txt|\.md/route\.ts$)", f)]
     ctx.verdict(added, "nothing built for rule 148 (waits for the owner)", "remove it until the owner answers open question 1 (rule 148)")
 
 
-@check("site.no-cms", "OR-site-stays", types=ALL, what="the site keeps its Markdown content in files: no CMS package added", needs="nextjs")
+@check("site.no-cms", "OR-site-stays", types=ALL, what="the site keeps its Markdown content in files: no CMS package added", needs="repo")
 def no_cms(ctx):
     pkg = json.loads(ctx.need_file(ctx.need_repo() / "package.json", "check --repo").read_text())
     deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
@@ -468,7 +470,7 @@ def no_cms(ctx):
 
 
 
-@check("repo.no-unused-code", "124a", what="no unused import, variable or parameter in the files the branch changed (tsc --noUnusedLocals)", needs="nextjs")
+@check("repo.no-unused-code", "124a", what="no unused import, variable or parameter in the files the branch changed (tsc --noUnusedLocals)", needs="repo")
 def no_unused_code(ctx):
     """Rule: clear dead and unused code. A sweep once found an import the
     branch left unused and a fix whose helper was imported but never called (the edit had not been saved): both are
@@ -497,7 +499,7 @@ def no_unused_code(ctx):
                 "remove the unused import or variable, or use what was meant to be used (rule 124a)")
 
 
-@check("repo.no-dead-files", "124a", what="every component, lib file and stylesheet the branch adds or changes is still used; every test's subject exists", needs="nextjs")
+@check("repo.no-dead-files", "124a", what="every component, lib file and stylesheet the branch adds or changes is still used; every test's subject exists", needs="repo")
 def no_dead_files(ctx):
     """From a real project: "do cleanup and housekeeping of your own created dead code and test files". A rework removes
     what it replaced in the same commit: a file the branch touched that nothing imports any more is dead code."""

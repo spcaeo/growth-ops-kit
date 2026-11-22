@@ -18,7 +18,7 @@ def not_on(ctx, f):
     return f.get("not_on", [p for p in (ctx.cfg.get("conversion_path"), (ctx.cfg.get("cta") or {}).get("contact_path")) if p])
 
 
-@check("cta.one-color", "32b", types=("money", "hub", "core"), what="every primary button is painted with the one CTA colour token", needs="nextjs")
+@check("cta.one-color", "32b", types=("money", "hub", "core"), what="every primary button is painted with the one CTA colour token", needs="repo")
 def one_color(ctx):
     CTA_HEX, CTA_PRESSED, TOKEN = colors(ctx)
     root = ctx.root()
@@ -45,7 +45,7 @@ def one_color(ctx):
                 f"paint every primary booking button (header, sticky bar, sections, dialogs) with background: var({TOKEN}) (rule 32b)")
 
 
-@check("cta.events", "133", what="every CTA event of growth.json cta.events exists in the site code and the page renders the CTA components", needs="nextjs")
+@check("cta.events", "133", what="every CTA event of growth.json cta.events exists in the site code and the page renders the CTA components", needs="repo")
 def events(ctx):
     events = (ctx.cfg.get("cta") or {}).get("events") or []
     if not events:
@@ -61,7 +61,7 @@ def events(ctx):
                 "push the missing dataLayer event from the shared component (rule 133); GTM needs a trigger for each")
 
 
-@check("dialog.backdrop", "134", types=("money", "hub", "core"), what="every dialog opens on a dimmed ::backdrop with a solid panel", needs="nextjs")
+@check("dialog.backdrop", "134", types=("money", "hub", "core"), what="every dialog opens on a dimmed ::backdrop with a solid panel", needs="repo")
 def backdrop(ctx):
     root = ctx.root()
     css = ctx.css_text()
@@ -76,7 +76,7 @@ def backdrop(ctx):
     ctx.verdict(probs, "every dialog has a dimmed backdrop", "add .<dialog>::backdrop { background: <token> } (rule 134)")
 
 
-@check("cta.glow", "32c", types=("money", "hub", "core"), what="the primary CTA glows in its own colour; pulses at most twice, never endlessly", needs="nextjs")
+@check("cta.glow", "32c", types=("money", "hub", "core"), what="the primary CTA glows in its own colour; pulses at most twice, never endlessly", needs="repo")
 def glow(ctx):
     CTA_HEX, _pressed, _token = colors(ctx)
     r, g, b = (int(CTA_HEX.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))

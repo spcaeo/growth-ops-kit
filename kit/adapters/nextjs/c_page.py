@@ -6,7 +6,7 @@ from gatelib.c_page import *  # noqa: F401,F403
 from gatelib.core import check  # noqa: F401
 
 
-@check("layout.table-scroll", "48", what="every wide table sits in its own scroll box", needs="nextjs")
+@check("layout.table-scroll", "48", what="every wide table sits in its own scroll box", needs="repo")
 def table_scroll(ctx):
     m = domx.main(ctx.root())
     probs = []

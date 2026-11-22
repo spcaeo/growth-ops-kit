@@ -6,7 +6,7 @@ from gatelib.c_links import *  # noqa: F401,F403
 from gatelib.core import check  # noqa: F401
 
 
-@check("links.blue", "36c", what="in-text links and their '+' use one link-blue token (#1a5fd0 / #6ea8ff), underlined, never the brand or CTA colour, contrast 4.5:1 or more", needs="nextjs")
+@check("links.blue", "36c", what="in-text links and their '+' use one link-blue token (#1a5fd0 / #6ea8ff), underlined, never the brand or CTA colour, contrast 4.5:1 or more", needs="repo")
 def blue(ctx):
     from .c_page import prose_links
     from gatelib import domx
@@ -55,7 +55,7 @@ def blue(ctx):
                 f"define {name or '--link-blue'}: {LIGHT} (dark {DARK}); give in-text links and the '+' color: {use} and an underline (rule 36c)")
 
 
-@check("links.card-glow", "36c", what="the open link preview card glows in link blue: a 1-2 px blue ring plus a blue blur of 24 px or more", needs="nextjs")
+@check("links.card-glow", "36c", what="the open link preview card glows in link blue: a 1-2 px blue ring plus a blue blur of 24 px or more", needs="repo")
 def card_glow(ctx):
     css = ctx.css_text()
     name = token(css)[0] or "--link-blue"
@@ -85,7 +85,7 @@ def card_glow(ctx):
                 f"box-shadow: 0 0 0 1px var({name}), 0 12px 32px -8px color-mix(in srgb, var({name}) 35%, transparent) (rule 36c)")
 
 
-@check("links.spacing", "36c", what="no word is glued to an in-text link: a space before and after every link in the rendered page and in the JSX source", needs="nextjs")
+@check("links.spacing", "36c", what="no word is glued to an in-text link: a space before and after every link in the rendered page and in the JSX source", needs="repo")
 def spacing(ctx):
     """From a real project: 'your new "+" logic removes the space, which is required sometimes; it should be properly
     checked internally'. JSX drops a line break between text and a <Link>, so 'and\\n<Link>not in' renders 'andnot in'."""
@@ -112,7 +112,7 @@ def spacing(ctx):
                 "put {\" \"} between text and a <Link> that sit on separate JSX lines (rule 36c)")
 
 
-@check("links.punct", "36c", what="punctuation right after a link sits after the '+' with no space, and link words + '+' + punctuation never split across lines", needs="nextjs")
+@check("links.punct", "36c", what="punctuation right after a link sits after the '+' with no space, and link words + '+' + punctuation never split across lines", needs="repo")
 def punct(ctx):
     """From a real project: 'how should that "," be handled, before the + or after the +?' Answer: words, then '+', then
     the comma, one unbreakable group. Checked in the shared link-card code (it must pull a leading punctuation mark of
@@ -136,7 +136,7 @@ def punct(ctx):
                 "in the link-card code move a leading , . ; : ! ? ) of the next text node into .lcx-slot after the '+'; nowrap the slot; add a test (rule 36c)")
 
 
-@check("icons.check-circle", "36e", what="list ticks are a tick inside a circle, one shared component, in the green 'yes' colour", needs="nextjs")
+@check("icons.check-circle", "36e", what="list ticks are a tick inside a circle, one shared component, in the green 'yes' colour", needs="repo")
 def check_circle(ctx):
     repo = ctx.need_repo()
     probs = []
