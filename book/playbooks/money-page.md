@@ -147,7 +147,10 @@ every interactive control, "+" preview cards on every prose link, and a clean te
    lead decides the hook, journey and interaction from the evidence; the concept file is the builder's input, not
    something the owner reads. In chat, ask only what the owner alone can answer (claims, offers, old pages to merge),
    in a few one-click questions with a safe default each; build on the defaults while the answers come in.
-3a. **Fold plan before any build** (rule 36h): `growth fold_plan init <path> --url <local URL> --key <key>`, then
+3a. **Fact inventory and fold plan before any build** (rule 36h; 2.8.0): first list every fact the page will state,
+   its source and the folds it sits in (each fact once in full, at most one short echo in the hero or a call to
+   action); the independent reviewer reads the inventory and the plan before the build (BLOCKING or NIT, see
+   [lanes](../04-lanes-and-releases.md)). Then: `growth fold_plan init <path> --url <local URL> --key <key>`, then
    answer all 14 detail fields for every fold and the 7 shared elements in `research/plans/<key>.json`. The builder
    works from it and `growth fold_plan check` must say "plan complete" before the build starts.
 3b. **Pre-flight: nothing is built until everything is set** (rule 0a; from a real project: "when you start a new page
@@ -166,7 +169,8 @@ every interactive control, "+" preview cards on every prose link, and a clean te
    gate's `repo.no-dead-files` and `repo.no-unused-code` pass; a scan for files nothing imports finds none the page
    left behind. Dead code that was already on the production branch goes on its own branch (`chore/...`), never into a
    page branch. Do this BEFORE shots and the click-test: any commit after them makes the page's evidence stale.
-5. **GOLDEN RULE before check-in 2** (from a real project: "never share a URL before it is 100% approved and checked;
+5. **GOLDEN RULE before check-in 2** (this step and 5b come after READY by definition, so ev.task-steps lets them
+   wait while step 6 is done; tick them when they happen, never before) (from a real project: "never share a URL before it is 100% approved and checked;
    this cannot be broken"). Step 6's checks run FIRST, all of them: research cross-check, CRO audit, independent
    review, fresh shots and click-test, share preview, AI baseline (speed is measured after publishing, on the
    production site). Then `growth ready <path> --type ... --key ...` must say READY (the full gate, 0 FAIL, at the

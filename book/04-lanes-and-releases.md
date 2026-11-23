@@ -99,11 +99,50 @@ merges. The rules:
 
 The project lists its own shared files in `SETUP.md`.
 
+## Many pages at once: the page flow (2.8.0)
+
+From a real project (23 Nov 2026): 12 pages went through four review rounds in one day and none was accepted. Each round
+fixed 30 to 50 findings and the next round found as many new ones; ready ran one page at a time (25 minutes for 12);
+builders waited for the reviewer and the reviewer waited for builders; one commit anywhere made every page not READY. The
+owner: "the process is fully broken, the speed is super slow, the process runs in sequence vs in parallel". The fixes:
+
+- **Pages flow one by one, never in rounds.** Queues, not batches: planned -> plan reviewed -> built -> reviewed (0
+  BLOCKING) -> READY -> accepted. Each page moves on its own and counts the moment it is accepted. No page waits for
+  another page's review, and the next pages start while earlier ones are reviewed.
+- **The reviewer is always on.** It takes pages from the "built" queue while the builder builds the next ones (the
+  builder stays 2 to 3 pages ahead). A page sent back goes to the front of the builder's queue.
+- **Review the plan before the build** (about 5 minutes): the fact inventory and the fold plan. Borrowed drawings,
+  proof from another field, two folds doing one job and a fact said three times are cheapest to fix on paper.
+- **Fact inventory first.** Before writing a fold, list every fact the page states, its source, and the folds it sits
+  in. Each fact is said once in full, with at most one short echo in the hero or a call to action
+  (words.fact-repeats checks it).
+- **BLOCKING or NIT, nothing in between.** BLOCKING: an unsourced or wrong claim, internal wording a buyer can read, a
+  part broken or cut at any width, an empty half or an orphan, a fact said three or more times, two folds with one job or
+  one shape, a drawing that tells another page's story. Everything else is a NIT on a list; a NIT never blocks a page.
+  A page is accepted at 0 BLOCKING. A second look checks the closures plus a fresh look for BLOCKING only.
+- **Two strikes, then a machine.** A finding class seen on two pages becomes a check (a site test, or a kit check) the
+  same day, and every page in the queue and every accepted page is checked against it. A reviewer is for judgement,
+  not for counting repeats.
+- **Fix once, carry everywhere.** A fix found on one page is applied to every page with the same problem, by the lane
+  that owns the shared code, before the builders' next pages.
+- **Ready runs side by side, after every merge:** `growth ready --batch ledger --stale-only --jobs 3`. READY holds while
+  a page's built output is byte for byte the same, so a fix to one page re-checks that page only; a shared CSS change
+  re-checks the pages whose output it changed. 12 pages: 3 minutes, not 25.
+- **Evidence lives in the project.** Shots, click-tests and every proof a task tick names sit in research/ or journal/,
+  never in a scratchpad or /tmp (a clean-up once broke the ticks of a dozen finished pages; 2.8.0 refuses such proofs).
+- **Someone wakes the lanes.** A lane that ends its turn while waiting stops for good: one night, work stopped at 1:48
+  and started again at 13:00. The lead runs an hourly check that nudges any idle lane with open work.
+- **Owner rules about how the team works** are logged with "(no page rule)" in docs/steps-log.md, so they do not make
+  every page brief stale at once.
+- **Measure before you guess.** `growth gate page ... --profile` prints each check's seconds; the slowest checks are the
+  first to fix.
+
 ## Speed: what helped and what did not
 
 - **No double checks.** The lane runs the suite once. The lead does not run it again unless the production branch
   moved and the branch was rebased. Writers do not build.
-- **Release each page alone** when it is ready and approved. Batches waited on the slowest page.
+- **Release each page alone** when it is ready and approved. Batches waited on the slowest page. The same holds
+  before release: pages flow one by one through review and ready (see "Many pages at once" above).
 - **On one laptop, 2 to 3 lanes plus a release is the most that helps.** More lanes made every page slower. A second
   machine with its own lanes is the real way to go faster.
 - **Automate every clash you see twice** (a checklist or a small script), but only for text that is safe to merge by
