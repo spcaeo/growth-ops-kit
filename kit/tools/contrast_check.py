@@ -25,7 +25,7 @@ same on every page. So:
   - a hover that did not take (the mouse missed the control, or something covers it) is retried at each line of the control
     and then on the next control of the group, and the hover is let go before focus is read;
   - each measurement is kept under <project>/.cache/contrast/, keyed by sha256(signature + colours at rest + width + a hash
-    of the page's CSS (every stylesheet, linked, inline or imported) + browser version + this tool's own code). Any CSS change
+    of the page's CSS and JavaScript (every stylesheet, linked, inline or imported) + browser version + this tool's own code). Any CSS change
     gives new keys. Only a measurement where :hover really applied and focus was read is kept.
     `--no-cache` skips it, `--no-dedupe` measures every control (the old way), growth.json "contrast_cache": false
     switches the cache off for the gate.
@@ -42,23 +42,6 @@ from pathlib import Path
 
 CACHE_VERSION = 1          # bump when the cache entry format changes
 WIDTHS = (1366, 390)
-
-JS_COLLECT = r"""
-() => {
-  const sel = 'a[href], button, [role=button], [role=tab], [role=radio], [role=switch], summary, input[type=submit], input[type=button]';
-  const out = [];
-  document.querySelectorAll(sel).forEach((el, i) => {
-    const r = el.getBoundingClientRect();
-    const cs = getComputedStyle(el);
-    if (r.width < 4 || r.height < 4 || cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) return;
-    if (el.closest('[aria-hidden=true], [hidden], [inert]')) return;
-    const text = (el.innerText || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 60);
-    el.setAttribute('data-cc', String(i));
-    out.push({ id: String(i), text, tag: el.tagName.toLowerCase(), cls: (el.className && el.className.baseVal === undefined ? el.className : '').toString().slice(0, 60) });
-  });
-  return out;
-}
-"""
 
 # The page's CSS: every stylesheet's text (linked, inline, @import-ed, adopted), plus the "probes": the selectors whose answer
 # a class list cannot give (an attribute selector, a position among siblings, a + or ~ combinator, :has). Each probe is asked
@@ -91,6 +74,7 @@ async () => {
     return out;
   };
   const texts = [];
+  const unreadable = [];
   for (const s of [...document.styleSheets, ...(document.adoptedStyleSheets || [])]) {
     let body = '';
     try {
@@ -103,13 +87,26 @@ async () => {
         setTimeout(() => ac.abort(), 4000);
         body = await (await fetch(s.href, { signal: ac.signal })).text();
         for (const m of body.matchAll(/([^{}]+)\{/g)) note(m[1]);
-      } catch (e2) { body = 'unreadable ' + (s.href || ''); }
+      } catch (e2) { body = 'unreadable ' + (s.href || ''); unreadable.push(s.href || '(sheet)'); }
     }
     texts.push(((s.media && s.media.mediaText) || '') + (s.disabled ? ' disabled' : '') + '\n' + body);
   }
   const ids = new Set();
   for (const t of texts) for (const m of t.matchAll(/#(-?[_a-zA-Z][\w-]*)/g)) ids.add(m[1]);
-  return { text: texts.join('\n/*sheet*/\n'), probes: [...probes].sort().slice(0, 4000), ids: [...ids].sort() };
+  // the page's JavaScript is part of what can change a state (a class added on mouseenter or focus): inline text, and each
+  // external script's source read the way the page got it
+  const js = [];
+  for (const sc of document.scripts) {
+    if (!sc.src) { js.push('inline\n' + sc.text); continue; }
+    try {
+      const ac = new AbortController();
+      setTimeout(() => ac.abort(), 4000);
+      const resp = await fetch(sc.src, { signal: ac.signal });
+      js.push(sc.src + '\n' + await resp.text());
+    } catch (e) { js.push('unreadable ' + sc.src); unreadable.push(sc.src); }
+  }
+  const all = [...probes].sort();
+  return { text: texts.join('\n/*sheet*/\n'), js: js.join('\n/*script*/\n'), unreadable, probes: all.slice(0, 4000), probeTotal: all.length, ids: [...ids].sort() };
 }
 """
 
@@ -217,6 +214,14 @@ JS_MEASURE = r"""
 JS_MEASURE_ALL = "(ids) => { const m = " + JS_MEASURE + "; return ids.map((id) => m(id)); }"
 # This tool's own measuring code is part of every cache key: change it and the old entries are simply not found.
 CODE_HASH = hashlib.sha256((JS_CSS + JS_COLLECT + JS_MEASURE).encode()).hexdigest()[:16]
+
+
+PROBE_LIMIT = 4000
+
+
+def _page_hash(css):
+    """One hash for what can change a control's look: the page's CSS and its JavaScript (inline and external)."""
+    return hashlib.sha256((css["text"] + "\0js\0" + css["js"]).encode("utf-8", "replace")).hexdigest()
 
 
 def lum(c):
@@ -443,7 +448,16 @@ def _page_width(browser, url, width, height, cache, dedupe, stats):
         page.wait_for_timeout(800)
         page.add_style_tag(content="*{transition:none!important;animation:none!important}")
         css = page.evaluate(JS_CSS)
-        css_hash = hashlib.sha256(css["text"].encode("utf-8", "replace")).hexdigest()
+        css_hash = _page_hash(css)
+        if css["unreadable"]:
+            # a sheet or script we cannot read could change without the key changing: measure live, keep nothing
+            print(f"contrast_check: cannot read {len(css['unreadable'])} stylesheet/script file(s) (e.g. {css['unreadable'][0]}); "
+                  "measuring live, cache off for this page", file=sys.stderr)
+            cache = None
+        if css["probeTotal"] > PROBE_LIMIT:
+            print(f"contrast_check: {css['probeTotal']} selector probes (limit {PROBE_LIMIT}); grouping of look-alike controls is off for this page",
+                  file=sys.stderr)
+            dedupe = False
         items = page.evaluate(JS_COLLECT, {"probes": css["probes"], "ids": css["ids"]})
         rest = page.evaluate(JS_MEASURE_ALL, [it["id"] for it in items]) if items else []
         groups, order = {}, []
@@ -469,7 +483,7 @@ def _page_width(browser, url, width, height, cache, dedupe, stats):
             measured[key] = states
         # keep the new measurements only if the page's CSS is still what it was when the keys were made (a sheet that finished
         # loading half way through would give a key that does not match what was measured)
-        if keep and hashlib.sha256(page.evaluate(JS_CSS)["text"].encode("utf-8", "replace")).hexdigest() == css_hash:
+        if keep and _page_hash(page.evaluate(JS_CSS)) == css_hash:
             for key, states in keep:
                 cache.put(key, states)
         stats["controls"] += len(items)

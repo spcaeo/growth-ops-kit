@@ -15,6 +15,7 @@ Core (#93):
 - ev.task-steps: the golden-rule and check-in-2 steps may come after READY.
 - ev.brief: a steps-log rule row marked "(no page rule)" (a process rule) no longer makes every page brief stale.
 - Book: "Many pages at once: the page flow" (04-lanes-and-releases); money-page playbook step 3a is a fact inventory and fold plan, reviewed before the build.
+- Review fixes: a build only vouches when it is newer than the moment HEAD last moved (a fast-forward or checkout to an older commit no longer leaves an old build trusted); the commit and output are read before the gate, and a change while it runs is NOT READY; a page that fails is kept in `journal/ready-failed.json` so `--batch ledger` checks it again; duplicate batch lines run once; a preview-repo problem is reported once for the batch; a proof path that climbs out with `../` is refused, and a site path such as `/pricing/index.html` is not taken for a file; "(no page rule)" and "(no new rule)" count only in the What was done column.
 - Tests: `tests/test_release_2_8_0_core.py`.
 
 Checks (#94): the finding classes a reviewer kept finding by hand.
@@ -31,6 +32,9 @@ Speed (#95):
   - A hover that did not take (the mouse missed the middle of a wrapped link, or a sticky bar covered the control) is retried at each line of the link, then with the control brought to the middle of the screen, then on the next look-alike control; the hover is let go before focus is read. A stored measurement is therefore never a miss, and focus never shows a leftover hover (before, the same control could read differently from one run to the next on a busy machine). A group whose hover or focus could not be read at all is measured again on every run, never kept.
   - `phone_check`: one browser for all four widths (a fresh context per width), measured side by side: about 4 s instead of 14, with the same answers on every page tried, failing and passing. Each page keeps all of its own settle waits. growth.json `"phone_parallel": false` or `phone_check --serial` measures them one after the other.
   - `growth gate page --profile`: after the normal output, each check's seconds (slowest 25) and the total, on stderr.
+  - `contrast_check` review fixes: a stylesheet or script that cannot be read (cross-origin fetch fails) turns the cache off for that page (measured live, one line on stderr) instead of hashing fixed text.
+  - `contrast_check` review fixes: the cache key now includes a hash of the page's JavaScript (inline text and external script sources), so a script that adds a class on hover or focus cannot leave stale passes.
+  - `contrast_check` review fixes: more than 4000 selector probes no longer cuts the list silently; grouping of look-alike controls is turned off for that page with a one-line warning on stderr. The dead first `JS_COLLECT` was removed.
 - Not changed, on purpose: `tags.not-local` waits 5.5 s by design (a tag manager may load 4 s late) and `repo.no-unused-code` is the site's own `astro check` or `tsc`; neither can be shortened without catching less.
 - Tests: `tests/test_contrast_phone_checks.py`.
 

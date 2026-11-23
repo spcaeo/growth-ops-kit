@@ -330,3 +330,64 @@ def test_gate_page_profile_flag_leaves_the_normal_output_alone(tmp_path):
         assert "Profile: seconds per check" in prof.stderr and "icons.no-emoji" in prof.stderr and "Total:" in prof.stderr
     finally:
         srv.shutdown()
+
+
+def test_a_script_change_misses_the_kept_measurements(tmp_path):
+    cache = tmp_path / "cache"
+    base, srv = served(tmp_path)
+    try:
+        def write(js):
+            (tmp_path / "a.js").write_text(js)
+            (tmp_path / "j.html").write_text(f"<!doctype html><meta name=viewport content='width=device-width'><style>{FINE}</style>{LIST}<script src='a.js'></script>")
+        write("/* v1 */")
+        a, b, c = {}, {}, {}
+        contrast_check.check(base + "/j.html", cache_dir=cache, stats=a)
+        contrast_check.check(base + "/j.html", cache_dir=cache, stats=b)
+        assert a["measured"] > 0 and b["measured"] == 0
+        # the script now paints a pale hover on mouseenter: same CSS, so only the script hash can tell
+        write("document.querySelectorAll('footer a').forEach(a=>a.addEventListener('mouseenter',()=>{a.style.color='#ccc'}))")
+        pc, _ = contrast_check.check(base + "/j.html", cache_dir=cache, stats=c)
+        assert c["cached"] == 0 and any("hover" in x for x in pc), (c, pc)
+    finally:
+        srv.shutdown()
+
+
+def test_an_inline_script_change_misses_the_kept_measurements(tmp_path):
+    cache = tmp_path / "cache"
+    a, b = {}, {}
+    contrast_check.check(page(tmp_path, LIST + "<script>/*1*/</script>", FINE), cache_dir=cache, stats=a)
+    contrast_check.check(page(tmp_path, LIST + "<script>/*2*/</script>", FINE), cache_dir=cache, stats=b)
+    assert a["measured"] > 0 and b["cached"] == 0
+
+
+def test_an_unreadable_sheet_or_script_turns_the_cache_off_and_says_so(tmp_path, capsys):
+    cache = tmp_path / "cache"
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "x.css").write_text(FINE)
+    (tmp_path / "other" / "x.js").write_text("/* x */")
+    base, srv = served(tmp_path)
+    base2, srv2 = served(tmp_path / "other")          # another origin, no CORS header: the page cannot read it
+    try:
+        for tag in (f"<link rel=stylesheet href='{base2}/x.css'>", f"<script src='{base2}/x.js'></script>"):
+            (tmp_path / "u.html").write_text(f"<!doctype html><meta name=viewport content='width=device-width'>{tag}{LIST}")
+            for _ in range(2):
+                st = {}
+                contrast_check.check(base + "/u.html", cache_dir=cache, stats=st)
+                assert st["cached"] == 0 and st["measured"] > 0, st
+            assert "cannot read" in capsys.readouterr().err
+        assert not list(cache.glob("*/*.json")) if cache.exists() else True
+    finally:
+        srv.shutdown()
+        srv2.shutdown()
+
+
+def test_more_than_4000_probes_turns_grouping_off_with_a_warning(tmp_path, capsys):
+    css = FINE + "".join(f" a[data-k{i}]{{color:#111}}" for i in range(4001))
+    st = {}
+    contrast_check.check(page(tmp_path, LIST, css), cache_dir=tmp_path / "cache", stats=st)
+    assert st["groups"] == st["controls"], st          # every control on its own
+    assert "grouping" in capsys.readouterr().err
+    st2 = {}
+    contrast_check.check(page(tmp_path, LIST, FINE + " a[data-k1]{color:#111}"), stats=st2)
+    assert st2["groups"] < st2["controls"]
+    assert "grouping" not in capsys.readouterr().err
