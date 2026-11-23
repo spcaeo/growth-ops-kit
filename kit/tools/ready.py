@@ -77,6 +77,25 @@ def _released(commit):
     return r.returncode == 0
 
 
+def head_moved_at(repo):
+    """When the worktree's HEAD last moved (commit, merge, pull, checkout, reset): the newest of the commit's own time and
+    the HEAD reflog / HEAD file times. A fast-forward to an older commit moves HEAD without a new commit time, so the
+    commit time alone let a build made before the move vouch for code it never saw (2.8.0 review). None when unknown."""
+    times = []
+    ct = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%ct"], capture_output=True, text=True).stdout.strip()
+    if ct.isdigit():
+        times.append(int(ct))
+    for name in ("logs/HEAD", "HEAD"):
+        gp = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-path", name], capture_output=True, text=True).stdout.strip()
+        if gp:
+            fp = Path(gp) if Path(gp).is_absolute() else repo / gp
+            try:
+                times.append(fp.stat().st_mtime)
+            except OSError:
+                pass
+    return max(times) if times else None
+
+
 def page_fp(path, repo=None):
     """The page's fingerprint from the built output (growth.json build_dir), or None when there is no build, the page is
     not in it, or the build is older than the preview repo's last commit (an old build cannot vouch for the code now)."""
@@ -90,13 +109,23 @@ def page_fp(path, repo=None):
         if not f:
             return None
         if repo is not None and (repo / ".git").exists():
-            ct = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%ct"], capture_output=True, text=True).stdout.strip()
-            if ct.isdigit() and f.stat().st_mtime < int(ct):
+            moved = head_moved_at(repo)
+            if moved is None or f.stat().st_mtime <= moved:
                 return None
         fp = fingerprint.current(CFG, PROJECT, repo, path)
         return fp if fp and fp.get("src") == "build" else None
     except Exception:  # noqa: BLE001  (no fingerprint: the commit rule decides)
         return None
+
+
+FAILED = PROJECT / "journal" / "ready-failed.json"
+
+
+def failed():
+    try:
+        return json.loads(FAILED.read_text())
+    except (OSError, ValueError):
+        return {}
 
 
 def status(path, entry=None, now=None, repo=None):
@@ -262,27 +291,34 @@ def main():
     cmd = [sys.executable, str(KIT_DIR / "tools" / "gate.py"), "page", path, "--url", url,
            "--type", a.type, "--key", a.key] + (["--repo", str(repo)] if repo else [])
     t0 = time.time()
+    c0, fp0 = head(repo), page_fp(path, repo)
     r = run_gate(cmd)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
     broken = key_problem(path, a.key) or gate_problem(r, a.type)
     if broken:
         fails.insert(0, f"FAIL {broken}")
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
+    if head(repo) != c0 or page_fp(path, repo) != fp0:
+        fails.insert(0, "FAIL the code or the build changed while the gate ran: run growth ready again on the settled tree")
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     held_lines = held_proposals(a.key)
     if fails:
         atomic.update_json(LEDGER, lambda x: x.pop(path, None) and None, default={}, indent=1)
+        atomic.update_json(FAILED, lambda x: x.update({path: {"type": a.type, "key": a.key, "commit": c0,
+                           "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "first": fails[0][:200]}}),
+                           default={}, indent=1)
         print(f"NOT READY {path}: {len(fails)} FAIL, {oks} OK. The URL may not be shared with the owner.")
         for l in fails:
             print(" ", l[:200])
         print_held(held_lines)
         sys.exit(1)
-    entry = {"commit": head(repo), "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "ok": oks, "url": url,
+    entry = {"commit": c0, "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "ok": oks, "url": url,
              "type": a.type, "key": a.key, "secs": round(time.time() - t0)}
-    fp = page_fp(path, repo)
-    if fp:
-        entry["fp"] = fp
+    if fp0:
+        entry["fp"] = fp0
     atomic.update_json(LEDGER, lambda x: x.update({path: entry}), default={}, indent=1)
+    if path in failed():
+        atomic.update_json(FAILED, lambda x: x.pop(path, None) and None, default={}, indent=1)
     d = {path: entry}
     print(f"READY {path}: 0 FAIL, {oks} OK at {d[path]['commit'][:7]}. It may be shared: {url}")
     print_held(held_lines)
@@ -290,8 +326,9 @@ def main():
 
 def batch_lines(src):
     """[(path, type, key)] from a file ("<path> <type> <key>" a line, # comments) or "ledger" (pages checked since 2.8.0)."""
-    if src == "ledger":
-        return [(p, e["type"], e["key"]) for p, e in sorted(ledger().items()) if e.get("type") and e.get("key")]
+    if src == "ledger":   # READY pages and pages that failed their last check (journal/ready-failed.json)
+        both = {**failed(), **ledger()}
+        return [(p, e["type"], e["key"]) for p, e in sorted(both.items()) if e.get("type") and e.get("key")]
     out = []
     for ln in Path(src).expanduser().read_text().splitlines():
         ln = ln.split("#", 1)[0].strip()
@@ -300,7 +337,8 @@ def batch_lines(src):
         parts = ln.split()
         if len(parts) != 3 or parts[1] not in ("money", "core", "hub", "post"):
             sys.exit(f"bad batch line (want '<path> <type> <key>'): {ln}")
-        out.append(tuple(parts))
+        if tuple(parts) not in out:   # a page twice would run twice at once and one log would overwrite the other
+            out.append(tuple(parts))
     return out
 
 
@@ -309,6 +347,8 @@ def run_batch(src, jobs=0, stale_only=False, repo=None):
     is exactly what a single run gives. Prints each verdict as it lands, then the totals and the full log's location."""
     import concurrent.futures as cf
     rows = batch_lines(src)
+    if repo is None and preview_repo_problem():   # once here, not as a bare NOT READY on every page
+        return preview_repo_problem()
     jobs = jobs or int(CFG.get("ready_jobs") or 3)
     kept, todo = [], []
     for p, t, k in rows:

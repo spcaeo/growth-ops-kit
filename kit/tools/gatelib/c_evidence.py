@@ -499,7 +499,10 @@ def brief(ctx):
     rows = [r for r in log.read_text().splitlines() if re.match(r"\|\s*I-\d+\s*\|", r)] if log.exists() else []
     # 2.8.0: a rule about how the team works, not about what a page says or shows, is marked "(no page rule)" and does not
     # make page briefs stale either (from a real project: "pause and fix the kit first" dropped 12 READY pages at once).
-    rule_rows = [r for r in rows if "no new rule" not in r.lower() and "no page rule" not in r.lower()]
+    def done(r):   # ID | Date | What the owner said | What was done | Where: the owner's quoted words never count
+        cells = r.split("|")
+        return (cells[-3] if len(cells) >= 6 else r).lower()
+    rule_rows = [r for r in rows if "no new rule" not in done(r) and "no page rule" not in done(r)]
     if rows:
         newest = re.match(r"\|\s*(I-\d+)", rule_rows[-1]).group(1) if rule_rows else None
         ids = {int(x) for x in re.findall(r"\bI-(\d+)\b", b.read_text())}

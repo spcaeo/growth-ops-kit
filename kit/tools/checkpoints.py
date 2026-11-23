@@ -127,10 +127,15 @@ def outside_files(text, project=None, repos=()):
     roots = [Path(r).expanduser().resolve() for r in ((project,) + tuple(repos or ())) if r] + [KIT_ROOT]
     bare = URL_RE.sub(" ", str(text or ""))
     out = []
+    disk = ("/Users/", "/home/", "/private/", "/tmp/", "/var/", "/Volumes/", "/opt/", "/root/")
     for f in FILE_RE.findall(bare):
         cand = Path(f).expanduser()
         if not cand.is_absolute():
-            continue
+            if ".." not in cand.parts:
+                continue
+            cand = Path(project).expanduser() / cand   # ../scratch/notes.md climbs out of the project
+        elif not cand.exists() and not str(cand).startswith(disk) and not f.startswith("~"):
+            continue   # "/pricing/index.html in dist" is a site path, not a file on this machine
         try:
             rc = cand.resolve()
         except OSError:

@@ -34,6 +34,8 @@ def site(tmp_path, demo_project, monkeypatch):
     import ready
     monkeypatch.setattr(ready, "PROJECT", demo_project)
     monkeypatch.setattr(ready, "LEDGER", demo_project / "journal" / "ready.json")
+    monkeypatch.setattr(ready, "FAILED", demo_project / "journal" / "ready-failed.json")
+    monkeypatch.setattr(ready, "preview_repo_problem", lambda: None)
     monkeypatch.setattr(ready, "CFG", {"preview_url": "http://127.0.0.1:9", "build_dir": "dist", "site_repo": str(repo),
                                        "preview_repo": str(repo)})
     monkeypatch.setattr(ready, "preview_repo", lambda: repo)
@@ -187,3 +189,81 @@ def test_a_process_rule_does_not_make_page_briefs_stale(tmp_path):
     one = '| I-1 | 2026-11-22 | "use X" | Set rule X. | BRAND |\n'
     assert line([one, '| I-2 | 2026-11-23 | "fix the kit first" | Rule: page work pauses (no page rule). | lead |\n']).level == "OK"
     assert line([one, '| I-2 | 2026-11-23 | "use Y" | Set rule Y. | BRAND |\n']).level == "FAIL"
+
+
+# ---- 2.8.0 review fixes ----
+
+def test_a_build_made_before_head_moved_back_never_vouches(site):
+    """A fast-forward (or checkout, reset) to a commit made before the last build moves HEAD with no new commit time."""
+    import ready
+    git(site, "checkout", "-qb", "lane")
+    commit(site, "broken change")             # made now, on a lane
+    git(site, "checkout", "-q", "-")
+    touch_build(site)                         # the preview is built from the old main
+    record(ready, "/a")
+    assert ready.is_ready("/a")
+    time.sleep(1.1)
+    git(site, "merge", "-q", "--ff-only", "lane")   # HEAD moves to an OLDER commit than the build; nobody rebuilds
+    later = time.time() + 30
+    os.utime(site / ".git" / "logs" / "HEAD", (later, later))   # the move happened after the build
+    assert ready.page_fp("/a") is None and not ready.is_ready("/a")
+
+
+def test_a_commit_while_the_gate_runs_is_not_ready(site, monkeypatch, capsys):
+    import ready
+    touch_build(site)
+
+    def gate(cmd):
+        commit(site, "landed during the gate")
+        return subprocess.CompletedProcess(cmd, 0, "OK a\nOK b\n", "")
+    monkeypatch.setattr(ready, "run_gate", gate)
+    for name in ("key_problem", "gate_problem"):
+        monkeypatch.setattr(ready, name, lambda *a: None)
+    monkeypatch.setattr(ready, "manual_problems", lambda *a: [])
+    monkeypatch.setattr(ready, "held_proposals", lambda *a: [])
+    monkeypatch.setattr(sys, "argv", ["ready", "/a", "--type", "post", "--key", "a"])
+    with pytest.raises(SystemExit):
+        ready.main()
+    assert "changed while the gate ran" in capsys.readouterr().out
+    assert "/a" not in ready.ledger() and "/a" in ready.failed()
+
+
+def test_a_failed_page_stays_in_the_ledger_batch(site):
+    import ready
+    touch_build(site)
+    record(ready, "/a")
+    ready.atomic.update_json(ready.FAILED, lambda x: x.update({"/b": {"type": "hub", "key": "b"}}), default={}, indent=1)
+    assert ready.batch_lines("ledger") == [("/a", "post", "a"), ("/b", "hub", "b")]
+    assert not ready.is_ready("/b")
+
+
+def test_batch_lines_drop_duplicates(tmp_path, site):
+    import ready
+    f = tmp_path / "pages.txt"
+    f.write_text("/a hub a\n/a hub a\n")
+    assert ready.batch_lines(str(f)) == [("/a", "hub", "a")]
+
+
+def test_relative_and_site_paths_in_proofs(demo_project, tmp_path):
+    import checkpoints
+    out = demo_project.parent / "scratch" / "n.md"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text("x")
+    why = checkpoints.proof_problem("file ../scratch/n.md shows the layout", demo_project, [])
+    assert why and "outside the project" in why
+    assert not checkpoints.outside_files("checked /pricing/index.html in dist at a1b2c3d", demo_project, [])
+    assert checkpoints.outside_files("file /private/tmp/gone/n.md", demo_project, [])   # a deleted scratch file still counts
+
+
+def test_the_owners_quoted_words_never_mark_a_row(tmp_path):
+    from gatelib import CHECKS
+    from gatelib.core import Ctx, run_check
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "steps-log.md").write_text(
+        "| ID | Date | What the owner said | What was done | Where |\n| I-1 | d | \"x\" | Set X. | B |\n"
+        "| I-2 | d | \"this is no page rule, it is a site rule: use Y\" | Set rule Y. | B |\n")
+    (tmp_path / "research" / "briefs").mkdir(parents=True)
+    (tmp_path / "research" / "briefs" / "pg.md").write_text("| I-1 | ... |\n")
+    c = Ctx(project=tmp_path, path="/pg/", key="pg", ptype="core", cfg={}, html="", url="", status=200, docs=tmp_path / "docs")
+    run_check(c, CHECKS["ev.brief"])
+    assert c.lines[-1].level == "FAIL"
