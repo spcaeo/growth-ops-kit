@@ -13,9 +13,30 @@
   "site_repo_remote": "",
   "commit_identity": {
     "name": "",
-    "email": ""
+    "email": "",
+    "email_sha256": ""
   },
-  "_commit_identity": "The git identity commits to the site repo must carry (rule 118; checks repo.commit-identity and proc.commit-identity, Next.js adapter). Set email for a private repo whose commits carry the owner's own identity on purpose. Empty email = the kit's default: every commit must use a GitHub noreply address.",
+  "_commit_identity": "The git identity commits to the site repo must carry (rule 118; checks repo.commit-identity and proc.commit-identity, any stack with a site checkout). Set email for a private repo whose commits carry the owner's own identity on purpose. Empty email = the kit's default: every commit must use a GitHub noreply address. email_sha256 (2.6.0) names the identity by the sha256 of the lower-case address, so a private address never has to be written into a project file; when set it wins over email (echo -n you@example.com | shasum -a 256).",
+  "commit_style": {
+    "since": ""
+  },
+  "_commit_style": "Rule 123 (check repo.commit-style). since (2.6.0): a date such as 2026-11-22; commits made before it are history and are not checked or rewritten (no force push, no rebase of shared branches). Empty = every branch commit is checked.",
+  "components": {
+    "copy": "",
+    "link_cards": "",
+    "link_cards_css_class": "",
+    "link_cards_marker": "",
+    "sticky_cta": "",
+    "call_dialog": "",
+    "exit_offer": "",
+    "tick": "",
+    "tests": []
+  },
+  "_components": "Where the site keeps its shared parts, for the checks that read the site's code on any stack (2.6.0): the one copy component, the '+' link-preview card, the sticky bar, the call dialog, the exit offer and the circled Tick, each a path from the site repo (src/components/frame/CopyOpen.astro). link_cards_css_class is the card's class prefix (lc for .lc .lc__title); link_cards_marker an attribute the page carries when the card is drawn; tests is a list of globs for the site's test files. Every key is optional: a part with no path is found by its file name under src/ (kebab or Pascal case: copy-button / CopyOpen, link-cards / LinkCard, sticky-cta / StickyCta, call-dialog / CallDialog, exit-offer / ExitOffer, tick / Tick); on Next.js the old components/*.tsx paths are the default; tests default to **/*.test.*, tests/** and e2e/**.",
+  "link_graph": {
+    "max_age_hours": 24
+  },
+  "_link_graph": "Checks links.inbound, links.plan, links.up-across, links.anchor-unique and links.no-redirect read inventory/link-graph.db on a stack that is not Next.js (2.6.0). The graph is fresh when its last crawl is newer than the site's last commit and no older than max_age_hours; otherwise the check prints a blocked SKIP naming the command: growth link_graph crawl --base <preview URL>. locale_prefixes: language folders the crawl joins into one page.",
   "branch_prefixes": [
     "page/",
     "article/",

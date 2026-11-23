@@ -98,6 +98,8 @@ def write_plan(path, ptype, key, checks, stack=None, extra_rules=None):
         phase = ("release" if c.stage == "release" else "before" if c.cid in PLAN else
                  "finish" if c.cid in FINISH else "fold")
         skip = f" **SKIP on this stack** ({stack}: needs a Next.js site, so it prints SKIP, never FAIL)" if c.needs == "nextjs" and stack != "nextjs" else ""
+        if c.needs == "repo":       # 2.6.0: reads the site's code on any stack; it needs the checkout, never a particular stack
+            skip = " **needs the site checkout** (--repo or growth.json site_repo; without it the gate prints a blocked SKIP, never a pass)"
         when[phase].append((c.cid, f"`{c.cid}` (rule {c.rule}): {c.what}{skip}"))
     head = {"before": "1. Before the build (growth preflight must PASS)",
             "fold": "2. After EVERY fold commit (gate on the preview; fix before the next fold, never at the end)",

@@ -446,6 +446,20 @@ class Ctx:
             self.cache["css"] = "\n".join(f.read_text(errors="replace") for f in files)
         return self.cache["css"]
 
+    def component(self, name):
+        """The shared component `name` (copy, link_cards, sticky_cta, call_dialog, exit_offer, tick): growth.json
+        components.<name>, else the Next.js default path, else found by file name under src/ (gatelib/components.py)."""
+        from . import components
+        return components.find_component(self, name)
+
+    def test_files(self, extra=()):
+        from . import components
+        return components.test_files(self, extra)
+
+    def key_path(self):
+        """The page path as the link graph writes it: no trailing slash ("/" for the home page)."""
+        return self.need_path().rstrip("/") or "/"
+
     def nx(self, key, default=None):
         """A setting of growth.json "nextjs" (how this site's code is laid out); `default` when it is not set."""
         if key in SITE_KEYS:           # stack-neutral keys: top level first, the older nextjs block as a fallback
@@ -465,10 +479,16 @@ class Ctx:
     def branch_files(self):
         """Files changed on the worktree's branch vs the production branch, plus uncommitted and untracked ones."""
         if "bfiles" not in self.cache:
-            a = self.git("diff", "--name-only", self.base_ref() + "...HEAD").split()
-            b = self.git("diff", "--name-only", "HEAD").split()
+            base = self.base_ref()
+            code, mb = run(["git", "-C", str(self.need_repo()), "merge-base", base, "HEAD"], timeout=60)
+            if code == 0 and mb.strip():
+                # the working tree against where the branch left the production branch: a file the branch changed and put
+                # back (an empty diff) is not listed (2.6.0)
+                tracked = self.git("diff", "--name-only", mb.strip()).split()
+            else:
+                tracked = self.git("diff", "--name-only", base + "...HEAD").split() + self.git("diff", "--name-only", "HEAD").split()
             c = self.git("ls-files", "--others", "--exclude-standard").split()
-            self.cache["bfiles"] = sorted(set(a + b + c))
+            self.cache["bfiles"] = sorted(set(tracked + c))
         return self.cache["bfiles"]
 
     def commit_email(self):

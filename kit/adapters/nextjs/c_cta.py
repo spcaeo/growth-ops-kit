@@ -51,7 +51,7 @@ def events(ctx):
     if not events:
         raise Skip("no CTA events in growth.json (cta.events)")
     comps = (ctx.cfg.get("cta") or {}).get("components") or []
-    files = ctx.repo_files(("components/**/*.tsx", "components/**/*.ts", "lib/**/*.ts"))
+    files = ctx.repo_files(("components/**/*.tsx", "components/**/*.ts", "lib/**/*.ts") if ctx.stack() == "nextjs" else None)   # any other stack: every source file under src/ (.astro included)
     src = "\n".join(f.read_text(errors="replace") for f in files if ".test." not in f.name)
     missing = [e for e in events if e not in src]
     tree = "\n".join(ctx.tree_sources().values())

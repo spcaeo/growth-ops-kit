@@ -102,14 +102,25 @@ def test_weak_page_fix_lines_say_what_to_do(weak):
     assert "->" in hype and "'" in hype                       # it names the word and gives the fix
 
 
-def test_whole_gate_skips_the_nextjs_adapter_on_a_static_site(base):
+def test_repo_checks_are_blocked_without_a_checkout_and_run_with_one_on_a_static_site(base, tmp_path):
+    """2.6.0: the checks that read the site's code (needs="repo") run on any stack when a checkout is given. Without one they
+    print a blocked SKIP (never a pass); with one they run (an OK or a FAIL, never "no adapter for static")."""
     r, lines, _ = gate(base, "/lawn-mowing")
-    nx = [l for l in lines if l.startswith("SKIP") and "no adapter for static" in l]
-    assert len(nx) >= 40, f"{len(nx)} adapter checks skipped"
-    assert any(l.startswith("SKIP repo.no-secrets: no adapter for static") for l in lines)
+    blocked = [l for l in lines if l.startswith("BLOCKED-SKIP") and "needs the site checkout" in l]
+    assert len(blocked) >= 40, f"{len(blocked)} repo checks blocked"
+    assert any(l.startswith("BLOCKED-SKIP repo.no-secrets: needs the site checkout") for l in lines)
+    assert not any("no adapter for static" in l for l in lines)
     assert not any(l.startswith("OK") and "[repo." in l for l in lines)
     summary = next(l for l in lines if l.startswith("Gate:"))
-    assert re.search(r"\d+ SKIP", summary)
+    assert re.search(r"\d+ BLOCKED-SKIP", summary)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from fixtures.astro_repo import make_astro_repo
+    repo = make_astro_repo(tmp_path / "site")
+    r2, lines2, _ = gate(base, "/lawn-mowing", "--repo", str(repo))
+    ran = [l for l in lines2 if re.match(r"(OK|FAIL|WARN)\b", l) and "[repo." in l]
+    assert len(ran) >= 15, f"only {len(ran)} repo checks ran with a checkout"
+    assert not any("check crashed" in l for l in lines2), [l for l in lines2 if "check crashed" in l]
+    assert not any("needs the site checkout" in l for l in lines2)
 
 
 def test_the_gate_refuses_the_real_site(base):

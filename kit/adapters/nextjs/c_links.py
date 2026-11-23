@@ -2,8 +2,19 @@
 They run only when growth.json "stack" is "nextjs"; on any other stack the gate prints SKIP for each."""
 from __future__ import annotations
 
+from gatelib import components
 from gatelib.c_links import *  # noqa: F401,F403
 from gatelib.core import check  # noqa: F401
+
+# A "+" drawn by CSS on the link itself (a ::after on a text link) is a marker too (an Astro / static site has no -plus class)
+JOINER = re.compile(r"content\s*:\s*['\"](\\2060|\\u2060|\u2060)['\"]|white-space\s*:\s*nowrap", re.I)
+
+
+def css_plus(css):
+    """[(selector, body)] of rules that draw a marker after a text link: `<...> a<...>::after { content: ...; border or background }`."""
+    return [(sel.strip(), b) for sel, b in RULE.findall(css)
+            if re.search(r"(?:^|[\s>)])a(?![\w-])[^{}]*::?after\s*$", sel.strip()) and re.search(r"(?<![\w-])content\s*:", b)
+            and re.search(r"border|background", b)]
 
 
 @check("links.blue", "36c", what="in-text links and their '+' use one link-blue token (#1a5fd0 / #6ea8ff), underlined, never the brand or CTA colour, contrast 4.5:1 or more", needs="repo")
@@ -47,8 +58,13 @@ def blue(ctx):
     if off:
         probs.append(f"underline removed: {off[0]}")
     plus = [(s, b) for s, b in RULE.findall(css) if re.search(r"\.[\w-]*-plus(?![\w-])", s)]
-    if not plus:
+    marker = css_plus(css) if not plus else []
+    if not plus and not marker:
         probs.append("no CSS for the '+' marker")
+    elif marker:
+        # a ::after on the link itself takes the link's colour (currentColor), which the in-text link rules above already check
+        if any(brandish(ctx).search(b) for s, b in marker):
+            probs.append("the '+' marker is painted in the brand or CTA colour")
     elif not any(use in b for s, b in plus if re.search(r"(?<![\w-])color\s*:", b)):
         probs.append(f"the '+' marker does not use color: {use}")
     ctx.verdict(probs, f"{len(links)} in-text links in {use} ({lv} / {dv}), underlined; the '+' matches",
@@ -60,10 +76,12 @@ def card_glow(ctx):
     css = ctx.css_text()
     name = token(css)[0] or "--link-blue"
     blue_re = re.compile(r"var\(" + re.escape(name) + r"|" + LIGHT + "|" + DARK + r"|rgba?\(\s*(26[\s,]+95[\s,]+208|110[\s,]+168[\s,]+255)", re.I)
+    pre = components.css_prefix(ctx)
+    own = f"|{re.escape(pre)}" if ctx.stack() != "nextjs" else ""      # the site's own card class (.lc), not only .lcx-card
     cards = [(s.strip(), b) for s, b in RULE.findall(css)
-             if re.search(r"\.(lcx-card|[\w-]*link-?card)(?![\w-])", s.split(",")[-1]) and "box-shadow" in b]
+             if re.search(r"\.(lcx-card|[\w-]*link-?card" + own + r")(?![\w-])", s.split(",")[-1]) and "box-shadow" in b]
     if not cards:
-        ctx.fail("no box-shadow on the link preview card (.lcx-card or .link-card)", "add the blue ring and glow to the card (rule 36c)")
+        ctx.fail("no box-shadow on the link preview card (.lcx-card, .link-card or the class of growth.json components.link_cards_css_class)", "add the blue ring and glow to the card (rule 36c)")
         return
     ring = glow = False
     for _, b in cards:
@@ -119,6 +137,8 @@ def punct(ctx):
     the next text node into the '+' slot) and by a site test that names this case."""
     repo = ctx.need_repo()
     probs = []
+    if ctx.stack() != "nextjs":
+        return punct_any_stack(ctx)
     comp = [f for f in ctx.repo_files(("components/**/*.tsx",)) if "lcx-plus" in f.read_text(errors="replace")]
     if not comp:
         probs.append("no shared link-card component (class lcx-plus) found")
@@ -136,14 +156,43 @@ def punct(ctx):
                 "in the link-card code move a leading , . ; : ! ? ) of the next text node into .lcx-slot after the '+'; nowrap the slot; add a test (rule 36c)")
 
 
+def punct_any_stack(ctx):
+    """Any other stack: the link-preview component exists, the '+' is glued to the link's last word (a word joiner U+2060 or a
+    nowrap box in the marker's CSS) so the punctuation after the link follows it and a line never starts with a lone '+',
+    and a site test names the glue."""
+    probs = []
+    comp = ctx.component("link_cards")
+    if not (comp and comp.is_file()):
+        probs.append("no shared link-card component found (set growth.json components.link_cards)")
+    css = ctx.css_text()
+    pre = components.css_prefix(ctx)
+    slot = re.search(r"\." + re.escape(pre) + r"-slot[^{]*\{[^}]*white-space\s*:\s*nowrap", css)
+    marker = css_plus(css)
+    if not slot and not any(JOINER.search(b) for _, b in marker):
+        probs.append("the '+' marker is not glued to the link's last word (a word joiner U+2060 in its ::after content, or a nowrap slot)")
+    tests = [t.read_text(errors="replace") for t in ctx.test_files()]
+    if not any(re.search(r"glued|joiner|2060|punctuation|comma|full stop", t, re.I) and re.search(r"marker|link.?card|\+", t, re.I) for t in tests):
+        probs.append("no site test covers the '+' staying with the link's last word and its punctuation")
+    ctx.verdict(probs, "the '+' keeps the following punctuation with it, no space, no line break",
+                "glue the marker to the link's last word (U+2060 in the ::after content or a nowrap slot) and add a test (rule 36c)")
+
+
 @check("icons.check-circle", "36e", what="list ticks are a tick inside a circle, one shared component, in the green 'yes' colour", needs="repo")
 def check_circle(ctx):
     repo = ctx.need_repo()
     probs = []
-    shared = [f for f in ctx.repo_files(("components/**/*.tsx",)) if re.search(r"export\s+(default\s+)?function\s+Tick\b", f.read_text(errors="replace"))]
-    if not shared:
-        probs.append("no shared Tick component (export function Tick) in components/")
-    for f in ctx.repo_files(("app/**/*.tsx", "components/**/*.tsx")):
+    if ctx.stack() == "nextjs":
+        shared = [f for f in ctx.repo_files(("components/**/*.tsx",)) if re.search(r"export\s+(default\s+)?function\s+Tick\b", f.read_text(errors="replace"))]
+        if not shared:
+            probs.append("no shared Tick component (export function Tick) in components/")
+        scan = ctx.repo_files(("app/**/*.tsx", "components/**/*.tsx"))
+    else:       # Tick.astro, Tick.vue, tick.svelte, tick.tsx ...: the component file found by name, any source extension
+        tick = ctx.component("tick")
+        shared = [tick] if tick and tick.is_file() else []
+        if not shared:
+            probs.append("no shared Tick component found (a Tick file under src/, or growth.json components.tick)")
+        scan = ctx.repo_files()
+    for f in scan:
         if f.name in TICK_OK or f in shared:
             continue
         t = f.read_text(errors="replace")
@@ -151,12 +200,12 @@ def check_circle(ctx):
             probs.append(f"{f.relative_to(repo)}: bare tick (use the shared Tick)")
     for f in shared:
         t = f.read_text(errors="replace")
-        if not re.search(r"Circle", t):
+        if not re.search(r"Circle|<circle|border-radius\s*:\s*50%", t, 0 if ctx.stack() == "nextjs" else re.I):
             probs.append(f"{f.relative_to(repo)}: Tick has no circle (CircleCheck / CircleCheckBig or an SVG circle)")
     css = ctx.css_text()
     if not re.search(r"--[\w-]*(yes|tick|success|ok)[\w-]*\s*:\s*#", css):
         probs.append("no green 'yes' colour token (e.g. --color-yes)")
     ctx.verdict(probs, "every list tick is the shared circled Tick in the 'yes' colour",
-                "make components/tick.tsx (export function Tick: a tick inside a circle, var(--color-yes)) and use it for every list tick (rule 36e)")
+                "make the one shared Tick component (components/tick.tsx on Next.js, Tick.astro on Astro: a tick inside a circle, var(--color-yes)) and use it for every list tick (rule 36e)")
 
 

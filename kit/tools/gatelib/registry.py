@@ -12,7 +12,7 @@ from config import REGISTRY, RULEBOOK  # noqa: E402
 
 ENFORCEMENT = ("code", "judgment")
 SCOPES = ("money", "hub", "post", "core", "site", "process")
-NEEDS = ("live", "project", "nextjs")      # what a check reads: the live page, the project folder, the site's code
+NEEDS = ("live", "project", "nextjs", "repo")      # what a check reads: the live page, the project folder, the site's code (repo: any stack, nextjs: Next.js only)
 
 
 def rulebook_ids(book: Path = RULEBOOK):
