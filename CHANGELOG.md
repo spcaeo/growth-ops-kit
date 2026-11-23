@@ -4,11 +4,16 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
-## 2.6.4 - 2026-11-22
+## 2.6.5 - 2026-11-22
 
 - claims.box-numbers (10): text inside <time> (a byline or card date) is no box number. (#89)
 - layout.column-ratio (158a): inline children (links in a wrapped paragraph) are never a two-column row. (#89)
 - Tests: `tests/test_release_2_6_4_box_time.py`, `tests/test_release_2_4_0_layout.py`.
+
+## 2.6.4 - 2026-11-22
+
+- inventory: growth.json `pillars_are_money` (default true). False marks a silo's top page a money page only when it is listed in `money_core`, so a pillar that maps its cluster is judged as a hub (rule 26).
+- Test: `tests/test_release_2_6_4_pillars.py`.
 
 ## 2.6.3 - 2026-11-22
 
