@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.6.2 - 2026-11-22
+
+- layout.card-orphan (158a): only a grid of like children (most share one tag and first class) is a card grid; a hero laid out as a heading, a picture and an answer box is a layout. (#88)
+- links.blue (36c): a link rule scoped to a dark surface may use a light --*link* token, because the light-mode link blue fails contrast on dark ink; never the brand or CTA colour. (#88)
+- Tests: `tests/test_release_2_4_0_layout.py`, `tests/test_release_2_6_1_links_logo_home.py`.
+
 ## 2.6.1 - 2026-11-22
 
 - links.blue (36c): growth.json `links.not_text` (regex alternatives) names a site's own menu, contents or badge classes that are not running text. Hover and focus colours are left out of the colour test (rule 36j). The dark link colour is required only when the site has a dark theme (prefers-color-scheme: dark, [data-theme=dark], .dark). (#87)
