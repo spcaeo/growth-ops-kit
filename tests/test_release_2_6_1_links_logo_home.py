@@ -22,3 +22,9 @@ def test_logo_pattern_is_logo_named_files_only():
     pat = re.compile(r"(?i)(logo|lockup|wordmark|brand-mark)[^/]*$")
     assert pat.search("src/components/frame/Logo.astro") and pat.search("public/brand/logo-word.svg")
     assert not pat.search("public/brand/tick.svg")
+
+
+def test_dark_surface_link_token_pattern():
+    """2.6.2: a link rule scoped to a dark surface may use a light --*link* token."""
+    on_dark = re.compile(r"(?i)dark|ink|night|\[data-theme=[\"']?dark")
+    assert on_dark.search('[data-surface="dark"] a:not(.btn)') and re.search(r"var\(--[\w-]*link[\w-]*\)", "var(--link-on-ink)")

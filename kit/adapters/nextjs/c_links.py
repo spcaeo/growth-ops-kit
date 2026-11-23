@@ -52,8 +52,12 @@ def blue(ctx):
     if rules and not any(use in c for _, c in colours):
         probs.append(f"no in-text link rule sets color: {use}")
     # a hover or focus state may change the colour (rule 36j: a hover changes one thing the reader can see)
+    # a link on a dark surface may use a light link token (any --*link* custom property): the link blue would fail
+    # contrast there (2.6.2); it still may not be the brand or CTA colour
+    on_dark = re.compile(r"(?i)dark|ink|night|\[data-theme=[\"']?dark")
     bad = [f"{s[-40:]} color: {c}" for s, c in colours if not re.search(r":(hover|focus)", s)
-           and (brandish(ctx).search(c) or (use not in c and c not in ("inherit", "currentColor")))]
+           and (brandish(ctx).search(c) or (use not in c and c not in ("inherit", "currentColor")
+                                            and not (on_dark.search(s) and re.search(r"var\(--[\w-]*link[\w-]*\)", c))))]
     probs += [f"in-text link in another colour: {b}" for b in bad[:3]]
     if rules and not any(re.search(r"text-decoration(-line)?\s*:[^;]*underline", b) for _, b in rules):
         probs.append("in-text links are not underlined")

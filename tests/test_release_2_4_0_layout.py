@@ -67,6 +67,9 @@ PAGES = {
     "mech": page(HERO, *[sec(n, '<div class="flip-card">x</div>' + block(100)) for n in "abc"]),
     "toc": page(HERO, sec("desk", cols('<nav class="toc">' + block(60) + '</nav>', block(900))),
                 sec("tool", '<div data-tool>' + grid(4) + '</div>' + block(300))),
+    "hero3": page(sec("hero", '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">'
+                         '<h1 style="height:60px">T</h1><svg width="300" height="200"></svg><aside style="height:120px;border:1px solid #000">A</aside></div>', pad=30),
+                  FILL("a")),
     "terms-good": page(sec("text", block(300))),
     "terms-bad": page(sec("text", block(300) + CTA), extra='<div class="sticky-cta"><p>Call us</p></div>'),
 }
@@ -173,3 +176,8 @@ def test_text_meta_row_is_not_a_card_grid(run):
     the same row with bordered children still fails."""
     assert run("meta", "layout.card-orphan").level == "OK"
     assert run("boxcards", "layout.card-orphan").level == "FAIL"
+
+
+def test_unlike_hero_parts_are_not_a_card_grid(run):
+    """2.6.2: a grid of a heading, a picture and an answer box is a layout, not three cards."""
+    assert run("hero3", "layout.card-orphan").level == "OK"
