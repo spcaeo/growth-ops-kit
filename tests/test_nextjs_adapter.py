@@ -167,10 +167,13 @@ def test_the_checkpoint_plan_marks_adapter_checks_skip_on_a_static_stack(demo_pr
             "from pathlib import Path\\n"
             "(preflight.PROJECT / 'research').mkdir(exist_ok=True)\\n"
             "for stack in ('static', 'nextjs'):\\n"
-            "    p, _ = preflight.write_plan('/x', 'money', 'x-' + stack, preflight.checks_in_scope('money'), stack)\\n"
-            "    print(stack, p.read_text().count('SKIP on this stack'))\\n")
+            "    p, _ = preflight.write_plan('/x', 'process', 'x-' + stack, preflight.checks_in_scope('process'), stack)\\n"
+            "    print(stack, p.read_text().count('SKIP on this stack'))\\n"
+            "p, _ = preflight.write_plan('/x', 'money', 'x-repo', preflight.checks_in_scope('money'), 'static')\\n"
+            "print('repo', p.read_text().count('needs the site checkout'))\\n")
     r = subprocess.run([sys.executable, "-c", code.replace("\\n", "\n")], cwd=ROOT, capture_output=True, text=True,
                        env={**os.environ, "GROWTH_PROJECT": str(demo_project)})
     assert r.returncode == 0, r.stderr
     counts = dict(l.split() for l in r.stdout.split("\n") if l.strip())
-    assert int(counts["static"]) > 0 and counts["nextjs"] == "0"
+    assert int(counts["static"]) > 0 and counts["nextjs"] == "0"            # proc.checks-script stays Next.js-only
+    assert int(counts["repo"]) >= 40                                         # the repo checks name the checkout, not a stack

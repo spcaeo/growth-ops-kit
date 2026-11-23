@@ -6,7 +6,7 @@ from gatelib.c_process import *  # noqa: F401,F403
 from gatelib.core import Skip, check, run  # noqa: F401
 
 
-@check("proc.commit-identity", "118", P, "every unmerged commit in every site worktree uses the commit identity (growth.json commit_identity.email; else a noreply address)", needs="nextjs")
+@check("proc.commit-identity", "118", P, "every unmerged commit in every site worktree uses the commit identity (growth.json commit_identity.email; else a noreply address)", needs="repo")
 def commit_identity(ctx):
     probs = []
     for w in worktrees(ctx):
@@ -22,7 +22,8 @@ def commit_identity(ctx):
 def project_start(ctx, repo):
     """The date the project began: the I-1 row of the steps log, else growth.json nextjs.start_date, else the date of the
     project folder's first commit, else the site repo's first commit. Raises Skip when none can be found."""
-    log = (ctx.need_docs() / "steps-log.md").read_text() + (ctx.need_docs() / "tasks.json").read_text()
+    log = "".join(ctx.need_file(ctx.need_docs() / n, "growth tasks / docs/steps-log.md (the project's start date is read from them)").read_text()
+                  for n in ("steps-log.md", "tasks.json"))
     m = re.search(r"\| I-1 \| (\d{4}-\d\d-\d\d)", log)
     if m:
         return m.group(1), log
@@ -35,7 +36,7 @@ def project_start(ctx, repo):
     raise Skip("no start date: set growth.json nextjs.start_date (the project's first commit could not be read)")
 
 
-@check("proc.no-push-main", "114", P, "every commit on the production branch since the project began is logged with the owner's yes; local branch not ahead", needs="nextjs")
+@check("proc.no-push-main", "114", P, "every commit on the production branch since the project began is logged with the owner's yes; local branch not ahead", needs="repo")
 def no_push(ctx):
     repo = site_repo(ctx)
     base = ctx.base_ref(repo)
@@ -59,14 +60,14 @@ def checks_script(ctx):
                 "checks.sh present with its change map", "restore adapters/nextjs/checks.sh (rule 105)")
 
 
-@check("proc.worktrees", "126", P, "at most 4 site worktrees open (one per live agent)", needs="nextjs")
+@check("proc.worktrees", "126", P, "at most 4 site worktrees open (one per live agent)", needs="repo")
 def wt_count(ctx):
     n = len(worktrees(ctx)) - 1
     ctx.verdict([] if n <= ctx.cfg.get("agent_cap", 4) else [f"{n} worktrees open"], f"{n} worktree(s) open",
                 "remove finished worktrees (git worktree remove), keep the branch (rule 126)")
 
 
-@check("proc.one-page-branch", "OR-one-page", P, "each page/ branch changes one page route only", needs="nextjs")
+@check("proc.one-page-branch", "OR-one-page", P, "each page/ branch changes one page route only", needs="repo")
 def one_page(ctx):
     probs = []
     for w in worktrees(ctx):

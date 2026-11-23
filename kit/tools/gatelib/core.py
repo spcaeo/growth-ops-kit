@@ -331,6 +331,8 @@ class Ctx:
         if "tree" in self.cache:
             return self.cache["tree"]
         repo = self.need_repo()
+        if self.stack() != "nextjs":
+            return self._src_tree(repo)
         route = repo / "app" / self.need_path().strip("/") / "page.tsx"
         if self.path == "/":
             route = repo / "app" / "page.tsx"
@@ -359,14 +361,83 @@ class Ctx:
         self.cache["tree"] = seen
         return seen
 
-    def repo_files(self, globs=("app/**/*.tsx", "app/**/*.ts", "components/**/*.tsx", "components/**/*.ts", "lib/**/*.ts")):
+    def _src_tree(self, repo):
+        """Any non-Next stack (2.6.0): the page's route file under src/pages (its own file, else the catch-all route that
+        renders it), its content file under src/content when there is one, and every local import they pull in,
+        followed recursively (.astro, .ts, .tsx, .js, .mjs, .svelte, .vue; "@/" and "~/" mean src/)."""
+        src = repo / "src"
+        p = self.need_path().strip("/")
+        cands = [src / "pages" / f"{p}.astro", src / "pages" / p / "index.astro", src / "pages" / f"{p}.md", src / "pages" / f"{p}.mdx"]
+        if not p:
+            cands = [src / "pages" / "index.astro"]
+        starts = [c for c in cands if c.is_file()]
+        if not starts:
+            starts = sorted((src / "pages").rglob("[[]*.astro")) if (src / "pages").exists() else []
+        slug = p.rsplit("/", 1)[-1] if p else "index"
+        if (src / "content").exists():
+            starts += [f for f in (src / "content").rglob(f"{slug}.*") if f.suffix in (".md", ".mdx", ".json", ".yaml", ".yml")][:3]
+        if not starts:
+            raise Missing(f"route file for {self.need_path()} under src/pages", "check --repo and the page path")
+        seen, todo = {}, list(starts)
+        exts = (".astro", ".tsx", ".ts", ".jsx", ".js", ".mjs", ".svelte", ".vue", ".css")
+        text_ext = exts + (".md", ".mdx", ".json", ".yaml", ".yml")
+        while todo:
+            f = todo.pop()
+            if f in seen or not f.is_file() or f.suffix not in text_ext:      # an imported picture is not source
+                continue
+            text = f.read_text(errors="replace")
+            seen[f] = text
+            for m in re.finditer(r"""(?:import|from)\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]""", text):
+                spec = m.group(1) or m.group(2)
+                if spec.startswith(("@/", "~/")):
+                    base = src / spec[2:]
+                elif spec.startswith("."):
+                    base = (f.parent / spec).resolve()
+                else:
+                    continue
+                for cand in (base, *(base.with_name(base.name + e) for e in exts), *(base / ("index" + e) for e in exts)):
+                    if cand.is_file():
+                        todo.append(cand)
+                        break
+        self.cache["tree"] = seen
+        return seen
+
+    NEXT_GLOBS = ("app/**/*.tsx", "app/**/*.ts", "components/**/*.tsx", "components/**/*.ts", "lib/**/*.ts")
+    SRC_GLOBS = ("src/**/*.astro", "src/**/*.tsx", "src/**/*.ts", "src/**/*.jsx", "src/**/*.js", "src/**/*.mjs", "src/**/*.vue",
+                 "src/**/*.svelte")
+
+    def repo_files(self, globs=None):
+        """The site's source files. Default: the Next.js app/components/lib folders, or on any other stack every source
+        file under src/ (Astro, Vite, SvelteKit layouts) (2.6.0). A check may pass its own globs; on a non-Next stack a
+        Next-style glob (app/, components/, lib/) is read under src/ as well."""
         repo = self.need_repo()
+        if globs is None:
+            globs = self.NEXT_GLOBS if self.stack() == "nextjs" else self.SRC_GLOBS
+        elif self.stack() != "nextjs":
+            globs = tuple(globs) + tuple("src/" + g for g in globs if not g.startswith("src/"))
         out = []
         for g in globs:
             out += [p for p in repo.glob(g) if "node_modules" not in p.parts and ".next" not in p.parts]
         return sorted(set(out))
 
     def css_text(self):
+        """The site's CSS. Next.js: the CSS files under app/ and components/. Any other stack (2.6.0): the CSS the served
+        page really loads (inline <style> and linked stylesheets), else every .css file under src/ plus the <style>
+        blocks of its components."""
+        if "css" not in self.cache and self.stack() != "nextjs":
+            parts = []
+            if self.url and self.html:
+                from .c_cta import page_css
+                parts.append(page_css(self))
+            if self.repo and not "".join(parts).strip():
+                src = self.repo / "src"
+                for f in sorted(src.rglob("*.css")) if src.exists() else []:
+                    parts.append(f.read_text(errors="replace"))
+                for f in sorted(src.rglob("*.astro")) + sorted(src.rglob("*.svelte")) + sorted(src.rglob("*.vue")) if src.exists() else []:
+                    parts += re.findall(r"(?s)<style\b[^>]*>(.*?)</style>", f.read_text(errors="replace"))
+            if not "".join(parts).strip():
+                raise Missing("site CSS (served page or src/**/*.css)", "pass --url, or --repo with the site's source")
+            self.cache["css"] = "\n".join(parts)
         if "css" not in self.cache:
             repo = self.need_repo()
             files = sorted(p for p in (repo / "app").rglob("*.css")) + sorted((repo / "components").rglob("*.css"))
@@ -374,6 +445,20 @@ class Ctx:
                 raise Missing("site CSS files", "check --repo")
             self.cache["css"] = "\n".join(f.read_text(errors="replace") for f in files)
         return self.cache["css"]
+
+    def component(self, name):
+        """The shared component `name` (copy, link_cards, sticky_cta, call_dialog, exit_offer, tick): growth.json
+        components.<name>, else the Next.js default path, else found by file name under src/ (gatelib/components.py)."""
+        from . import components
+        return components.find_component(self, name)
+
+    def test_files(self, extra=()):
+        from . import components
+        return components.test_files(self, extra)
+
+    def key_path(self):
+        """The page path as the link graph writes it: no trailing slash ("/" for the home page)."""
+        return self.need_path().rstrip("/") or "/"
 
     def nx(self, key, default=None):
         """A setting of growth.json "nextjs" (how this site's code is laid out); `default` when it is not set."""
@@ -394,10 +479,16 @@ class Ctx:
     def branch_files(self):
         """Files changed on the worktree's branch vs the production branch, plus uncommitted and untracked ones."""
         if "bfiles" not in self.cache:
-            a = self.git("diff", "--name-only", self.base_ref() + "...HEAD").split()
-            b = self.git("diff", "--name-only", "HEAD").split()
+            base = self.base_ref()
+            code, mb = run(["git", "-C", str(self.need_repo()), "merge-base", base, "HEAD"], timeout=60)
+            if code == 0 and mb.strip():
+                # the working tree against where the branch left the production branch: a file the branch changed and put
+                # back (an empty diff) is not listed (2.6.0)
+                tracked = self.git("diff", "--name-only", mb.strip()).split()
+            else:
+                tracked = self.git("diff", "--name-only", base + "...HEAD").split() + self.git("diff", "--name-only", "HEAD").split()
             c = self.git("ls-files", "--others", "--exclude-standard").split()
-            self.cache["bfiles"] = sorted(set(a + b + c))
+            self.cache["bfiles"] = sorted(set(tracked + c))
         return self.cache["bfiles"]
 
     def commit_email(self):
@@ -406,11 +497,19 @@ class Ctx:
         return (self.cfg.get("commit_identity") or {}).get("email") or self.cfg.get("committer_email", "")
 
     def identity_ok(self, *emails):
-        """True when every address is the configured commit identity; with none configured, when it is a GitHub noreply address."""
+        """True when every address is the configured commit identity; with none configured, when it is a GitHub noreply address.
+        growth.json commit_identity.email_sha256 names the identity by the sha256 of the lower-case address, so a private
+        repo's real address never has to be written into a project file (2.6.0)."""
+        import hashlib
+        h = str((self.cfg.get("commit_identity") or {}).get("email_sha256") or "").lower()
+        if h:
+            return all(hashlib.sha256(e.strip().lower().encode()).hexdigest() == h for e in emails)
         want = self.commit_email()
         return all((e == want) if want else e.lower().endswith("@users.noreply.github.com") for e in emails)
 
     def identity_rule(self):
+        if (self.cfg.get("commit_identity") or {}).get("email_sha256"):
+            return "by the project's commit identity (growth.json commit_identity.email_sha256)"
         want = self.commit_email()
         return f"by {want}" if want else "by a GitHub noreply address (set growth.json commit_identity.email to name another)"
 
@@ -458,7 +557,12 @@ def base_ref_of(repo, cfg):
 def run_check(ctx: Ctx, c: Check):
     ctx._cur = c
     n = len(ctx.lines)
-    if c.needs not in ("live", "project") and c.needs != ctx.stack():
+    if c.needs == "repo" and not ctx.repo:
+        # reads the site's code on any stack (2.6.0): without the checkout it cannot run, which never counts as a pass
+        ctx.skip("needs the site checkout (pass --repo, or set growth.json site_repo)", blocked=True)
+        ctx._cur = None
+        return
+    if c.needs not in ("live", "project", "repo") and c.needs != ctx.stack():
         ctx.skip(f"no adapter for {ctx.stack()} (this check reads {c.needs} code)")
         ctx._cur = None
         return

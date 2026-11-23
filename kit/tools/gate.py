@@ -103,9 +103,11 @@ def cmd_page(a):
         ctx.status, ctx.html = fetch(a.url)
     ctx.cache["no_link_status"] = a.no_link_status
     ctx.cache["no_browser"] = a.no_browser
-    ctx.cache["needs_filter"] = set(filter(None, (a.needs or "").split(",")))
-    only = set(filter(None, (getattr(a, "only", "") or "").split(",")))
     needs = set(filter(None, (a.needs or "").split(",")))
+    if "nextjs" in needs:
+        needs.add("repo")      # the checks that read the site's code run on any stack since 2.6.0; "nextjs" has always meant them
+    ctx.cache["needs_filter"] = set(needs)
+    only = set(filter(None, (getattr(a, "only", "") or "").split(",")))
     todo = [c for c in CHECKS.values() if a.type in c.types and c.stage == a.stage and c.cid != "house.features"
             and not (static and c.file in STATIC_SKIP) and (not only or c.cid in only) and (not needs or c.needs in needs)]
     for c in todo:
@@ -163,8 +165,8 @@ def cmd_coverage(a):
     print(f"\nRulebook rules: {len(book)}; enforced by code: {len(book_code)} ({100 * len(book_code) / max(len(book), 1):.0f}%); "
           f"judgment with a code proxy: {len(book) - len(book_code)}.")
     print(f"All entries (rulebook + OWNER-RULES rows): {len(reg)}; code {len(code)} ({100 * len(code) / len(reg):.0f}%), judgment {len(judg)}.")
-    by = {n: sum(1 for c in CHECKS.values() if c.needs == n) for n in ("live", "project", "nextjs")}
-    print(f"Checks: {len(CHECKS)} ({by['live']} read the live page, {by['project']} the project folder, {by['nextjs']} the Next.js site code via the adapter).")
+    by = {n: sum(1 for c in CHECKS.values() if c.needs == n) for n in ("live", "project", "nextjs", "repo")}
+    print(f"Checks: {len(CHECKS)} ({by['live']} read the live page, {by['project']} the project folder, {by['repo'] + by['nextjs']} the Next.js site code via the adapter, which runs on any stack given a checkout).")
     print(f"Registry: Rules without an entry: {missing or 'none'}. Unknown check ids: {unknown or 'none'}.")
     return 1 if missing or unknown else 0
 
@@ -182,7 +184,7 @@ def main(argv=None):
     p.add_argument("--url", help="local URL of the page (dev or preview server); leave out for static mode (source checks only)")
     p.add_argument("--repo", default="", help="the site's checkout (default: growth.json site_repo)")
     p.add_argument("--no-browser", action="store_true", help="skip the two checks that measure the page in a headless browser (contrast, phone)")
-    p.add_argument("--needs", default="", help="only checks that read: live, project, nextjs (comma list)")
+    p.add_argument("--needs", default="", help="only checks that read: live, project, repo (the site's code; nextjs is the same) (comma list)")
     p.add_argument("--type", choices=["money", "hub", "post", "core"], default="money")
     p.add_argument("--key", default="", help="research file key (default: the path as a slug, e.g. blog__my-post)")
     p.add_argument("--stage", choices=["build", "release"], default="build", help="release = after the merge")

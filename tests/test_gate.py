@@ -62,7 +62,7 @@ class TestRegistry:
 
     def test_nextjs_checks_live_in_the_adapter(self):
         for c in CHECKS.values():
-            assert (c.needs == "nextjs") == c.where.startswith("adapters/nextjs/"), f"{c.cid}: needs {c.needs} but lives in {c.where}"
+            assert (c.needs in ("nextjs", "repo")) == c.where.startswith("adapters/nextjs/"), f"{c.cid}: needs {c.needs} but lives in {c.where}"
 
     def test_registry_text_has_no_one_business_in_it(self):
         text = (Path(registry.REGISTRY)).read_text()
@@ -117,23 +117,34 @@ class TestMissingInputFails:
 
 
 class TestSkipIsNeverOk:
-    def test_adapter_checks_skip_on_other_stacks(self):
+    def test_nextjs_only_checks_skip_on_other_stacks(self):
         with tempfile.TemporaryDirectory() as tmp:
             for stack in ("static", "wordpress"):
-                ctx = empty_ctx(tmp, "money", cfg={"stack": stack})
-                nx = [c for c in CHECKS.values() if c.needs == "nextjs" and "money" in c.types]
-                assert nx
+                ctx = empty_ctx(tmp, "process", cfg={"stack": stack})
+                nx = [c for c in CHECKS.values() if c.needs == "nextjs"]
+                assert nx                                                  # proc.checks-script stays Next.js-only
                 for c in nx:
                     run_check(ctx, c)
                 assert {l.level for l in ctx.lines} == {"SKIP"}
                 assert all(l.text() == f"SKIP {l.cid}: no adapter for {stack} (this check reads nextjs code)" for l in ctx.lines)
 
-    def test_adapter_checks_run_on_nextjs(self):
+    def test_repo_checks_are_blocked_without_a_checkout_on_every_stack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for stack in ("static", "wordpress", "nextjs"):
+                ctx = empty_ctx(tmp, "money", cfg={"stack": stack})
+                rc = [c for c in CHECKS.values() if c.needs == "repo" and "money" in c.types]
+                assert len(rc) >= 30
+                for c in rc:
+                    run_check(ctx, c)
+                assert {l.level for l in ctx.lines} == {"SKIP"} and all(l.blocked for l in ctx.lines)       # never a pass
+                assert all("needs the site checkout" in l.what for l in ctx.lines)
+
+    def test_repo_checks_run_with_a_checkout_that_is_not_a_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
             ctx = empty_ctx(tmp, "money", cfg={"stack": "nextjs"})
-            c = CHECKS["repo.no-secrets"]
-            run_check(ctx, c)
-            assert ctx.lines[0].level == "FAIL" and "input missing" in ctx.lines[0].what      # it ran, and failed for want of a repo
+            ctx.repo = Path(tmp)                                           # a folder with no .git: the check runs and fails for want of one
+            run_check(ctx, CHECKS["repo.no-secrets"])
+            assert ctx.lines[0].level == "FAIL" and "input missing" in ctx.lines[0].what
 
     def test_feature_off_is_skip(self):
         with tempfile.TemporaryDirectory() as tmp:

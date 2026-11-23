@@ -4,6 +4,18 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+### 2.6.0
+
+- The checks that read the site's code (needs="repo", about 45 of them, once written for Next.js) now run on any stack whenever a site checkout is given, and without one they print a blocked SKIP (never a pass). Next.js behaviour is unchanged.
+- A non-Next page's source tree is its route file under src/pages (or the catch-all route), its content file and every import; the site's CSS is what the served page loads, else src/**/*.css and the <style> blocks.
+- Shared components are found on any stack (new `ctx.component(name)`, `gatelib/components.py`): growth.json `components`, else the Next.js default path, else a file under src/ whose name matches in kebab or Pascal case. repo.shared-components checks that the page's tree holds the component file, copy.shared takes the one clipboard component plus its helper, links.cards / links.punct / links.card-glow use the site's own card class and marker and find the guard test by name, icons.check-circle accepts a Tick in any source extension (.astro included), repo.guard-tests and repo.scroll-test find tests anywhere (**/*.test.*, tests/**).
+- links.blue accepts a "+" drawn as a `::after` on the link itself (no -plus class needed).
+- Internal-link checks (links.inbound 88, links.plan 88a, links.up-across 89, links.anchor-unique 90, links.no-redirect 75) compute the same flags from inventory/link-graph.db on a stack with no app/ folder (`gatelib/graph_links.py`). A missing or stale graph is a blocked SKIP that names `growth link_graph crawl --base <preview>`; the check never writes into the project. link_map.py stays the Next.js path.
+- repo.logo-untouched (42): a diff that changes only the text of an aria-label or title is allowed; any path, shape or image change still fails. The branch's file list now leaves out a file whose diff against the base is empty.
+- repo.no-unused-code (124a) runs the site's own checker (`astro check` with @astrojs/check, else tsc with a tsconfig.json); when the stack has neither it is a blocked SKIP that names what is missing, not a FAIL telling the reader to install node_modules. repo.no-dead-files reads src/** on a non-Next stack.
+- New growth.json keys: `components` (copy, link_cards, link_cards_css_class, link_cards_marker, sticky_cta, call_dialog, exit_offer, tick, tests), `commit_identity.email_sha256` (the identity by the sha256 of its address), `commit_style.since` (older commits are history), `link_graph.max_age_hours` (default 24).
+- Test: `tests/test_release_2_6_0_any_stack.py`; `tests/test_demo.py` now expects the repo checks to run with --repo and to be blocked without it.
+
 ## 2.5.0 - 2026-11-22
 
 - hero.unique (157) reads the served page on every stack and now covers posts too. It compares the first screen with its siblings on the same preview: the same depth and either the same cluster or the same kind of page across clusters (every .../experts). A shared hero design (the composition: the tag and class tree plus each drawing's shape list), the same picture, or the same animation fails. A hero with no picture, tool or motion of its own fails. It used to be Next.js only, and a static site shipped 128 pages on 14 hero designs. (#85)
