@@ -26,7 +26,7 @@ LIMITS = {
     "mechanics": ["flip", "tabs", "accordion", "slider"],
     # inside these, rows and grids are a tool's or a menu's own layout, not the page's folds (2.4.2): a reading desk's
     # table of contents beside the text, a calculator's option grid, a form
-    "exempt": "nav, form, fieldset, [data-tool], [role=tablist], [role=radiogroup], .toc, [data-layout-exempt]",
+    "exempt": "nav, form, fieldset, table, [data-tool], [role=tablist], [role=radiogroup], .toc, [data-layout-exempt]",
 }
 
 MEASURE_JS = r"""
@@ -75,7 +75,7 @@ MEASURE_JS = r"""
     const own = (MEDIA.has(c.tagName) || isSvg(c) || c.tagName === 'FIGURE');
     const m = mediaIn(c), isMedia = own || (txt < 20 && m.length > 0);
     let mArea = 0; if (isMedia) { const els = own && !m.length ? [c] : m; els.forEach(e => { const q = R(e); mArea = Math.max(mArea, q.width * q.height); });
-      if (own && !m.length) mArea = r.width * r.height; }
+      if (own && (!m.length || c.tagName === 'FIGURE')) mArea = r.width * r.height; }   // a <figure> is the picture as a whole (2.6.6)
     return {cls: (c.className && c.className.baseVal === undefined ? String(c.className) : c.tagName.toLowerCase()).slice(0, 30) || c.tagName.toLowerCase(),
             top: r.top, height: r.height, cHeight: x.cBottom - x.cTop, width: r.width, text: txt, isMedia, mArea,
             tArea: r.width * (x.cBottom - x.cTop)}; };

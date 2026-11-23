@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.6.6 - 2026-11-22
+
+- layout.picture-text measures a `<figure>` as the picture as a whole (its box), not the largest small icon inside it; a document-style figure no longer fails on its 14px icon.
+- layout.column-ratio and the other layout checks skip tables: a table row is not two page columns.
+- Test: `tests/test_release_2_4_0_layout.py::test_a_figure_is_measured_as_a_whole_and_table_rows_are_not_columns`.
+
 ## 2.6.5 - 2026-11-22
 
 - claims.box-numbers (10): text inside <time> (a byline or card date) is no box number. (#89)

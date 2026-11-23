@@ -57,6 +57,10 @@ PAGES = {
     "hero": page(sec("hero", block(100) + CTA, pad=150), FILL("a")),
     "cols": page(HERO, sec("a", cols(block(300), block(600)))),
     "pic": page(HERO, sec("a", cols(block(300), svg(50, 50)))),
+    "figdoc": page(HERO, sec("a", cols(block(300), '<figure style="height:300px;margin:0">' + svg(14, 14)
+                   + '<p>A sample report shown as a document, with its own text lines.</p></figure>'))),
+    "tablerow": page(HERO, sec("a", '<table style="width:100%"><tr><th style="height:49px">Region</th>'
+                     '<td><span>EU</span></td></tr></table>')),
     "cards": page(HERO, sec("a", grid(4))),
     "meta": page(HERO, sec("a", '<div style="display:flex;flex-wrap:wrap;width:300px">'
                  + "".join(f'<span style="width:90px">Meta {i}</span>' for i in range(5)) + '</div>')),
@@ -188,3 +192,9 @@ def test_unlike_hero_parts_are_not_a_card_grid(run):
 def test_inline_links_in_a_paragraph_are_not_columns(run):
     """2.6.4: two links wrapped inside one paragraph are inline text, not a two-column row."""
     assert run("inline2", "layout.column-ratio").level == "OK"
+
+
+def test_a_figure_is_measured_as_a_whole_and_table_rows_are_not_columns(run):
+    """2.6.6: a <figure> with a small icon and text is the picture as a whole; a table row is not two page columns."""
+    assert run("figdoc", "layout.picture-text").level == "OK"
+    assert run("tablerow", "layout.column-ratio").level == "OK"
