@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.8.0
+version: 2.8.1
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.8.0 (generic edition) · 23 Nov 2026.**
+**Version 2.8.1 (generic edition) · 23 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-23 | 2.8.1 | `growth ready --batch` reaches the batch (the front door took "ledger" for a page); `--repo` passes through the short form. |
 | 2026-11-23 | 2.8.0 | Four new checks for what a reviewer kept finding by hand: rule 28 (a fact repeated across folds), rule 11 (internal process words), rule 36 (short-list items not on the old site), rule 158a (half-empty boxes). `growth ready --batch` checks many pages side by side, and READY holds while a page's built output is unchanged. |
 | 2026-11-23 | 2.7.6 | `growth ready --repo <worktree>` checks the page's own worktree; `link_graph crawl --base` always reads the preview's own sitemap, so a branch's new page is in the graph before release. |
 | 2026-11-23 | 2.7.5 | Rule 36c reads the '+' marker's own class (never a BEM modifier like `--plus`) and ignores CSS comments; rule 156 accepts one data-driven test that loops over every built page (growth.json `guard_tests.all_pages`). |

@@ -151,3 +151,18 @@ def test_the_readme_start_is_the_handful_of_commands():
 def test_the_onboard_skill_starts_with_growth_setup():
     skill = (ROOT / "kit" / "skills" / "onboard" / "SKILL.md").read_text()
     assert "## Step 0. Run the setup" in skill and "`growth setup`" in skill
+
+
+def test_ready_batch_and_repo_reach_the_ready_tool(tmp_path, monkeypatch):
+    """2.8.1: `growth ready --batch ledger` went to the one-page path and gated a page called /ledger."""
+    import front_door
+    calls = []
+    (tmp_path / "growth.json").write_text('{"preview_url": "http://127.0.0.1:9"}')
+    monkeypatch.setattr(front_door, "need_project", lambda: tmp_path)
+    monkeypatch.setattr(front_door.subprocess, "run", lambda cmd, **k: calls.append(cmd) or
+                        front_door.subprocess.CompletedProcess(cmd, 0, "READY /a: 0 FAIL", ""))
+    assert front_door.cmd_ready(["--batch", "ledger", "--stale-only", "--jobs", "3"]) == 0
+    assert calls[-1][1].endswith("ready.py") and calls[-1][2:] == ["--batch", "ledger", "--stale-only", "--jobs", "3"]
+    monkeypatch.setattr(front_door, "page_from", lambda p, t, f: {"path": "/a", "type": "hub", "key": "a"})
+    front_door.cmd_ready(["/a", "--repo", "/w/lane"])
+    assert calls[-1][-2:] == ["--repo", "/w/lane"]

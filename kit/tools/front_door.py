@@ -438,19 +438,24 @@ def cmd_check(argv: list[str]) -> int:
 
 
 def cmd_ready(argv: list[str]) -> int:
+    if "--batch" in argv:   # 2.8.1: many pages side by side; verdicts stream as they land (before, "ledger" was taken for a page)
+        project = need_project()
+        env = {**os.environ, "GROWTH_PROJECT": str(project), "PYTHONDONTWRITEBYTECODE": "1"}
+        return subprocess.run([sys.executable, str(HERE / "ready.py"), *argv], cwd=project, env=env).returncode
     if "--list" in argv or ("--type" in argv and "--key" in argv and argv and not argv[0].startswith("--")):
         r = run_tool(need_project(), "ready.py", *argv)           # the exact old form: unchanged output
         sys.stdout.write(r.stdout)
         sys.stderr.write(r.stderr)
         return r.returncode
-    rest, flags = split_flags(argv, ("--type", "--key"))
+    rest, flags = split_flags(argv, ("--type", "--key", "--repo"))
     target = next((x for x in rest if not x.startswith("--")), None)
     project = need_project()
     page = page_from(project, target, flags)
     if not page:
         no_page_message()
         return 2
-    r = run_tool(project, "ready.py", page["path"], "--type", page["type"], "--key", page["key"])
+    repo = ["--repo", flags["repo"]] if flags.get("repo") else []
+    r = run_tool(project, "ready.py", page["path"], "--type", page["type"], "--key", page["key"], *repo)
     text = (r.stdout + r.stderr).strip()
     lines = text.splitlines()
     if r.returncode == 0 and lines and lines[0].startswith("READY"):
