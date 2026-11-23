@@ -84,7 +84,8 @@ MEASURE_JS = r"""
     if (isSvg(e) || !shown(e)) continue;
     const kids = [...e.children].filter(k => !isSvg(k) && shown(k) && flow(k));
     if (e.closest(args.exempt)) continue;
-    if (kids.length === 2 && !kids.some(k => k.matches(args.exempt) || cs(k).position === 'sticky' || k.querySelector('.toc, nav'))) {
+    const inline = k => cs(k).display.startsWith('inline') && !['IMG', 'SVG', 'PICTURE', 'VIDEO'].includes(k.tagName.toUpperCase());
+    if (kids.length === 2 && !kids.some(inline) && !kids.some(k => k.matches(args.exempt) || cs(k).position === 'sticky' || k.querySelector('.toc, nav'))) {
       const [a, b] = kids.map(k => R(k));
       if (a.width >= 200 && b.width >= 200 && Math.abs(a.top - b.top) <= 60 && (a.right <= b.left + 1 || b.right <= a.left + 1))
         rows.push({fold: names[foldOf(e)] || '', cols: kids.map(colInfo)});

@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.6.4 - 2026-11-22
+
+- claims.box-numbers (10): text inside <time> (a byline or card date) is no box number. (#89)
+- layout.column-ratio (158a): inline children (links in a wrapped paragraph) are never a two-column row. (#89)
+- Tests: `tests/test_release_2_6_4_box_time.py`, `tests/test_release_2_4_0_layout.py`.
+
 ## 2.6.3 - 2026-11-22
 
 - words.call-length reads each text element on its own, so a tool's "2 minutes" next to "Free 30-minute call" is no longer read as the call length (22 false FAILs on a real project).

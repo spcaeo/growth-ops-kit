@@ -552,6 +552,8 @@ def box_numbers(ctx):
     probs = []
     for b in boxes:
         bt = domx.text(b, skip_examples=True)
+        for t in find_all(b, "time"):                 # a byline or card date ("Published November 13") is no claim (2.6.4)
+            bt = bt.replace(domx.text(t), " ")
         rest = text_without_node(ctx, order.index(b))          # the page's text without THIS box only: a copy of its number in the prose still counts
         for num in {x.rstrip(".,") if not x.endswith("%") else x for x in re.findall(r"\b\d[\d,.]*%?", bt)}:
             if num not in rest:
