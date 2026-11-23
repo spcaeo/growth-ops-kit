@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.7.5 - 2026-11-23
+
+- links.blue: the '+' marker CSS is found by its own class (`.link-plus`, `.lc-plus`), not a BEM modifier such as `.leadcard--plus`; CSS comments are removed before colours are read.
+- repo.guard-tests: growth.json `guard_tests.all_pages` names one data-driven test that loops over every built page; it counts for every page when it tests the house features and FAQPage markup.
+- Test: `tests/test_release_2_7_5_links_guard.py`.
+
 ## 2.7.4 - 2026-11-23
 
 - links.no-utm skips `//`, `/* */`, `<!-- -->` and `#` comments, so a comment that mentions an old utm-tagged link no longer fails the page.

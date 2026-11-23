@@ -399,6 +399,20 @@ def scroll_test(ctx):
 
 @check("repo.guard-tests", "156", types=("money", "hub", "post"), what="a test checks the page's house features and its FAQ markup", needs="repo")
 def guard_tests(ctx):
+    # growth.json guard_tests.all_pages: ONE data-driven test that loops over every built page and asserts its house
+    # features and FAQPage markup counts for every page (2.7.5). It must name both, and fail when one page loses one.
+    allp = ((ctx.cfg.get("guard_tests") or {}).get("all_pages") or "").strip()
+    if allp:
+        f = ctx.need_repo() / allp
+        t = f.read_text(errors="replace") if f.is_file() else ""
+        miss = [] if f.is_file() else [f"{allp} not found"]
+        if t and not re.search(r"(?i)house features|rule 156", t):
+            miss.append(f"{allp} does not test the house features")
+        if t and not re.search(r"FAQPage", t):
+            miss.append(f"{allp} does not test FAQPage markup (rule 151)")
+        ctx.verdict(miss, f"one data-driven house-features test covers every page: {allp}",
+                    "point growth.json guard_tests.all_pages at a test that loops over every built page (rules 110, 151, 156)")
+        return
     tests = sorted(set(ctx.repo_files(("lib/*.test.ts", "components/**/*.test.ts", "tests/**/*.ts")) + ctx.test_files()))
     key = ctx.need_key()
     mine = [t for t in tests if key in t.name or key in t.read_text(errors="replace")]

@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.7.4
+version: 2.7.5
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.7.4 (generic edition) · 23 Nov 2026.**
+**Version 2.7.5 (generic edition) · 23 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-23 | 2.7.5 | Rule 36c reads the '+' marker's own class (never a BEM modifier like `--plus`) and ignores CSS comments; rule 156 accepts one data-driven test that loops over every built page (growth.json `guard_tests.all_pages`). |
 | 2026-11-23 | 2.7.4 | Rule 34's utm check skips code comments: a comment that remembers an old tagged link adds nothing to any link. |
 | 2026-11-23 | 2.7.3 | Four site-code checks read an Astro and nginx site right: rule 34 flags only code that writes a utm_ tag into an address (reading the landing tags for attribution is fine); rule 131 needs no copy button beside a mailto or tel action with no address; rule 36e ignores a tick inside a regex; rule 76 finds a retired group named inside an nginx-style pattern with its 410 nearby. |
 | 2026-11-23 | 2.7.2 | Rule 157: a button's icon is not the hero's picture. |

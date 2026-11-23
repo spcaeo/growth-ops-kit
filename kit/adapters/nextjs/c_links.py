@@ -24,7 +24,7 @@ def blue(ctx):
     root = ctx.root()
     main = domx.main(root)
     links = prose_links(ctx, main) if main is not None else []
-    css = ctx.css_text()
+    css = re.sub(r"/\*.*?\*/", "", ctx.css_text(), flags=re.S)   # a comment names no colour (2.7.5)
     probs = []
     if not links:
         probs.append("no in-text links in <main> to check")
@@ -64,7 +64,8 @@ def blue(ctx):
     off = [s[-40:] for s, b in rules if ":hover" not in s and ":focus" not in s and re.search(r"text-decoration(-line)?\s*:\s*none", b)]
     if off:
         probs.append(f"underline removed: {off[0]}")
-    plus = [(s, b) for s, b in RULE.findall(css) if re.search(r"\.[\w-]*-plus(?![\w-])", s)]
+    # the marker's own class (.link-plus, .lc-plus), never a BEM modifier like .leadcard--plus (2.7.5)
+    plus = [(s, b) for s, b in RULE.findall(css) if re.search(r"\.[\w-]*[^-]-plus(?![\w-])", s)]
     marker = css_plus(css) if not plus else []
     if not plus and not marker:
         probs.append("no CSS for the '+' marker")
