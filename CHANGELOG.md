@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.6.4 - 2026-11-22
+
+- inventory: growth.json `pillars_are_money` (default true). False marks a silo's top page a money page only when it is listed in `money_core`, so a pillar that maps its cluster is judged as a hub (rule 26).
+- Test: `tests/test_release_2_6_4_pillars.py`.
+
 ## 2.6.3 - 2026-11-22
 
 - words.call-length reads each text element on its own, so a tool's "2 minutes" next to "Free 30-minute call" is no longer read as the call length (22 false FAILs on a real project).

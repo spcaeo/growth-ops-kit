@@ -43,6 +43,9 @@ MONEY_CORE = {key(p) for p in CFG.get("money_core", [])}                  # mone
 CORE = {key(k): tuple(v) for k, v in CFG.get("core_pages", {}).items()}   # {path: [type, buyer stage]}
 BLOG = CFG.get("blog_path", "/blog").rstrip("/")
 NEW_PAGES = {key(p) for p in CFG.get("new_pages", [])}
+# growth.json "pillars_are_money": false marks a silo's top page a money page only when it is in money_core
+# (a pillar that maps its cluster is a hub, rule 26). Default true keeps every pillar a money page (2.6.4).
+PILLARS_ARE_MONEY = CFG.get("pillars_are_money", True) is not False
 GSC_NONE = "none yet (no Search Console rows in page-tracker/tracker.db: run `growth page-tracker sync`, then this again)"
 
 
@@ -131,7 +134,7 @@ def build(sm: dict, pages: dict, gsc=None, readers=None, work=None):
                "type": kind, "silo": silo, "pillar": pillar, "stage": stage,
                "gsc_clicks": g[0] or 0, "gsc_impressions": g[1] or 0, "gsc_position": g[2], "visitors": readers.get(key(path), 0),
                **page_facts(doc)}
-        row["money_page"] = row["status"] == "live" and (kind == "pillar" or key(path) in MONEY_CORE)
+        row["money_page"] = row["status"] == "live" and ((kind == "pillar" and PILLARS_ARE_MONEY) or key(path) in MONEY_CORE)
         mine = [w for w in work if key(w["path"]) == key(path)]
         row["touched"] = f'{mine[-1]["at"]} {mine[-1]["task"]} {mine[-1]["action"]}' if mine else ""
         rows.append(row)

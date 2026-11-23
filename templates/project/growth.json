@@ -145,6 +145,7 @@
   "money_core": [
     "/"
   ],
+  "pillars_are_money": true,
   "core_pages": {
     "/": [
       "home",
