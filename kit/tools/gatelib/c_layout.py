@@ -24,6 +24,14 @@ LIMITS = {
     "mechanics_max": 2,           # folds one mechanic may appear in
     "legal_paths": ["/terms*", "/privacy*", "/cookie*"],
     "mechanics": ["flip", "tabs", "accordion", "slider"],
+    # layout.box-fill (2.8.0): a card or panel (a border on 3 sides, or its own background) of at least this size
+    "box_min_w": 240, "box_min_h": 160,
+    "box_fill_min": 0.55,         # its content covers at least this share of its inner height
+    "box_gap_merge": 32,          # a gap this small between two pieces of content is not empty space
+    "box_wide_min": 560,          # a box this wide must not hold one narrow column against its left edge ...
+    "box_empty_right": 0.45,      # ... and leave more than this share of its inner width empty on the right
+    "box_empty_px": 320,          # ... and at least this many px (a short list in a half-width card is not a hollow box)
+    "box_left_max": 0.10,         # (a column starts within this share of the left edge)
     # inside these, rows and grids are a tool's or a menu's own layout, not the page's folds (2.4.2): a reading desk's
     # table of contents beside the text, a calculator's option grid, a form
     "exempt": "nav, form, fieldset, table, [data-tool], [role=tablist], [role=radiogroup], .toc, [data-layout-exempt]",
@@ -143,7 +151,59 @@ MEASURE_JS = r"""
     if (lines < 2) continue;
     measure.push({fold: names[foldOf(el)] || '', cpl: Math.round(t.length / lines), lines});
   }
-  return {measure, vh: window.innerHeight, pageH: document.documentElement.scrollHeight, folds, rows, grids, ctas, mech,
+
+  // boxed elements (rule 158, layout.box-fill): a card or panel whose content leaves too much of it empty. Text is measured by
+  // its own line boxes, so a short heading in a wide block is as wide as its words, not as its block. A box is drawn by its own
+  // border (3 sides), its own background, or an absolutely placed layer that covers it (a hand-drawn card outline).
+  const boxes = [];
+  const alpha = c => { const m = String(c).match(/rgba?\(([^)]+)\)/); if (!m) return 0; const p = m[1].split(','); return p.length > 3 ? parseFloat(p[3]) : 1; };
+  const bgOf = e => { for (let p = e; p && p.nodeType === 1; p = p.parentElement) { const c = cs(p).backgroundColor; if (alpha(c) > 0.02) return c; } return 'rgb(255, 255, 255)'; };
+  const drawn = (w, st, c) => parseFloat(w) > 0 && st !== 'none' && st !== 'hidden' && alpha(c) > 0.05;
+  const paints = e => { const st = cs(e), par = e.parentElement ? bgOf(e.parentElement) : '';
+    return ['Top', 'Right', 'Bottom', 'Left'].filter(k => drawn(st['border' + k + 'Width'], st['border' + k + 'Style'], st['border' + k + 'Color'])).length >= 3
+      || (alpha(st.backgroundColor) > 0.05 && st.backgroundColor !== par) || st.backgroundImage !== 'none'; };
+  const layered = (e, r) => [...e.children].some(c => { const q = R(c);
+    return cs(c).position === 'absolute' && Math.abs(q.left - r.left) < 9 && Math.abs(q.right - r.right) < 9 && Math.abs(q.top - r.top) < 9
+      && Math.abs(q.bottom - r.bottom) < 9 && paints(c); });
+  const contentRects = root => {
+    const out = [];
+    const push = (q, text) => out.push({t: q.top + sy, b: q.bottom + sy, l: q.left + sx, r: q.right + sx, text});
+    const rec = (n) => { for (const c of n.childNodes) {
+      if (c.nodeType === 3) {
+        if (!c.textContent.trim() || !c.parentElement || cs(c.parentElement).visibility === 'hidden') continue;
+        const rg = document.createRange(); rg.selectNodeContents(c);
+        for (const q of rg.getClientRects()) if (q.width > 1 && q.height > 1) push(q, true);
+      } else if (c.nodeType === 1) {
+        const s = cs(c);
+        if (s.display === 'none' || s.visibility === 'hidden') continue;
+        if ((s.position === 'absolute' || s.position === 'fixed') && c.getAttribute('aria-hidden') === 'true') continue;   // a hint or an outline layer
+        if (isSvg(c) || MEDIA.has(c.tagName) || FORM.has(c.tagName)) { const q = R(c); if (q.width > 4 && q.height > 4) push(q, false); continue; }
+        rec(c);
+      } } };
+    rec(root); return out; };
+  const placed = [];
+  for (const e of main.querySelectorAll('*')) {
+    if (isSvg(e) || e.tagName === 'BUTTON' || !shown(e) || MEDIA.has(e.tagName) || FORM.has(e.tagName) || secs.includes(e)) continue;
+    const r = R(e);
+    if (r.width < args.boxW || r.height < args.boxH || e.closest(args.exempt) || e.querySelector(args.exempt) || !(paints(e) || layered(e, r))) continue;   // a tool's or a table's own box is its own layout
+    const a = abs(r), st = cs(e);
+    if (placed.some(q => q.el.contains(e) && Math.abs(q.a.top - a.top) < 5 && Math.abs(q.a.left - a.left) < 5 && Math.abs(q.a.width - a.width) < 9 && Math.abs(q.a.height - a.height) < 9)) continue;
+    placed.push({el: e, a});
+    const px = k => parseFloat(st[k]) || 0;
+    const inTop = a.top + px('borderTopWidth') + px('paddingTop'), inBot = a.top + a.height - px('borderBottomWidth') - px('paddingBottom');
+    const inL = a.left + px('borderLeftWidth') + px('paddingLeft'), inR = a.left + a.width - px('borderRightWidth') - px('paddingRight');
+    if (inBot - inTop < 100 || inR - inL < 100) continue;
+    const rs = contentRects(e);
+    if (!rs.some(x => x.text)) continue;                                                  // a picture alone is not a box to judge
+    const clip = rs.map(x => [Math.max(x.t, inTop), Math.min(x.b, inBot)]).filter(x => x[1] > x[0]).sort((p, q) => p[0] - q[0]);
+    const ivs = []; clip.forEach(x => { const l = ivs[ivs.length - 1]; if (l && x[0] - l[1] <= 6) l[1] = Math.max(l[1], x[1]); else ivs.push([x[0], x[1]]); });
+    const hd = e.querySelector('h1,h2,h3,h4,h5,h6'), k = foldOf(e);
+    const lbl = ((hd && hd.innerText) || (e.innerText || '')).replace(/\s+/g, ' ').trim().slice(0, 40);
+    boxes.push({fold: k >= 0 ? names[k] : '', name: lbl, w: Math.round(a.width), h: Math.round(a.height), innerH: Math.round(inBot - inTop), innerW: Math.round(inR - inL),
+                ivs: ivs.map(x => [Math.round(x[0] - inTop), Math.round(x[1] - inTop)]),
+                left: Math.max(0, Math.round(Math.min(...rs.map(x => x.l)) - inL)), right: Math.round(Math.max(...rs.map(x => x.r)) - inL)});
+  }
+  return {measure, boxes, vh: window.innerHeight, pageH: document.documentElement.scrollHeight, folds, rows, grids, ctas, mech,
           sticky: document.querySelectorAll('.sticky-cta').length, tokenFound: !!rgb};
 }
 """
@@ -170,7 +230,7 @@ def measure(ctx):
     if not ctx.url:
         raise Skip("no page URL to open in a browser", blocked=True)
     args = {"token": (ctx.cfg.get("cta") or {}).get("color_token", "--color-cta"), "mechanics": limits(ctx)["mechanics"],
-            "exempt": limits(ctx)["exempt"]}
+            "exempt": limits(ctx)["exempt"], "boxW": limits(ctx)["box_min_w"], "boxH": limits(ctx)["box_min_h"]}
     from playwright.sync_api import sync_playwright
     out = {}
     try:
@@ -363,3 +423,45 @@ def line_length(ctx):
         probs.append(f"{len(wide)} paragraph(s) run over {hi} characters a line, e.g. in fold '{wide[0]['fold']}' ({wide[0]['cpl']})")
     ctx.verdict(probs, f"body lines run {med} characters (median of {len(rows)} paragraphs)",
                 "set the reading column to about 65ch (max-width) so body lines run 60 to 80 characters (rule 45)")
+
+
+def covered(ivs, gap):
+    """Pixels of height the content covers: its vertical pieces, with gaps of `gap` px or less counted as covered."""
+    n, end = 0, None
+    for lo, hi in sorted(ivs):
+        if end is not None and lo - end <= gap:
+            n += max(0, hi - end)
+            end = max(end, hi)
+        else:
+            n += hi - lo
+            end = hi
+    return n
+
+
+def box_problems(boxes, L, w):
+    """One line for each box whose content fills too little of it (see layout.box-fill)."""
+    probs = []
+    for b in boxes:
+        name = f"'{b['name']}' in fold '{b['fold'] or '?'}'"
+        fill = covered(b["ivs"], L["box_gap_merge"]) / max(b["innerH"], 1)
+        if fill < L["box_fill_min"]:
+            probs.append(f"box {name}: content fills {fill:.0%} of its height ({b['w']} x {b['h']} px, min {L['box_fill_min']:.0%}) at {w}")
+        elif (b["w"] >= L["box_wide_min"] and b["left"] <= L["box_left_max"] * b["innerW"]
+              and 1 - b["right"] / max(b["innerW"], 1) > L["box_empty_right"] and b["innerW"] - b["right"] >= L["box_empty_px"]):
+            probs.append(f"box {name}: content stops at {b['right'] / b['innerW']:.0%} of its width, {1 - b['right'] / b['innerW']:.0%} empty on the right "
+                         f"({b['w']} x {b['h']} px, max {L['box_empty_right']:.0%}) at {w}")
+    return probs
+
+
+@check("layout.box-fill", "158a", what="a card or panel is filled by its content: no empty bottom half, no empty right half (rule 158)", needs="live")
+def box_fill(ctx):
+    """A box (a border on three sides or its own background, 240 x 160 px or more, not in a form, table, nav or tool) whose content
+    covers less than 55% of its inner height (an empty bottom half; a card stretched to a taller neighbour counts), or, 560 px or
+    wider, holds one text column against its left edge and leaves more than 45% of its width empty. Limits: growth.json layout."""
+    L, probs, seen = limits(ctx), [], 0
+    for w, d in measure(ctx).items():
+        seen += len(d.get("boxes", []))
+        probs += box_problems(d.get("boxes", []), L, w)
+    ctx.verdict(probs, f"{seen} box(es) measured at 1440 and 390, each filled at least {L['box_fill_min']:.0%} of its height",
+                "cut the box to its content (no min-height, no stretch to a taller card), add what the empty half is for, or fill the width "
+                "with a second column or a picture (rule 158a)")

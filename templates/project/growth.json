@@ -140,7 +140,17 @@
     "hype": null,
     "no_price": false,
     "call_minutes": null,
-    "call_words": "call|visit|meeting"
+    "call_words": "call|visit|meeting",
+    "_repeat_ok": "words.fact-repeats (rule 28): a fact (a time, price, percent or \"50+\") in 3 or more folds fails. Facts that may repeat: [\"4.8\", {\"fact\": \"60 days\", \"folds\": [\"rules\"]}] (the second form excuses the same words in the named folds, where they mean something else). The call's length (call_minutes) may always repeat.",
+    "repeat_ok": [],
+    "_repeat_terms": "Promises with no number that count as facts, besides the kit's (free replacement, money-back guarantee, no lock-in): a regex, or {\"pattern\": \"\\\\bNDA\\\\b\", \"as\": \"nda first\"}. repeat_folds (default 3) is the number of folds that makes a repeat; repeat_sentence (default 0.6) is how alike two long sentences of two folds may be.",
+    "repeat_terms": [],
+    "_internal": "words.internal-labels (rule 11): extra internal wording that must never reach the page, a regex (any case) or {\"pattern\": \"...\", \"case_sensitive\": true}. The kit already catches BRAND, FACTS, OWNER-RULES, dossier, fold plan, checkpoint file, this rebuild, the old page, growth.json and rule N. internal_ok lists wording that is fine as it stands.",
+    "internal": [],
+    "internal_ok": [],
+    "_old_terms": "migrate.old-terms (rule 36): every item of a short list (5 or more items of 5 words or fewer, or anything marked data-tags) is on an archived old page of the site or in BRAND.md. old_terms_scope \"page\" also needs it on THIS page's own old version; old_terms_ok lists items that are fine as they are.",
+    "old_terms_scope": "site",
+    "old_terms_ok": []
   },
   "money_core": [
     "/"
@@ -246,7 +256,7 @@
     "_about": "A house feature switched off in features needs its fit reason here (rule 161), for example {\"exit_offer\": \"the site sells nothing online; no booking path\"}. Without one, house.features fails: a reader-visible feature is never dropped silently."
   },
   "layout": {
-    "_about": "The measured design limits of rule 158a (layout.*, cta.one-per-view, cta.spacing, cta.legal-quiet, engage.one-mechanic). Every key is optional; these are the defaults. A limit changed for one site needs a \"_why\" next to it.",
+    "_about": "The measured design limits of rule 158a (layout.*, cta.one-per-view, cta.spacing, cta.legal-quiet, engage.one-mechanic). Every key is optional; these are the defaults. A limit changed for one site needs a \"_why\" next to it. box_* belong to layout.box-fill: a card or panel of at least box_min_w x box_min_h px must have content over box_fill_min of its inner height (gaps under box_gap_merge px count as content), and one at least box_wide_min px wide must not leave more than box_empty_right (and box_empty_px px) of its width empty on the right of a column against its left edge (within box_left_max).",
     "section_step": 80,
     "gap_pad": 24,
     "hero_extra": 66,
@@ -256,6 +266,14 @@
     "top_tolerance": 8,
     "picture_ratio": 0.6,
     "mechanics_max": 2,
+    "box_min_w": 240,
+    "box_min_h": 160,
+    "box_fill_min": 0.55,
+    "box_gap_merge": 32,
+    "box_wide_min": 560,
+    "box_empty_right": 0.45,
+    "box_empty_px": 320,
+    "box_left_max": 0.1,
     "legal_paths": [
       "/terms*",
       "/privacy*",
