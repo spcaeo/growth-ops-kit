@@ -297,6 +297,8 @@ def house_types(ctx):
     money = "|".join(main_types((ctx.cfg.get("schema_types") or {}).get("money")))   # never Organization: every page has it
     need = {"money": [money, "BreadcrumbList"], "post": ["Article|BlogPosting", "BreadcrumbList"],
             "hub": ["CollectionPage|WebPage", "BreadcrumbList"], "core": ["WebPage|AboutPage|ContactPage"]}[ctx.ptype]
+    if ctx.need_path() == "/":
+        need = [n for n in need if n != "BreadcrumbList"]   # home has no breadcrumbs (crumbs.visible); 2.6.3
     if faq_items(ctx, root)[1]:
         need.append("FAQPage")
     miss = [n for n in need if not set(n.split("|")) & have]

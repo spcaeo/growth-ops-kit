@@ -269,15 +269,30 @@ def call_length(ctx):
     if not want:
         raise Skip("no call length in growth.json (words.call_minutes)")
     words = wcfg(ctx, "call_words", "call|zoom|intro|visit|meeting")
-    t = page_text(ctx)
     probs = []
-    for m in re.finditer(r"(?i)\b" + NUM + r"[- ]minutes?\b", t):
-        tail = t[m.end():m.end() + 45]
-        if not re.search(r"(?i)\b(" + words + r")\b", tail.split(".")[0]):
-            continue
-        if m.group(1).lower() not in (str(want), NUMWORDS.get(int(want), "")):
-            probs.append(f"'{ctx_window(t, m)}'")
+    # 2.6.3: read each text element on its own, so "2 minutes" in a tool and "Free 30-minute call" in the next element
+    # are never joined into one phrase (a real project had 22 false FAILs from the page text read as one string).
+    for t in element_texts(ctx):
+        for m in re.finditer(r"(?i)\b" + NUM + r"[- ]minutes?\b", t):
+            tail = t[m.end():m.end() + 45]
+            if not re.search(r"(?i)\b(" + words + r")\b", tail.split(".")[0]):
+                continue
+            if m.group(1).lower() not in (str(want), NUMWORDS.get(int(want), "")):
+                probs.append(f"'{ctx_window(t, m)}'")
+    probs = list(dict.fromkeys(probs))
     ctx.verdict(probs, f"the call is always {want} minutes", f"say '{want}-minute call' (rule 4; BRAND.md)")
+
+
+TEXT_TAGS = ("p", "li", "dt", "dd", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6", "figcaption", "caption", "label",
+             "button", "summary", "blockquote", "q", "small", "strong", "em", "b", "a", "span")
+
+
+def element_texts(ctx):
+    """The text of each text element of the page body, one string per element (nested elements also give their own)."""
+    if "element_texts" not in ctx.cache:
+        body = domx.body(ctx.root())
+        ctx.cache["element_texts"] = [x for x in (domx.text(n) for n in body.iter() if getattr(n, "tag", None) in TEXT_TAGS) if x]
+    return ctx.cache["element_texts"]
 
 
 @check("words.us-spelling", "93", what="the chosen spelling (en-US, en-CA or en-GB, per path) in the title, description, alt text and body", needs="live")

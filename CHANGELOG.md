@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.6.3 - 2026-11-22
+
+- words.call-length reads each text element on its own, so a tool's "2 minutes" next to "Free 30-minute call" is no longer read as the call length (22 false FAILs on a real project).
+- schema.house-types: the home page needs no BreadcrumbList, matching crumbs.visible.
+- Test: `tests/test_release_2_6_3_call_home.py`.
+
 ## 2.6.2 - 2026-11-22
 
 - layout.card-orphan (158a): only a grid of like children (most share one tag and first class) is a card grid; a hero laid out as a heading, a picture and an answer box is a layout. (#88)

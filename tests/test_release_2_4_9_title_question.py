@@ -26,7 +26,7 @@ def test_kept_live_title_is_a_warning(tmp_path):
 
 def test_question_title_skips_the_byline():
     html = ("<html><body><main><section><h1>Is AI safe in hospitals?</h1>"
-            "<p class='byline'>By Rakesh Patel, updated 20 Nov 2026, eleven minute read</p>"
+            "<p class='byline'>By Jordan Lee, updated 20 Nov 2026, eleven minute read</p>"
             "<p>Yes, when it is validated on local data and a clinician stays in the loop.</p></section></main></body></html>")
     assert last("words.question-title", html).level == "OK"
 
