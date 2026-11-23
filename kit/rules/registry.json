@@ -1,6 +1,6 @@
 {
  "_about": "One entry per numbered rule of book/03-page-rulebook.md and per row of the owner rules (book/02-owner-rules.md; a project may add rows in its own OWNER-RULES.md). enforcement 'code': the checks decide it. 'judgment': a person decides; the proxy checks are code that prove the evidence exists. Severity FAIL unless warn_reason says why. 'needs' says what the checks read: live (the served page), project (the project folder), nextjs (the site's code; adapters/nextjs, run only when growth.json stack is nextjs). 'files' is kept in step by growth registry_sync. tests/ fail when a rule has no entry or an entry names a check that does not exist.",
- "rulebook_version": "2.7.2",
+ "rulebook_version": "2.7.3",
  "rules": [
   {"id": "0", "rule": "No shortcuts: every step of the job's playbook, in order, with every owner check-in.", "source": "book/03-page-rulebook.md", "scope": ["money", "hub", "post", "core", "process"], "enforcement": "code", "severity": "FAIL", "checks": ["ev.task-steps", "proc.tasks", "ev.brief"], "files": ["tools/gatelib/c_evidence.py", "tools/gatelib/c_process.py"], "needs": "project"},
   {"id": "0a", "rule": "Pre-flight before the build: planning complete, shared site problems fixed first, every checkpoint set", "source": "book/03-page-rulebook.md", "scope": ["money", "hub", "post", "core"], "enforcement": "code", "severity": "FAIL", "checks": ["ev.preflight"], "files": ["tools/gatelib/c_evidence.py", "tools/preflight.py"], "needs": "project"},

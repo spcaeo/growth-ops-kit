@@ -217,7 +217,9 @@ def up_across(ctx):
 def no_utm(ctx):
     root = ctx.root()
     probs = [a.get("href")[:60] for a in find_all(root, "a") if ctx.internal_path(a.get("href")) and "utm_" in a.get("href")]
-    probs += [f"{f.name}" for f, s in ctx.tree_sources().items() if re.search(r"utm_(source|medium|campaign)", s)]
+    # 2.7.3: only code that WRITES a utm_ tag into an address counts (?utm_source= / &utm_medium=); reading the landing
+    # URL's tags for first-touch attribution (params.get("utm_source")) adds nothing to any link
+    probs += [f"{f.name}" for f, s in ctx.tree_sources().items() if re.search(r"[?&]utm_(source|medium|campaign)=", s)]
     ctx.verdict(probs, "no utm_ on internal links", "name the CTA with a data attribute or event, not a utm_ parameter (rule 34)")
 
 
@@ -245,6 +247,8 @@ def copy_shared(ctx):
     for a in find_all(domx.body(root), "a"):
         h = a.get("href")
         if h.startswith(("mailto:", "tel:")):
+            if re.match(r"(?i)(mailto|tel):\s*(\?|$)", h):
+                continue          # "Email it" / share actions with no address or number: nothing to copy (2.7.3)
             box = a.parent
             if box is None or not any(re.search(r"(?i)copy", b.get("aria-label")) for b in find_all(box, "button")):
                 probs.append(f"{h[:40]} has no copy button")
@@ -474,7 +478,15 @@ def retired_410(ctx):
     code = "\n".join(f.read_text(errors="replace") for n in ("middleware.ts", "middleware.js", "next.config.ts", "next.config.js", "next.config.mjs", "vercel.json", "netlify.toml")
                      for f in [repo / n] if f.is_file())
     code += "\n".join((repo / r).read_text(errors="replace") for r in ctx.nx("redirect_files", []) if (repo / r).is_file())
-    lost = [p for p in paths if p.rstrip("/") not in code or not re.search(r"\b(410|gone|GONE)\b", code)]
+    lines = code.splitlines()
+
+    def answers_410(p):
+        """The group's name and a 410 within 5 lines of each other (2.7.3): an nginx rule names groups in one pattern,
+        ^/(wp-admin|wp-json)(/|$) { return 410; }, so the path with its slash is not a substring of the file."""
+        name = p.strip("/")
+        hits = [i for i, ln in enumerate(lines) if name and re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", ln)]
+        return any(re.search(r"\b(410|gone|GONE)\b", "\n".join(lines[max(0, i - 5):i + 6])) for i in hits)
+    lost = [p for p in paths if not answers_410(p)]
     ctx.verdict(lost, f"{len(paths)} retired group(s) still answer 410", "restore the 410 for the retired group (rule 76)")
 
 

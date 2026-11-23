@@ -184,6 +184,10 @@ def punct_any_stack(ctx):
                 "glue the marker to the link's last word (U+2060 in the ::after content or a nowrap slot) and add a test (rule 36c)")
 
 
+# a JavaScript regex literal after = ( , : [ ! & | ? { } ; or return, for example /[\u2713✓✔]/g
+REGEX_LITERAL = re.compile(r"(?:(?<=[=(,:\[!&|?{};])|(?<=\breturn))\s*/(?![/*])(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\n])+/[dgimsuyv]*")
+
+
 @check("icons.check-circle", "36e", what="list ticks are a tick inside a circle, one shared component, in the green 'yes' colour", needs="repo")
 def check_circle(ctx):
     repo = ctx.need_repo()
@@ -203,6 +207,8 @@ def check_circle(ctx):
         if f.name in TICK_OK or f in shared:
             continue
         t = f.read_text(errors="replace")
+        if f.suffix in (".ts", ".js", ".mjs", ".cjs", ".tsx", ".jsx"):
+            t = REGEX_LITERAL.sub("", t)   # a tick inside a /regex/ only recognises the mark in text; it draws nothing (2.7.3)
         if re.search(r"import\s*\{[^}]*\b(Check|CheckIcon)\b[^}]*\}\s*from\s*[\"']lucide-react", t) or re.search(r"[✓✔]", t):
             probs.append(f"{f.relative_to(repo)}: bare tick (use the shared Tick)")
     for f in shared:

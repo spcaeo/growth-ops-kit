@@ -4,6 +4,14 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.7.3 - 2026-11-23
+
+- links.no-utm: only source that writes `?utm_` / `&utm_` into an address fails; code that reads the landing URL's utm tags for attribution passes.
+- copy.shared: a `mailto:` or `tel:` link with no address or number (an "Email it" share action) needs no copy button.
+- icons.check-circle: a tick inside a JavaScript regex literal (emoji recognisers) is not a bare tick.
+- repo.retired-410: a retired group passes when its name and a 410 sit within 5 lines of each other (nginx rules name groups in one pattern).
+- Tests in `tests/test_release_2_6_0_any_stack.py`.
+
 ## 2.7.2 - 2026-11-23
 
 - hero.unique (157): an icon inside a button or call-to-action link (the booking button's arrow) is not the hero's picture or motion, so a hero without its own drawing is no longer counted as having one. (#92)

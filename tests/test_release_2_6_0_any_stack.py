@@ -284,3 +284,43 @@ def test_no_dead_files_reads_src_on_astro(tmp_path, repo):
     commit(repo)
     ln = line(make_ctx(tmp_path, repo), "repo.no-dead-files")
     assert ln.level == "FAIL" and "Unused.astro" in ln.what and "Used.astro is not" not in ln.what, ln.text()
+
+
+# ---- 2.7.3: three misreads on a real Astro site ----------------------------------------------------------------
+def test_reading_utm_tags_for_attribution_is_not_a_utm_link(tmp_path, repo):
+    hero = repo / "src/components/blocks/Hero.astro"            # imported by the lawn-mowing page, so in its source tree
+    hero.write_text("<script>const p = new URLSearchParams(location.search); const s = p.get('utm_source');</script>")
+    assert line(make_ctx(tmp_path, repo), "links.no-utm").level == "OK"
+    hero.write_text("<script>a.href = '/contact-us/?utm_source=footer';</script>")
+    ln = line(make_ctx(tmp_path, repo), "links.no-utm")
+    assert ln.level == "FAIL" and "Hero.astro" in ln.what, ln.text()
+
+
+def test_mailto_with_no_address_needs_no_copy_button(tmp_path, repo):
+    c = make_ctx(tmp_path, repo)
+    c.html = '<html><body><main><h1>x</h1><p><a href="mailto:?subject=Read%20this">Email it</a></p></main></body></html>'
+    assert line(c, "copy.shared").level == "OK"
+    c = make_ctx(tmp_path, repo)
+    c.html = '<html><body><main><h1>x</h1><p><a href="mailto:hi@tiny.example">hi@tiny.example</a></p></main></body></html>'
+    ln = line(c, "copy.shared")
+    assert ln.level == "FAIL" and "has no copy button" in ln.what, ln.text()
+
+
+def test_a_tick_inside_a_regex_is_not_a_bare_tick(tmp_path, repo):
+    (repo / "src/components/article").mkdir(parents=True, exist_ok=True)
+    (repo / "src/components/article/emoji.ts").write_text("const TICK = /[\\u2713✓✔]/g;\nexport const has = (s) => TICK.test(s);\n")
+    assert line(make_ctx(tmp_path, repo), "icons.check-circle").level == "OK"
+    (repo / "src/components/article/emoji.ts").write_text("el.textContent = '✓ done';\n")
+    ln = line(make_ctx(tmp_path, repo), "icons.check-circle")
+    assert ln.level == "FAIL" and "bare tick" in ln.what, ln.text()
+
+
+def test_retired_groups_found_in_an_nginx_style_rule(tmp_path, repo):
+    (repo / "src/lib").mkdir(parents=True, exist_ok=True)
+    (repo / "src/lib/redirects.mjs").write_text(
+        "export const conf = `\n  location ~ ^/(wp-admin|wp-json|graphql)(/|$) { return 410; }\n`;\n")
+    ok = make_ctx(tmp_path, repo, nextjs={"retired_paths": ["/wp-admin", "/wp-json", "/graphql"], "redirect_files": ["src/lib/redirects.mjs"]})
+    assert line(ok, "repo.retired-410").level == "OK"
+    bad = make_ctx(tmp_path, repo, nextjs={"retired_paths": ["/wp-admin", "/tag"], "redirect_files": ["src/lib/redirects.mjs"]})
+    ln = line(bad, "repo.retired-410")
+    assert ln.level == "FAIL" and "/tag" in ln.what and "/wp-admin" not in ln.what, ln.text()
