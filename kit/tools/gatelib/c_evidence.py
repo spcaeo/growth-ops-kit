@@ -376,7 +376,9 @@ def task_steps(ctx):
     probs += [f"{task['id']} step {s.get('n')} skipped" for s in steps if s.get("status") == "skipped"]
     # A step still "todo" while a later step is done was either skipped or done and never ticked (from a real project,
     # 30 such steps once sat on five finished pages). Steps that only happen after the release may wait.
-    after = re.compile(r"(?i)release|index|re-read|measure|day 7")
+    # The golden-rule step and owner check-in 2 come AFTER READY by definition (the owner may only see a READY page), so they
+    # may wait too; demanding them before READY made a circle that taught agents to tick steps out of order (2.8.0).
+    after = re.compile(r"(?i)release|index|re-read|measure|day 7|golden rule|check-in 2|check in 2")
     # judge order by the step's own label ("Step 16a" comes after "Step 16"), not by where it sits in the list:
     # steps can only be appended, so a step added later would otherwise make every earlier step look skipped
     steps = sorted(steps, key=step_order)
@@ -495,14 +497,20 @@ def brief(ctx):
     # Only a row that sets or changes a rule makes a brief stale. A row whose "What was done" says "(no new rule)" (a
     # question, a status request) does not: one owner question once dropped every READY page (2.4.6).
     rows = [r for r in log.read_text().splitlines() if re.match(r"\|\s*I-\d+\s*\|", r)] if log.exists() else []
-    rule_rows = [r for r in rows if "no new rule" not in r.lower()]
+    # 2.8.0: a rule about how the team works, not about what a page says or shows, is marked "(no page rule)" and does not
+    # make page briefs stale either (from a real project: "pause and fix the kit first" dropped 12 READY pages at once).
+    def done(r):   # ID | Date | What the owner said | What was done | Where: the owner's quoted words never count
+        cells = r.split("|")
+        return (cells[-3] if len(cells) >= 6 else r).lower()
+    rule_rows = [r for r in rows if "no new rule" not in done(r) and "no page rule" not in done(r)]
     if rows:
         newest = re.match(r"\|\s*(I-\d+)", rule_rows[-1]).group(1) if rule_rows else None
         ids = {int(x) for x in re.findall(r"\bI-(\d+)\b", b.read_text())}
         stale = newest is not None and (not ids or max(ids) < int(newest[2:]))
         ctx.verdict(["brief is older than the newest owner instruction that sets a rule (" + newest + ")"] if stale else [],
                     f"brief {b.name} is current" + (f" (holds the rules up to {newest})" if newest else ""),
-                    "regenerate it with growth brief and send the new rows to the helper (rule 0)")
+                    "regenerate it with growth brief and send the new rows to the helper (rule 0); a rule about how the "
+                    "team works rather than what pages say or show is marked '(no page rule)' in docs/steps-log.md")
         return
     ctx.verdict([] if mtime(b) >= mtime(log) - 1 else ["brief is older than the newest owner instruction"],
                 f"brief {b.name} is current", f"regenerate it with growth brief and send the new rows to the helper (rule 0)")

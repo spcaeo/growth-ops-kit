@@ -157,15 +157,15 @@ def _chromium_ready():
         return False
 
 
-def test_browser_checks_pass_on_the_strong_page_when_a_browser_is_installed(base):
+def test_browser_checks_pass_on_the_strong_page_when_a_browser_is_installed(base, demo_project):
     """Contrast at rest, hover and focus, and phone readability, measured in a real headless browser (closed at the end).
     Skipped, never faked, when no browser is installed: setup.sh --browsers installs one."""
     if not _chromium_ready():
         pytest.skip("no headless chromium (python3 -m playwright install chromium)")
-    env = {**os.environ, "GROWTH_PROJECT": str(DEMO / "project")}
+    env = {**os.environ, "GROWTH_PROJECT": str(demo_project)}       # a scratch copy: the contrast check keeps its measurements in <project>/.cache
     r = subprocess.run([sys.executable, str(GATE), "page", "/lawn-mowing", "--url", base + "/lawn-mowing", "--type", "money",
                         "--only", "ui.contrast-states,ui.phone", "--no-link-status"], capture_output=True, text=True, env=env,
-                       cwd=DEMO / "project", timeout=300)
+                       cwd=demo_project, timeout=300)
     assert "FAIL" not in r.stdout.split("Gate:")[0], r.stdout
     assert sum(1 for l in r.stdout.splitlines() if l.startswith("OK")) == 2, r.stdout
 

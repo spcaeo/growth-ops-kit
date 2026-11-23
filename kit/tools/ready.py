@@ -3,12 +3,18 @@
 
   growth ready <path> --type money|core|hub|post --key <key>    # check one page
   growth ready --list                                           # what is READY now
+  growth ready --batch pages.txt [--jobs 3] [--stale-only]      # many pages side by side ("<path> <type> <key>" a line)
+  growth ready --batch ledger --stale-only                      # re-check every page in the ledger that is not READY now
 
 A page is READY only when the full gate, run on the one preview address (growth.json preview_url) against the
 worktree that serves it (growth.json preview_repo), shows 0 FAIL. That includes the status of every internal link (growth.json link_check_cap, default 200), the independent review (rule 109),
 fresh screenshots and click-test, the fact check, the AI baseline and the speed run: no exceptions, no "known" FAILs.
 Manual checkpoints (research/<key>-checkpoints.md, see `growth checkpoints`) must each be ticked with a proof.
-READY is recorded in journal/ready.json with the commit it was checked at; any later commit makes it not READY again.
+READY is recorded in journal/ready.json with the commit it was checked at and the page's fingerprint (its built HTML plus
+every CSS and JS file it links, see fingerprint.py). It stays READY while either is unchanged: the same commit, or a
+later commit whose fresh build leaves this page's output byte for byte the same (2.8.0; before, any commit anywhere on the
+site made every page not READY, so one page's fix forced a re-check of all of them). A build older than the last commit
+never vouches for a page: then only the commit counts.
 growth url_guard (the Stop hook) blocks any reply that shows the owner a local page URL that is not READY.
 """
 from __future__ import annotations
@@ -19,6 +25,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -70,14 +77,78 @@ def _released(commit):
     return r.returncode == 0
 
 
-def is_ready(path):
-    e = ledger().get(path.rstrip("/") or "/")
+def head_moved_at(repo):
+    """When the worktree's HEAD last moved (commit, merge, pull, checkout, reset): the newest of the commit's own time and
+    the HEAD reflog / HEAD file times. A fast-forward to an older commit moves HEAD without a new commit time, so the
+    commit time alone let a build made before the move vouch for code it never saw (2.8.0 review). None when unknown."""
+    times = []
+    ct = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%ct"], capture_output=True, text=True).stdout.strip()
+    if ct.isdigit():
+        times.append(int(ct))
+    for name in ("logs/HEAD", "HEAD"):
+        gp = subprocess.run(["git", "-C", str(repo), "rev-parse", "--git-path", name], capture_output=True, text=True).stdout.strip()
+        if gp:
+            fp = Path(gp) if Path(gp).is_absolute() else repo / gp
+            try:
+                times.append(fp.stat().st_mtime)
+            except OSError:
+                pass
+    return max(times) if times else None
+
+
+def page_fp(path, repo=None):
+    """The page's fingerprint from the built output (growth.json build_dir), or None when there is no build, the page is
+    not in it, or the build is older than the preview repo's last commit (an old build cannot vouch for the code now)."""
+    try:
+        import fingerprint
+        repo = repo or preview_repo()
+        root = fingerprint.build_root(CFG, PROJECT, repo)
+        if not root or not root.is_dir():
+            return None
+        f = fingerprint._built_file(root, path)
+        if not f:
+            return None
+        if repo is not None and (repo / ".git").exists():
+            moved = head_moved_at(repo)
+            if moved is None or f.stat().st_mtime <= moved:
+                return None
+        fp = fingerprint.current(CFG, PROJECT, repo, path)
+        return fp if fp and fp.get("src") == "build" else None
+    except Exception:  # noqa: BLE001  (no fingerprint: the commit rule decides)
+        return None
+
+
+FAILED = PROJECT / "journal" / "ready-failed.json"
+
+
+def failed():
+    try:
+        return json.loads(FAILED.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def status(path, entry=None, now=None, repo=None):
+    """"same commit", "same output" or "" (not READY) for one ledger entry."""
+    e = entry if entry is not None else ledger().get(path.rstrip("/") or "/")
     if not e:
-        return False
-    now = head(preview_repo())
+        return ""
+    repo = repo or preview_repo()
+    now = now or head(repo)
     if e.get("commit") == now:
-        return True
-    return now == "no-repo" and _released(e.get("commit"))
+        return "same commit"
+    if now == "no-repo":
+        return "released" if _released(e.get("commit")) else ""
+    if e.get("fp"):
+        import fingerprint
+        cur = page_fp(path, repo)
+        if cur and fingerprint.same(e["fp"], cur, "built"):
+            return "same output"
+    return ""
+
+
+def is_ready(path, repo=None):
+    return bool(status(path, repo=repo))
 
 
 def manual_problems(path, key):
@@ -195,14 +266,21 @@ def main():
     ap.add_argument("--key")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--repo", help="the worktree the page is built in (overrides growth.json preview_repo for this run)")
+    ap.add_argument("--batch", help='file with "<path> <type> <key>" a line, or "ledger" for every page in journal/ready.json')
+    ap.add_argument("--jobs", type=int, default=0, help="pages checked side by side (default growth.json ready_jobs, else 3)")
+    ap.add_argument("--stale-only", action="store_true", help="skip pages that are READY now (same commit or same output)")
     a = ap.parse_args()
     repo = Path(a.repo).expanduser().resolve() if a.repo else preview_repo()   # 2.7.6: like gate page --repo
     if not a.list and a.path and not a.repo and preview_repo_problem():
         sys.exit(preview_repo_problem())
+    if a.batch:
+        sys.exit(run_batch(a.batch, a.jobs, a.stale_only, Path(a.repo).expanduser().resolve() if a.repo else None))
     if a.list or not a.path:
         cur = head(repo)
         for p, e in sorted(ledger().items()):
-            print(f"{'READY' if e.get('commit') == cur else 'STALE'}  {p}  (checked {e.get('at')} at {e.get('commit', '')[:7]})")
+            why = status(p, e, cur, repo)
+            print(f"{'READY' if why else 'STALE'}  {p}  (checked {e.get('at')} at {e.get('commit', '')[:7]}"
+                  f"{'; ' + why if why else ''})")
         return
     if not (a.type and a.key):
         sys.exit("--type and --key are required")
@@ -212,26 +290,102 @@ def main():
     url = CFG["preview_url"].rstrip("/") + fetch_path(path, a.path, CFG)
     cmd = [sys.executable, str(KIT_DIR / "tools" / "gate.py"), "page", path, "--url", url,
            "--type", a.type, "--key", a.key] + (["--repo", str(repo)] if repo else [])
+    t0 = time.time()
+    c0, fp0 = head(repo), page_fp(path, repo)
     r = run_gate(cmd)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
     broken = key_problem(path, a.key) or gate_problem(r, a.type)
     if broken:
         fails.insert(0, f"FAIL {broken}")
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
+    if head(repo) != c0 or page_fp(path, repo) != fp0:
+        fails.insert(0, "FAIL the code or the build changed while the gate ran: run growth ready again on the settled tree")
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     held_lines = held_proposals(a.key)
     if fails:
         atomic.update_json(LEDGER, lambda x: x.pop(path, None) and None, default={}, indent=1)
+        atomic.update_json(FAILED, lambda x: x.update({path: {"type": a.type, "key": a.key, "commit": c0,
+                           "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "first": fails[0][:200]}}),
+                           default={}, indent=1)
         print(f"NOT READY {path}: {len(fails)} FAIL, {oks} OK. The URL may not be shared with the owner.")
         for l in fails:
             print(" ", l[:200])
         print_held(held_lines)
         sys.exit(1)
-    entry = {"commit": head(repo), "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "ok": oks, "url": url}
+    entry = {"commit": c0, "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "ok": oks, "url": url,
+             "type": a.type, "key": a.key, "secs": round(time.time() - t0)}
+    if fp0:
+        entry["fp"] = fp0
     atomic.update_json(LEDGER, lambda x: x.update({path: entry}), default={}, indent=1)
+    if path in failed():
+        atomic.update_json(FAILED, lambda x: x.pop(path, None) and None, default={}, indent=1)
     d = {path: entry}
     print(f"READY {path}: 0 FAIL, {oks} OK at {d[path]['commit'][:7]}. It may be shared: {url}")
     print_held(held_lines)
+
+
+def batch_lines(src):
+    """[(path, type, key)] from a file ("<path> <type> <key>" a line, # comments) or "ledger" (pages checked since 2.8.0)."""
+    if src == "ledger":   # READY pages and pages that failed their last check (journal/ready-failed.json)
+        both = {**failed(), **ledger()}
+        return [(p, e["type"], e["key"]) for p, e in sorted(both.items()) if e.get("type") and e.get("key")]
+    out = []
+    for ln in Path(src).expanduser().read_text().splitlines():
+        ln = ln.split("#", 1)[0].strip()
+        if not ln:
+            continue
+        parts = ln.split()
+        if len(parts) != 3 or parts[1] not in ("money", "core", "hub", "post"):
+            sys.exit(f"bad batch line (want '<path> <type> <key>'): {ln}")
+        if tuple(parts) not in out:   # a page twice would run twice at once and one log would overwrite the other
+            out.append(tuple(parts))
+    return out
+
+
+def run_batch(src, jobs=0, stale_only=False, repo=None):
+    """Check many pages side by side: each page is its own `growth ready` run (its own gate and browser), so a page's verdict
+    is exactly what a single run gives. Prints each verdict as it lands, then the totals and the full log's location."""
+    import concurrent.futures as cf
+    rows = batch_lines(src)
+    if repo is None and preview_repo_problem():   # once here, not as a bare NOT READY on every page
+        return preview_repo_problem()
+    jobs = jobs or int(CFG.get("ready_jobs") or 3)
+    kept, todo = [], []
+    for p, t, k in rows:
+        (kept if stale_only and is_ready(p, repo) else todo).append((p, t, k))
+    for p, *_ in kept:
+        print(f"READY (kept, {status(p, repo=repo)})  {p}", flush=True)
+    t0 = time.time()
+    logs, verdicts = {}, {}
+
+    def one(row):
+        p, t, k = row
+        s0 = time.time()
+        r = subprocess.run([sys.executable, str(Path(__file__).resolve()), p, "--type", t, "--key", k] + (["--repo", str(repo)] if repo else []),
+                           capture_output=True, text=True, cwd=PROJECT)
+        return row, r, time.time() - s0
+
+    with cf.ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
+        for fut in cf.as_completed([ex.submit(one, row) for row in todo]):
+            (p, t, k), r, secs = fut.result()
+            out = (r.stdout or "") + (r.stderr or "")
+            logs[p] = out
+            ok = r.returncode == 0 and out.lstrip().startswith("READY")
+            verdicts[p] = ok
+            first = next((l.strip() for l in out.splitlines() if l.strip().startswith("FAIL")), "")
+            print(f"{'READY' if ok else 'NOT READY'}  {p}  {secs:.0f}s" + ("" if ok else f"  {first[:150]}"), flush=True)
+    wall = time.time() - t0
+    n_ok = sum(verdicts.values()) + len(kept)
+    stamp = dt.datetime.now(TZ).strftime("%Y-%m-%d-%H%M%S")
+    log = PROJECT / "journal" / "runs" / f"ready-batch-{stamp}.log"
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("".join(f"===== {p}\n{logs[p]}\n" for p in sorted(logs)))
+    except OSError:
+        log = None
+    print(f"\nBatch: {n_ok} of {len(rows)} READY ({len(kept)} kept unchanged, {len(todo)} checked with {jobs} side by side in "
+          f"{wall / 60:.1f} min){'; full log ' + str(log.relative_to(PROJECT)) if log else ''}")
+    return 0 if n_ok == len(rows) else 1
 
 
 if __name__ == "__main__":

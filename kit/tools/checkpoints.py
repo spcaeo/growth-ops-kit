@@ -115,12 +115,46 @@ def proof_refs(text, project=None, repos=()):
     return out
 
 
+KIT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def outside_files(text, project=None, repos=()):
+    """Absolute file paths the proof names that sit outside the project, the site repos and the kit (a scratchpad, /tmp,
+    a home folder). Such a file is not proof: scratch folders are cleaned, and the proof then points at nothing (2.8.0;
+    from a real project: a clean-up of the scratchpad broke the ticks of a dozen finished pages)."""
+    if not project:
+        return []
+    roots = [Path(r).expanduser().resolve() for r in ((project,) + tuple(repos or ())) if r] + [KIT_ROOT]
+    bare = URL_RE.sub(" ", str(text or ""))
+    out = []
+    disk = ("/Users/", "/home/", "/private/", "/tmp/", "/var/", "/Volumes/", "/opt/", "/root/")
+    for f in FILE_RE.findall(bare):
+        cand = Path(f).expanduser()
+        if not cand.is_absolute():
+            if ".." not in cand.parts:
+                continue
+            cand = Path(project).expanduser() / cand   # ../scratch/notes.md climbs out of the project
+        elif not cand.exists() and not str(cand).startswith(disk) and not f.startswith("~"):
+            continue   # "/pricing/index.html in dist" is a site path, not a file on this machine
+        try:
+            rc = cand.resolve()
+        except OSError:
+            rc = cand
+        if not any(rc == r or r in rc.parents for r in roots):
+            out.append(f)
+    return out
+
+
 def proof_problem(text, project=None, repos=()):
     """None when `text` is meaningful proof; else what is wrong, in plain words."""
     t = str(text or "").strip()
     if t.lower() in WEAK or len(t) < PROOF_MIN:
         return (f"'{t}' is not proof: name what you checked (a file, a commit, a journal id, a command with its output "
                 "line, or a web address)")
+    away = outside_files(t, project, repos)
+    if away:
+        return (f"'{away[0][:70]}' is outside the project: proof must live in the project (research/, journal/), the site "
+                "repo or the kit; copy the file into research/ and name that copy, or name the commit or journal id instead")
     refs = proof_refs(t, project, repos)
     if any(refs.values()):
         return None
