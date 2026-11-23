@@ -232,6 +232,10 @@
     "_fresh_on": "When evidence (shots, click test, share preview) counts as current: 'built' (default) = the page and every CSS/JS file it links are unchanged; 'page_html' = the page's own markup is unchanged, shared bundles may differ (a site where every merged page rebuilds one shared bundle). The measured layout checks still run live on every gate."
   },
   "_evidence": "What makes a page's screenshots, click-test and share preview stale: the newest commit that touched the page's own content file(s) (page_tracker.page_sources or content_globs, or evidence.content_globs, each {glob, address, values}) or shared code that renders it. shared_paths (null = the default: src/components, src/layouts, src/styles, styles, src/lib, src/data, astro.config.*) replaces that list. A commit that only touches other pages' content does not count. A page whose own files cannot be found falls back to the newest commit of the whole checkout.",
+  "contrast_cache": true,
+  "_contrast_cache": "The contrast check (ui.contrast-states, rule 36j) keeps what it measured under <project>/.cache/contrast, keyed by the control's look-alike signature, the width and a hash of every stylesheet, so the header, footer and pills that repeat on every page are measured once, not on every page. Any CSS change gives new keys by itself. Set false to measure every control on every run (growth gate page --no-cache and growth contrast_check --no-cache do the same for one run). The cache folder keeps itself out of git.",
+  "phone_parallel": true,
+  "_phone_parallel": "The phone check (ui.phone, rule 70) measures its four widths side by side in one browser (about 4 s instead of 14). Set false to measure them one after the other, for a machine too busy to load four pages at once (growth phone_check --serial does the same for one run).",
   "thin_ok_paths": [],
   "_thin_ok_paths": "Pages that are short by nature (an author page): [{\"glob\": \"*/author/*/\", \"why\": \"an author page lists a bio and posts\"}]. A matching page gets a WARN, not a FAIL, on CNT-01 and JSR-02. An entry without a why is ignored. Default empty: no blanket exception.",
   "indexing": {

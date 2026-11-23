@@ -132,14 +132,16 @@ def contrast_states(ctx):
     need_browser(ctx)
     import sys as _sys
     _sys.path.insert(0, str(ctx.kit_dir / "tools"))
-    from contrast_check import check as _cc  # noqa: E402
+    from contrast_check import WIDTHS as _widths, cache_dir_for, check_widths as _cw  # noqa: E402
     if not ctx.url or not ("127.0.0.1" in ctx.url or "localhost" in ctx.url):
         from .core import NeedsPage
         raise NeedsPage("local page URL", "pass --url http://127.0.0.1:<port><path> (the check hovers every control)")
     probs, n = [], 0
+    # one browser for both widths; controls that look alike are measured once, and what was measured is kept in
+    # <project>/.cache/contrast (growth.json "contrast_cache": false, or gate --no-cache, switches that off)
+    cache = None if ctx.cache.get("no_cache") else cache_dir_for(ctx.project, ctx.cfg)
     try:
-        for w in (1366, 390):
-            p, rows = _cc(ctx.url, w)
+        for w, (p, rows) in _cw(ctx.url, _widths, cache_dir=cache).items():
             probs += [f"{w}px {x}" for x in p]
             n += len(rows)
     except Exception as e:  # noqa: BLE001
@@ -156,12 +158,12 @@ def phone(ctx):
     import sys as _sys
     _sys.path.insert(0, str(ctx.kit_dir / "tools"))
     need_browser(ctx)
-    from phone_check import WIDTHS, check as _pc  # noqa: E402
+    from phone_check import WIDTHS, check_widths as _pcw  # noqa: E402
     if not ctx.url or not ("127.0.0.1" in ctx.url or "localhost" in ctx.url):
         from .core import NeedsPage
         raise NeedsPage("local page URL", "pass --url http://127.0.0.1:<port><path> (the check loads the page at four widths)")
     try:
-        probs = [f"{w}px {x}" for w in WIDTHS for x in _pc(ctx.url, w)]
+        probs = [f"{w}px {x}" for w, found in _pcw(ctx.url, WIDTHS, parallel=ctx.cfg.get("phone_parallel") is not False).items() for x in found]
     except Exception as e:  # noqa: BLE001
         if browser_failed(e):
             raise Skip("no headless browser installed (python3 -m playwright install chromium)", blocked=True)
