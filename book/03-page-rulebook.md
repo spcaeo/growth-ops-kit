@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.6.0
+version: 2.6.1
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.6.0 (generic edition) · 22 Nov 2026.**
+**Version 2.6.1 (generic edition) · 22 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-22 | 2.6.1 | Rule 36c reads running text only (a site names its menu and contents classes) and asks a dark link colour only of a site with a dark theme; rule 42 judges logo files only; rule 89 lets the home page link down to every silo. |
 | 2026-11-22 | 2.6.0 | The checks that read the site's code run on any stack (Astro, Vite, SvelteKit) when a checkout is given: shared components found by name, the link flags from the crawled link graph, the logo's accessible name may change, the type checker is the stack's own. |
 | 2026-11-22 | 2.5.0 | Rule 157 is checked on the served page for every stack: siblings may not share a hero design, picture or animation. |
 | 2026-11-22 | 2.4.11 | Rule 84: the H1 reads once (words.h1-clean), after a template glued a highlight label onto 32 titles. |

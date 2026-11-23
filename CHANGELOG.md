@@ -4,6 +4,13 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.6.1 - 2026-11-22
+
+- links.blue (36c): growth.json `links.not_text` (regex alternatives) names a site's own menu, contents or badge classes that are not running text. Hover and focus colours are left out of the colour test (rule 36j). The dark link colour is required only when the site has a dark theme (prefers-color-scheme: dark, [data-theme=dark], .dark). (#87)
+- repo.logo-untouched (42): only logo-named files (logo, lockup, wordmark, brand-mark) count. A brand folder also holds icons such as a tick. (#87)
+- links.up-across (89): the home page sits above every silo; it passes when its content links down to each silo's top page. (#87)
+- Test: `tests/test_release_2_6_1_links_logo_home.py`.
+
 ### 2.6.0
 
 - The checks that read the site's code (needs="repo", about 45 of them, once written for Next.js) now run on any stack whenever a site checkout is given, and without one they print a blocked SKIP (never a pass). Next.js behaviour is unchanged.

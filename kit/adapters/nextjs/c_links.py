@@ -37,20 +37,23 @@ def blue(ctx):
     else:
         if lv != LIGHT:
             probs.append(f"{name} is {lv} in light mode ({LIGHT} required)")
-        if dv != DARK:
+        dark_theme = re.search(r"prefers-color-scheme\s*:\s*dark|\[data-theme=[\"']?dark|\.dark\b|\.theme-dark", css)
+        if dark_theme and dv != DARK:            # a site with no dark theme has no dark background to set a link colour for (2.6.1)
             probs.append(f"{name} is {dv or 'not set'} in dark mode ({DARK} required)")
         if lv and contrast(lv, "#ffffff") < 4.5:
             probs.append(f"{name} {lv} on white is {contrast(lv, '#ffffff'):.1f}:1 (4.5:1 needed)")
         if dv and contrast(dv, bg) < 4.5:
             probs.append(f"{name} {dv} on the dark background {bg} is {contrast(dv, bg):.1f}:1 (4.5:1 needed)")
-    rules = prose_link_rules(css)
+    rules = prose_link_rules(css, "|".join((ctx.cfg.get("links") or {}).get("not_text") or []))
     if not rules:
         probs.append("no CSS rule styles in-text links (e.g. '.article-body a', 'main p a')")
     use = f"var({name})" if name else "var(--link-blue)"
     colours = [(s, c.strip()) for s, b in rules for c in re.findall(r"(?<![\w-])color\s*:\s*([^;]+)", b)]
     if rules and not any(use in c for _, c in colours):
         probs.append(f"no in-text link rule sets color: {use}")
-    bad = [f"{s[-40:]} color: {c}" for s, c in colours if brandish(ctx).search(c) or (use not in c and c not in ("inherit", "currentColor"))]
+    # a hover or focus state may change the colour (rule 36j: a hover changes one thing the reader can see)
+    bad = [f"{s[-40:]} color: {c}" for s, c in colours if not re.search(r":(hover|focus)", s)
+           and (brandish(ctx).search(c) or (use not in c and c not in ("inherit", "currentColor")))]
     probs += [f"in-text link in another colour: {b}" for b in bad[:3]]
     if rules and not any(re.search(r"text-decoration(-line)?\s*:[^;]*underline", b) for _, b in rules):
         probs.append("in-text links are not underlined")

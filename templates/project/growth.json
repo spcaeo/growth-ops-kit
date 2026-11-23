@@ -266,5 +266,9 @@
       "accordion",
       "slider"
     ]
+  },
+  "links": {
+    "not_text": [],
+    "_not_text": "Regex alternatives for a site's own menu, contents or badge link classes that are not running text (rule 36c, links.blue)."
   }
 }
