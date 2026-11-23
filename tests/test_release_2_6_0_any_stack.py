@@ -324,3 +324,11 @@ def test_retired_groups_found_in_an_nginx_style_rule(tmp_path, repo):
     bad = make_ctx(tmp_path, repo, nextjs={"retired_paths": ["/wp-admin", "/tag"], "redirect_files": ["src/lib/redirects.mjs"]})
     ln = line(bad, "repo.retired-410")
     assert ln.level == "FAIL" and "/tag" in ln.what and "/wp-admin" not in ln.what, ln.text()
+
+
+def test_a_utm_link_in_a_code_comment_is_not_a_utm_link(tmp_path, repo):
+    hero = repo / "src/components/blocks/Hero.astro"
+    hero.write_text("<script>// once carried as ?utm_source=partner&utm_medium=banner\n/* &utm_campaign=x */ const a = 1;</script>")
+    assert line(make_ctx(tmp_path, repo), "links.no-utm").level == "OK"
+    hero.write_text("<script>const u = 'https://x.example/'; a.href = u + '?utm_source=footer';</script>")
+    assert line(make_ctx(tmp_path, repo), "links.no-utm").level == "FAIL"

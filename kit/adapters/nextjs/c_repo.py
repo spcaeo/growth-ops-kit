@@ -213,13 +213,20 @@ def up_across(ctx):
     ctx.verdict(probs, f"links to {len(posts)} posts of its cluster", "add contextual links up/down/across from sentences that name the target (rule 89)")
 
 
+def strip_comments(src):
+    """Source without // line comments, /* block */ comments, <!-- html --> comments and # comment lines (2.7.4): a
+    comment that remembers an old utm-tagged link adds nothing to any link."""
+    src = re.sub(r"/\*.*?\*/|<!--.*?-->", "", src, flags=re.S)
+    return re.sub(r"(?m)(^|[^:\\\w])//[^\n]*|^\s*#[^\n]*", r"\1", src)
+
+
 @check("links.no-utm", "34", what="no utm_ on internal links, in the HTML or the page's source", needs="repo")
 def no_utm(ctx):
     root = ctx.root()
     probs = [a.get("href")[:60] for a in find_all(root, "a") if ctx.internal_path(a.get("href")) and "utm_" in a.get("href")]
     # 2.7.3: only code that WRITES a utm_ tag into an address counts (?utm_source= / &utm_medium=); reading the landing
     # URL's tags for first-touch attribution (params.get("utm_source")) adds nothing to any link
-    probs += [f"{f.name}" for f, s in ctx.tree_sources().items() if re.search(r"[?&]utm_(source|medium|campaign)=", s)]
+    probs += [f"{f.name}" for f, s in ctx.tree_sources().items() if re.search(r"[?&]utm_(source|medium|campaign)=", strip_comments(s))]
     ctx.verdict(probs, "no utm_ on internal links", "name the CTA with a data attribute or event, not a utm_ parameter (rule 34)")
 
 

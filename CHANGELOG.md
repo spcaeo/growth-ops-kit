@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.7.4 - 2026-11-23
+
+- links.no-utm skips `//`, `/* */`, `<!-- -->` and `#` comments, so a comment that mentions an old utm-tagged link no longer fails the page.
+- Test: `tests/test_release_2_6_0_any_stack.py::test_a_utm_link_in_a_code_comment_is_not_a_utm_link`.
+
 ## 2.7.3 - 2026-11-23
 
 - links.no-utm: only source that writes `?utm_` / `&utm_` into an address fails; code that reads the landing URL's utm tags for attribution passes.
