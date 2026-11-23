@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.7.1
+version: 2.7.2
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.7.1 (generic edition) · 22 Nov 2026.**
+**Version 2.7.2 (generic edition) · 22 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-23 | 2.7.2 | Rule 157: a button's icon is not the hero's picture. |
 | 2026-11-23 | 2.7.1 | Rule 45 is measured (layout.line-length). |
 | 2026-11-23 | 2.7.0 | Rule 36h: a plan is written for its own page (no copied template answers) and the built page follows it, fold by fold. |
 | 2026-11-22 | 2.6.7 | Rule 147's split-hero check ignores a script, style or aria-hidden hint beside the hero's grid; only elements that take part in the layout count as columns. |

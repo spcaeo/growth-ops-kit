@@ -32,6 +32,9 @@ def hero_print(html):
     for n in h.iter():
         if not n.tag:
             continue
+        in_button = any(a.tag in ("a", "button") and (domx.has_cls(a, r"(.*[-_])?(btn|button|book-cta|cta)([-_].*)?")) for a in n.ancestors())
+        if in_button:
+            continue                    # a button's own arrow or icon is not the hero's picture or motion (2.7.2)
         if n.tag == "use":
             ref = n.get("href") or n.get("xlink:href") or ""
             if "#" in ref:

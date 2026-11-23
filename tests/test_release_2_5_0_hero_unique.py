@@ -70,3 +70,12 @@ def test_two_siblings_with_one_hero_design_fail(site):
 
 def test_a_hero_of_its_own_passes(site):
     assert line(site, "c/x").level == "OK"
+
+
+def test_button_arrow_is_not_a_picture():
+    """2.7.2: the booking button's arrow sprite is no hero picture."""
+    from gatelib.c_hero import hero_print
+    html = ('<html><body><main><section><h1>T</h1><a class="btn book-cta" href="/c"><svg><use href="/i.svg#arrow-r"/></svg>Book</a>'
+            '</section></main></body></html>')
+    hp = hero_print(html)
+    assert hp["pictures"] == set() and hp["motion"] == set()

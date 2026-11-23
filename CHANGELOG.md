@@ -4,6 +4,10 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.7.2 - 2026-11-23
+
+- hero.unique (157): an icon inside a button or call-to-action link (the booking button's arrow) is not the hero's picture or motion, so a hero without its own drawing is no longer counted as having one. (#92)
+
 ## 2.7.1 - 2026-11-23
 
 - New check layout.line-length (45): characters per rendered line of long paragraphs in the reading flow (200+ characters, not in cards, asides, tables, figures or FAQ), measured at 1440. The median must sit in growth.json `layout.line_chars` (default 55 to 90: rule 45's 60 to 80 with an allowance for rounding). (#91)
