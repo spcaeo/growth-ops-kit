@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.7.0 - 2026-11-23
+
+- New check ev.fold-plan-own (36h): a fold plan is written for its own page. A field answer that stands word for word in the plans of 3 or more pages fails; the icons and check fields may repeat. One site had 86% of its plan answers copied from a template. (#90)
+- New check ev.fold-plan-match (36h): the built page follows its plan fold by fold: the data-surface and data-job named in the plan, the headline's words in the built heading, a call to action present or absent as planned, controls and a picture when the plan describes them. (#90)
+- Test: `tests/test_release_2_7_0_fold_plans.py`.
+
 ## 2.6.7 - 2026-11-22
 
 - hero.split ignores script, style, template and aria-hidden elements when it looks for the hero's columns; an inline script or a hint beside the grid no longer hides a real words + tool split.
