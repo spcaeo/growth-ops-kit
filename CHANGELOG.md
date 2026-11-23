@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.7.1 - 2026-11-23
+
+- New check layout.line-length (45): characters per rendered line of long paragraphs in the reading flow (200+ characters, not in cards, asides, tables, figures or FAQ), measured at 1440. The median must sit in growth.json `layout.line_chars` (default 55 to 90: rule 45's 60 to 80 with an allowance for rounding). (#91)
+- Test: `tests/test_release_2_4_0_layout.py`.
+
 ## 2.7.0 - 2026-11-23
 
 - New check ev.fold-plan-own (36h): a fold plan is written for its own page. A field answer that stands word for word in the plans of 3 or more pages fails; the icons and check fields may repeat. One site had 86% of its plan answers copied from a template. (#90)

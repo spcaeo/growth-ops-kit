@@ -76,6 +76,8 @@ PAGES = {
                   FILL("a")),
     "inline2": page(HERO, sec("a", '<p style="width:520px">' + "word " * 40 + '<a href="/x" style="padding:0 120px">first link</a> and '
                                    + '<a href="/y" style="padding:0 120px">second link</a> end.</p>' + block(600))),
+    "wide-text": page(HERO, sec("a", "".join(f'<p style="width:1300px;line-height:20px">{"Body words here. " * 20}</p>' for _ in range(4)))),
+    "read-text": page(HERO, sec("a", "".join(f'<p style="width:560px;line-height:20px">{"Body words here. " * 20}</p>' for _ in range(4)))),
     "terms-good": page(sec("text", block(300))),
     "terms-bad": page(sec("text", block(300) + CTA), extra='<div class="sticky-cta"><p>Call us</p></div>'),
 }
@@ -198,3 +200,9 @@ def test_a_figure_is_measured_as_a_whole_and_table_rows_are_not_columns(run):
     """2.6.6: a <figure> with a small icon and text is the picture as a whole; a table row is not two page columns."""
     assert run("figdoc", "layout.picture-text").level == "OK"
     assert run("tablerow", "layout.column-ratio").level == "OK"
+
+
+def test_body_line_length(run):
+    """2.7.1: rule 45, 60 to 80 characters a line, measured."""
+    assert run("wide-text", "layout.line-length").level == "FAIL"
+    assert run("read-text", "layout.line-length").level == "OK"
