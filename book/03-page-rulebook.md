@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.7.0
+version: 2.7.1
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.7.0 (generic edition) · 22 Nov 2026.**
+**Version 2.7.1 (generic edition) · 22 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -203,7 +203,7 @@ and box (149).
 42. **Keep the approved logo lockup as it is.** The owner approved it; do not redraw, recolour or crop it. (Next.js adapter: the logo files named in `growth.json`.) [code: repo.logo-untouched]
 43. **One header, one footer and one reading column on every page of a kind.** Going from one page to another must not move the logo, the menu or the column, and the page content starts and ends on the header's lines. Measure at several widths. [judgment: proxy layout.shared-frame, ev.shots-widths]
 44. **Everything in an article ends on one right edge, at one reading width** (breadcrumbs, title, cover, takeaways, text, tables, FAQ, author box, related cards). Wide blocks use one width rule, and a wide block inside a wide block never grows again. [judgment: proxy ev.shots-widths]
-45. **Body text is 60 to 80 characters a line.** Much longer lines tire the eye. [judgment: proxy ev.shots-widths]
+45. **Body text is 60 to 80 characters a line.** Much longer lines tire the eye. Measured in a browser at 1440 on the long paragraphs of the reading flow. [code: layout.line-length]
 46. **Cards in a row share the row.** Two are halves, three are thirds. Never one card left with an empty slot. A before/after pair keeps its own height. [judgment: proxy ev.shots-widths]
 47. **A popover, menu or sticky bar never covers something the reader needs to click.** [judgment: proxy ev.shots-1366-390, ev.click-test]
 48. **Wide tables scroll inside their own box, keep the first column sticky, show an edge shadow and cut nothing off.** Highlight your own column only if the page is about you. Numbers in a column line up on the right. [code: layout.table-scroll]
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-23 | 2.7.1 | Rule 45 is measured (layout.line-length). |
 | 2026-11-23 | 2.7.0 | Rule 36h: a plan is written for its own page (no copied template answers) and the built page follows it, fold by fold. |
 | 2026-11-22 | 2.6.7 | Rule 147's split-hero check ignores a script, style or aria-hidden hint beside the hero's grid; only elements that take part in the layout count as columns. |
 | 2026-11-22 | 2.6.6 | Rule 158a measures a `<figure>` as one picture (its box, not a small icon inside it) and never reads a table row as two page columns. |

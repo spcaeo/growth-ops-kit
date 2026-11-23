@@ -132,7 +132,18 @@ MEASURE_JS = r"""
     for (const e of main.querySelectorAll('[class]')) { if (isSvg(e)) continue; const k = foldOf(e);
       if (k >= 0 && [...e.classList].some(c => re.test(c))) set.add(names[k]); }
     mech[m] = [...set]; }
-  return {vh: window.innerHeight, pageH: document.documentElement.scrollHeight, folds, rows, grids, ctas, mech,
+  // body text line length (rule 45): characters per rendered line of long paragraphs in the reading flow
+  const measure = [];
+  for (const el of main.querySelectorAll('p')) {
+    if (!shown(el) || el.closest(args.exempt) || el.closest('aside,figure,table,blockquote,[class*="card"],[class*="faq"]')) continue;
+    const t = (el.innerText || '').replace(/\s+/g, ' ').trim();
+    if (t.length < 200) continue;
+    const lh = parseFloat(cs(el).lineHeight) || parseFloat(cs(el).fontSize) * 1.5;
+    const lines = Math.max(1, Math.round(R(el).height / lh));
+    if (lines < 2) continue;
+    measure.push({fold: names[foldOf(el)] || '', cpl: Math.round(t.length / lines), lines});
+  }
+  return {measure, vh: window.innerHeight, pageH: document.documentElement.scrollHeight, folds, rows, grids, ctas, mech,
           sticky: document.querySelectorAll('.sticky-cta').length, tokenFound: !!rgb};
 }
 """
@@ -330,3 +341,25 @@ def one_mechanic(ctx):
             probs.append(f"mechanic '{m}' in {len(names)} folds ({', '.join(repr(n) for n in names)}; max {L['mechanics_max']})")
     ctx.verdict(probs, f"no mechanic of {', '.join(L['mechanics'])} in more than {L['mechanics_max']} folds",
                 "give each fold its own shape: swap the repeats for a different mechanic or a plain layout (rule 30)")
+
+
+@check("layout.line-length", "45", what="body text runs 60 to 80 characters a line (measured on long paragraphs at 1440)", needs="live")
+def line_length(ctx):
+    """Rule 45 was judgment only. Measured: characters per rendered line of every paragraph of 200+ characters in the
+    reading flow (not in cards, asides, tables or FAQ). The median must sit in growth.json layout.line_chars (default
+    55 to 90: rule 45's 60 to 80 with a small allowance for the measure's rounding)."""
+    lo, hi = (ctx.cfg.get("layout") or {}).get("line_chars") or [55, 90]
+    d = measure(ctx).get(DESKTOP) or {}
+    rows = d.get("measure") or []
+    if len(rows) < 3:
+        raise Skip("fewer than 3 long body paragraphs to measure")
+    cpl = sorted(r["cpl"] for r in rows)
+    med = cpl[len(cpl) // 2]
+    wide = [r for r in rows if r["cpl"] > hi]
+    probs = []
+    if not lo <= med <= hi:
+        probs.append(f"body lines run {med} characters (median of {len(rows)} paragraphs; {lo} to {hi} allowed)")
+    if wide and len(wide) * 4 >= len(rows):
+        probs.append(f"{len(wide)} paragraph(s) run over {hi} characters a line, e.g. in fold '{wide[0]['fold']}' ({wide[0]['cpl']})")
+    ctx.verdict(probs, f"body lines run {med} characters (median of {len(rows)} paragraphs)",
+                "set the reading column to about 65ch (max-width) so body lines run 60 to 80 characters (rule 45)")
