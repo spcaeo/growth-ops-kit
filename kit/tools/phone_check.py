@@ -3,10 +3,11 @@
 by eye, chart labels drawn at 5.5 px, a time box clipped at 360 px, tables whose key column sat off screen and footer
 links 19 px tall. Each of these is measurable, so it is measured, not left to a screenshot.
 
-  growth phone_check <local URL> [--width 390] [--json out.json]
+  growth phone_check <local URL> [--width 390] [--json out.json] [--serial]
 
 At each width (default 360, 390, 820 and 1024) it loads the page in headless Chromium with analytics hosts blocked,
-scrolls to the end and back so in-view parts settle, then reports:
+scrolls to the end and back so in-view parts settle, then reports (one browser serves every width, a fresh context each,
+side by side; --serial measures them one after the other):
   - assets:   any /_next/static file that answers 400 or more (a broken build serves an unstyled page)
   - overflow: the page scrolls sideways, or a box clips its content sideways with no visible scroll cue (rule 68)
   - text:     visible text drawn under 12 px on screen, SVG text included (font size x the drawing's scale) (rule 70)
@@ -18,6 +19,8 @@ Exit 1 on any problem. Local dev server only.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import concurrent.futures
 import json
 import sys
 
@@ -128,36 +131,77 @@ JS_MEASURE = r"""
 """
 
 
-def check(url, width):
-    from playwright.sync_api import sync_playwright
+async def _check_in(browser, url, width):
+    """One width, in a fresh context of an open browser: the problem lines."""
     probs = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            ctx = browser.new_context(viewport={"width": width, "height": 800}, reduced_motion="reduce",
-                                      device_scale_factor=1, is_mobile=width < 640, has_touch=width < 640)
-            ctx.route("**/*", lambda r: r.abort() if any(h in r.request.url for h in BLOCK) else r.continue_())
-            page = ctx.new_page()
-            bad = []
-            page.on("response", lambda resp: bad.append(f"{resp.status} {resp.url.split('/_next/', 1)[-1]}")
-                    if "/_next/static/" in resp.url and resp.status >= 400 else None)
-            page.goto(url, wait_until="load", timeout=120000)
-            page.wait_for_timeout(1000)
-            h = page.evaluate("document.documentElement.scrollHeight")
-            for y in range(0, h, 600):
-                page.evaluate(f"window.scrollTo(0, {y})")
-                page.wait_for_timeout(60)
-            page.evaluate("window.scrollTo(0, 0)")
-            page.add_style_tag(content="*{transition:none!important;animation:none!important}")
-            page.wait_for_timeout(400)
-            m = page.evaluate(JS_MEASURE, width < 640)
-            probs += [f"assets: {b}" for b in sorted(set(bad))]
-            probs += [f"overflow: {x}" for x in m["overflow"]]
-            probs += [f"text: {x}" for x in sorted(set(m["text"]))]
-            probs += [f"taps: {x}" for x in sorted(set(m["taps"]))]
-        finally:
-            browser.close()
+    ctx = await browser.new_context(viewport={"width": width, "height": 800}, reduced_motion="reduce",
+                                    device_scale_factor=1, is_mobile=width < 640, has_touch=width < 640)
+    try:
+        async def gate(route):
+            if any(h in route.request.url for h in BLOCK):
+                await route.abort()
+            else:
+                await route.continue_()
+
+        await ctx.route("**/*", gate)
+        page = await ctx.new_page()
+        bad = []
+        page.on("response", lambda resp: bad.append(f"{resp.status} {resp.url.split('/_next/', 1)[-1]}")
+                if "/_next/static/" in resp.url and resp.status >= 400 else None)
+        await page.goto(url, wait_until="load", timeout=120000)
+        await page.wait_for_timeout(1000)
+        h = await page.evaluate("document.documentElement.scrollHeight")
+        for y in range(0, h, 600):
+            await page.evaluate(f"window.scrollTo(0, {y})")
+            await page.wait_for_timeout(60)
+        await page.evaluate("window.scrollTo(0, 0)")
+        await page.add_style_tag(content="*{transition:none!important;animation:none!important}")
+        await page.wait_for_timeout(400)
+        m = await page.evaluate(JS_MEASURE, width < 640)
+        probs += [f"assets: {b}" for b in sorted(set(bad))]
+        probs += [f"overflow: {x}" for x in m["overflow"]]
+        probs += [f"text: {x}" for x in sorted(set(m["text"]))]
+        probs += [f"taps: {x}" for x in sorted(set(m["taps"]))]
+    finally:
+        await ctx.close()
     return probs
+
+
+async def _run(url, widths, parallel):
+    from playwright.async_api import async_playwright
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        try:
+            if parallel:
+                found = await asyncio.gather(*[_check_in(browser, url, w) for w in widths], return_exceptions=True)
+            else:
+                found = []
+                for w in widths:
+                    try:
+                        found.append(await _check_in(browser, url, w))
+                    except Exception as e:  # noqa: BLE001
+                        found.append(e)
+                        break
+        finally:
+            await browser.close()
+    for f in found:
+        if isinstance(f, BaseException):
+            raise f
+    return dict(zip(widths, found))
+
+
+def check_widths(url, widths=WIDTHS, parallel=True):
+    """Every width in ONE browser (a fresh context per width, so nothing leaks from one to the next): {width: problem lines}.
+    The widths are measured side by side by default (about 4 s instead of 14 for four; each page keeps all its own settle
+    waits, and the answers were the same on every page tried); parallel=False measures them one after the other."""
+    # in a worker thread: the caller may already sit inside an event loop (a test runner, an open Playwright session)
+    with concurrent.futures.ThreadPoolExecutor(1) as ex:
+        return ex.submit(asyncio.run, _run(url, tuple(widths), parallel)).result()
+
+
+def check(url, width):
+    """One width: the problem lines."""
+    return check_widths(url, (width,))[width]
 
 
 def main():
@@ -165,10 +209,11 @@ def main():
     ap.add_argument("url")
     ap.add_argument("--width", type=int, action="append")
     ap.add_argument("--json")
+    ap.add_argument("--serial", action="store_true", help="measure the widths one after the other, not side by side")
     a = ap.parse_args()
     if "127.0.0.1" not in a.url and "localhost" not in a.url:
         sys.exit("local dev server only")
-    res = {w: check(a.url, w) for w in (a.width or WIDTHS)}
+    res = check_widths(a.url, tuple(a.width or WIDTHS), parallel=not a.serial)
     if a.json:
         with open(a.json, "w") as f:
             json.dump({"url": a.url, "problems": res}, f, indent=1)

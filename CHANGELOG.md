@@ -4,6 +4,36 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.8.0 - 2026-11-23
+
+Many pages at once. One site ran 12 pages through 4 review rounds in a day and accepted none: `ready` checked one page at a time (about 92 s each), any commit made every page not READY, and builders and the reviewer waited for each other. (#93, #94, #95)
+
+Core (#93):
+- `growth ready --batch FILE|ledger --jobs N [--stale-only]`: many pages side by side, each its own ready run (same verdict as a single run); verdicts print as they land; the full log goes to `journal/runs/ready-batch-<stamp>.log`. `--jobs` defaults to growth.json `ready_jobs`, else 3. `--repo` is passed on to every page. 12 pages: 3.2 min (was about 25).
+- READY holds on the same commit, or on the same output: the ledger keeps the page's fingerprint of the built HTML and shared CSS/JS, so a commit that does not change a page keeps it READY. A build older than the last commit never vouches. `ready --list` says why a page is READY.
+- Proofs must live in the project, the site repo or the kit: a proof that points outside (a scratch folder) is refused.
+- ev.task-steps: the golden-rule and check-in-2 steps may come after READY.
+- ev.brief: a steps-log rule row marked "(no page rule)" (a process rule) no longer makes every page brief stale.
+- Book: "Many pages at once: the page flow" (04-lanes-and-releases); money-page playbook step 3a is a fact inventory and fold plan, reviewed before the build.
+- Tests: `tests/test_release_2_8_0_core.py`.
+
+Checks (#94): the finding classes a reviewer kept finding by hand.
+- New check words.fact-repeats (28): a fact in 3 or more folds, or a long sentence two folds share. growth.json `words.repeat_ok`, `repeat_terms`, `repeat_folds`, `repeat_sentence`; call-to-action reason lines are skipped.
+- New check words.internal-labels (11): the team's own process words in the page text. growth.json `words.internal`, `internal_ok`.
+- New check migrate.old-terms (36): short-list items must be on an archived old page of the site or in BRAND.md. Site-wide by default (an item found only on another old page is a WARN); `words.old_terms_scope: "page"` makes that a FAIL; `old_terms_ok`.
+- New check layout.box-fill (158a): a card or panel whose content leaves its bottom half (55% of the height) or its right half (45%, boxes 320 px and wider) empty. growth.json `layout.box_*`.
+- Tests: `tests/test_release_2_8_0_{fact_repeats,internal_labels,old_terms,box_fill}.py`.
+
+Speed (#95):
+- Faster browser checks, same catches. `ui.contrast-states` (36j) and `ui.phone` (70) took 67 s of one page's 92 s gate run (49.6 s and 17.5 s), and `ready` runs them on every page. (speed)
+  - `contrast_check`: one browser for both widths (a fresh page per width); controls that look alike are measured once. The look-alike signature is the tag, class, style attribute, role / type / disabled / aria-current / -expanded / -pressed / -selected, first or last child, the text-bearing child, and for every ancestor its tag, class, style attribute and data-* attributes, plus which of the page's attribute selectors, ids and position or sibling selectors (`:nth-child`, `:has`, `+`, `~`) apply to it, plus the colours it reads at rest. The problem list still names every control. The scroll is the browser's own `scrollIntoViewIfNeeded` (same final position, 15 to 20 ms less per control).
+  - Measurements are kept under `<project>/.cache/contrast/` (a `.gitignore` of `*` inside keeps it out of git; entries unused for 30 days are removed), keyed by sha256 of the signature, the width, a hash of every stylesheet (linked, inline, imported), the browser version and the tool's own code. Any CSS change gives new keys. `growth contrast_check --no-cache` and `growth gate page --no-cache` skip it; growth.json `"contrast_cache": false` switches it off; `--no-dedupe` measures every control (the old way). `--width` can be repeated.
+  - A hover that did not take (the mouse missed the middle of a wrapped link, or a sticky bar covered the control) is retried at each line of the link, then with the control brought to the middle of the screen, then on the next look-alike control; the hover is let go before focus is read. A stored measurement is therefore never a miss, and focus never shows a leftover hover (before, the same control could read differently from one run to the next on a busy machine). A group whose hover or focus could not be read at all is measured again on every run, never kept.
+  - `phone_check`: one browser for all four widths (a fresh context per width), measured side by side: about 4 s instead of 14, with the same answers on every page tried, failing and passing. Each page keeps all of its own settle waits. growth.json `"phone_parallel": false` or `phone_check --serial` measures them one after the other.
+  - `growth gate page --profile`: after the normal output, each check's seconds (slowest 25) and the total, on stderr.
+- Not changed, on purpose: `tags.not-local` waits 5.5 s by design (a tag manager may load 4 s late) and `repo.no-unused-code` is the site's own `astro check` or `tsc`; neither can be shortened without catching less.
+- Tests: `tests/test_contrast_phone_checks.py`.
+
 ## 2.7.6 - 2026-11-23
 
 - ready: `--repo <worktree>` passes the page's worktree to the gate (repo.branch and the evidence dates read the branch the page is built on).

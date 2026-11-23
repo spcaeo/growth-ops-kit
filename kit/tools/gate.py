@@ -9,6 +9,8 @@ is "nextjs"; on any other stack the gate prints "SKIP <id>: no adapter for <stac
 
   growth gate page /pricing --url http://127.0.0.1:3801/pricing --type money [--key pricing] [--stage release] [--md out.md]
   growth gate page /pricing --url ... --needs live         # only the checks that read the served page
+  growth gate page /pricing --url ... --profile            # the normal output, then each check's seconds (slowest 25) on stderr
+  growth gate page /pricing --url ... --no-cache           # measure every control again (contrast keeps its work in <project>/.cache/contrast)
   growth gate page /pricing --repo ../site --type money    # no --url = static mode: only the checks that read the source
   growth gate process        # setup, logs, tasks, commits, main untouched, rulebook current
   growth gate engine         # kit files hold no project facts (file:line, count by file)
@@ -20,6 +22,7 @@ Read-only: GETs the one local page (and the links the technical SEO check follow
 import argparse
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -108,12 +111,22 @@ def cmd_page(a):
         needs.add("repo")      # the checks that read the site's code run on any stack since 2.6.0; "nextjs" has always meant them
     ctx.cache["needs_filter"] = set(needs)
     only = set(filter(None, (getattr(a, "only", "") or "").split(",")))
+    ctx.cache["no_cache"] = getattr(a, "no_cache", False)
     todo = [c for c in CHECKS.values() if a.type in c.types and c.stage == a.stage and c.cid != "house.features"
             and not (static and c.file in STATIC_SKIP) and (not only or c.cid in only) and (not needs or c.needs in needs)]
+    seconds = {}                                  # --profile: check id -> seconds
+
+    def timed(c):
+        t0 = time.perf_counter()
+        try:
+            run_check(ctx, c)
+        finally:
+            seconds[c.cid] = time.perf_counter() - t0
+
     for c in todo:
-        run_check(ctx, c)
+        timed(c)
     if not static and not only and (not needs or "live" in needs):
-        run_check(ctx, CHECKS["house.features"])
+        timed(CHECKS["house.features"])
     later = [c.cid for c in CHECKS.values() if a.type in c.types and c.stage != a.stage]
     title = (f"Rule gate: {a.path} ({a.type} page, stage {a.stage}, stack {ctx.stack()})  url {a.url or 'none: STATIC mode'}  repo {repo}"
              + (f"  only checks that read: {', '.join(sorted(needs))}" if needs else "") + "\n"
@@ -121,7 +134,20 @@ def cmd_page(a):
     if static:
         title += (f"\nStatic mode (source only, for the pre-commit hook): {len(ctx.skipped)} checks that read the page and "
                   f"the evidence checks did not run. Release still needs the full gate with --url.")
-    return print_lines(ctx, title, a.md)
+    code = print_lines(ctx, title, a.md)
+    if getattr(a, "profile", False):
+        print_profile(seconds)
+    return code
+
+
+def print_profile(seconds, top=25, out=None):
+    """--profile: each check's seconds, slowest first (top 25), then the total, on stderr after the normal output."""
+    out = out or sys.stderr
+    rows = sorted(seconds.items(), key=lambda kv: (-kv[1], kv[0]))
+    print(f"\nProfile: seconds per check, slowest {min(top, len(rows))} of {len(rows)}", file=out)
+    for cid, sec in rows[:top]:
+        print(f"  {sec:7.2f}  {cid}", file=out)
+    print(f"Total: {sum(seconds.values()):.1f} s over {len(rows)} checks", file=out)
 
 
 def cmd_process(a):
@@ -190,6 +216,8 @@ def main(argv=None):
     p.add_argument("--stage", choices=["build", "release"], default="build", help="release = after the merge")
     p.add_argument("--no-link-status", action="store_true", help="skip the status check of every internal link (faster)")
     p.add_argument("--only", default="", help="comma list of check ids to run (growth preflight uses it)")
+    p.add_argument("--profile", action="store_true", help="after the normal output, print each check's seconds (slowest 25) and the total, on stderr")
+    p.add_argument("--no-cache", action="store_true", help="do not read or write kept measurements (the contrast check's .cache/contrast); measure everything now")
     p.add_argument("--md", help="also write the output to this file")
     q = sub.add_parser("process", help="process rules")
     q.add_argument("--md")
