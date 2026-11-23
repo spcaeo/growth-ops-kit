@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.6.6
+version: 2.6.7
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.6.6 (generic edition) · 22 Nov 2026.**
+**Version 2.6.7 (generic edition) · 22 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-22 | 2.6.7 | Rule 147's split-hero check ignores a script, style or aria-hidden hint beside the hero's grid; only elements that take part in the layout count as columns. |
 | 2026-11-22 | 2.6.6 | Rule 158a measures a `<figure>` as one picture (its box, not a small icon inside it) and never reads a table row as two page columns. |
 | 2026-11-22 | 2.6.5 | Box numbers skip dates; inline links are never columns. |
 | 2026-11-22 | 2.6.4 | The inventory reads growth.json `pillars_are_money`: false marks a silo's top page a money page only when it is in `money_core` (a pillar that maps its cluster is a hub, rule 26). |

@@ -516,9 +516,14 @@ def hero_split(ctx):
         return
     kids = [c for c in sec.iter() if c is not sec and c.parent is not None]
     has_media = any(c.tag in ("svg", "img", "picture", "canvas", "form", "input", "video") for c in kids)
-    cols = [c for c in sec.elements()]
+    def layout_kids(n):
+        """Children that take part in the layout: never a script, style or template, nor an aria-hidden decoration or hint
+        (2.6.7: a hero's inline <script> or hint counted as a column and hid the real two-column grid)."""
+        return [c for c in n.elements() if c.tag not in ("script", "style", "template", "noscript", "link", "meta")
+                and (c.get("aria-hidden") or "").lower() != "true"]
+    cols = layout_kids(sec)
     while len(cols) == 1:
-        cols = cols[0].elements()
+        cols = layout_kids(cols[0])
     h1col = [c for c in cols if find(c, "h1") is not None]
     other = [c for c in cols if find(c, "h1") is None and any(x.tag in ("svg", "img", "picture", "canvas", "form", "input") for x in c.iter())]
     if has_media and h1col and other:

@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.6.7 - 2026-11-22
+
+- hero.split ignores script, style, template and aria-hidden elements when it looks for the hero's columns; an inline script or a hint beside the grid no longer hides a real words + tool split.
+- Test: `tests/test_release_2_6_7_hero_split.py`.
+
 ## 2.6.6 - 2026-11-22
 
 - layout.picture-text measures a `<figure>` as the picture as a whole (its box), not the largest small icon inside it; a document-style figure no longer fails on its 14px icon.
