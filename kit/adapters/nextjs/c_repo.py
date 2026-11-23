@@ -190,6 +190,12 @@ def up_across(ctx):
     body = [l.get("final") or l.get("to") for l in d.get("links", []) if l.get("where") == "body"]
     silo = next((s for s in ctx.cfg.get("silos", {}) if ctx.need_path().startswith("/" + s)), None)
     me = ctx.key_path()
+    if silo is None and me.strip("/") == "":
+        # the home page sits above every silo: it links down to each silo's top page from its content (2.6.1)
+        hubs = [s for s in ctx.cfg.get("silos", {}) if not any((b or "").rstrip("/") == "/" + s for b in body)]
+        ctx.verdict([f"no body link down to /{h}" for h in hubs], f"home links down to all {len(ctx.cfg.get('silos', {}))} silo pages",
+                    "link each silo's top page from the home page's content (rule 89)")
+        return
     if silo is None:
         ctx.fail(f"{ctx.path} is in no silo of growth.json", "add the page's silo to growth.json silos or check the path (rule 89)")
         return
@@ -420,7 +426,8 @@ def accessible_name_only(ctx, f):
 
 @check("repo.logo-untouched", "42", what="the branch does not change the approved logo files", needs="repo")
 def logo(ctx):
-    probs = [f for f in ctx.branch_files() if re.search(r"(?i)(^public/brand/|logo)", f) and not accessible_name_only(ctx, f)]
+    # a logo file: its name says logo, lockup or wordmark (a brand folder also holds icons such as a tick, which are not the logo)
+    probs = [f for f in ctx.branch_files() if re.search(r"(?i)(logo|lockup|wordmark|brand-mark)[^/]*$", f) and not accessible_name_only(ctx, f)]
     ctx.verdict(probs, "logo files unchanged (a change of only an aria-label or title text is allowed)", "revert the logo change; the lockup is approved as is; only an aria-label or title text may change (rule 42)")
 
 

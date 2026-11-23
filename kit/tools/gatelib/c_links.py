@@ -76,9 +76,14 @@ def token(css):
     return name, light.get(name), dark.get(name), bg or "#121212"
 
 
-def prose_link_rules(css):
+def prose_link_rules(css, extra=""):
+    """CSS rules that style links inside running text. growth.json links.not_text (regex alternatives) names a site's own
+    menu, contents or badge classes that are not running text (2.6.1)."""
     out = []
+    more = re.compile(extra) if extra else None
     for s, b in RULE.findall(css):
+        if more and more.search(s):
+            continue
         parts = [p.strip() for p in s.split(",")]
         if any(re.search(r"(^|[\s>])a(\[[^\]]*\]|:{1,2}[\w-]+(\([^)]*\))?)*$", p) and re.search(r"\S\s*[\s>]\s*a\b", p)
                and not NOT_PROSE.search(p) for p in parts):
