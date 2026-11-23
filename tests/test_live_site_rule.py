@@ -82,3 +82,10 @@ def test_crawl_ok_projects_are_unchanged(demo_project):
     proj = project(demo_project, rule="crawl-ok")
     r = run(proj, "inventory", "--offline", str(demo_project / "none.xml"), "--no-pages")
     assert "REFUSED" not in r.stdout + r.stderr
+
+
+def test_a_preview_crawl_reads_the_previews_own_sitemap_on_a_crawl_ok_site_too(demo_project, preview):
+    """2.7.6: --base always reads the preview's sitemap, so a branch's new page (not yet in the live sitemap) is mapped."""
+    proj = project(demo_project, rule="crawl-ok")
+    r = run(proj, "link_graph", "crawl", "--base", preview, "--delay", "0", "--concurrency", "2")
+    assert r.returncode == 0 and "pages 2," in r.stdout + r.stderr, r.stdout + r.stderr

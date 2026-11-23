@@ -194,9 +194,10 @@ def main():
     ap.add_argument("--type", choices=["money", "core", "hub", "post"])
     ap.add_argument("--key")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--repo", help="the worktree the page is built in (overrides growth.json preview_repo for this run)")
     a = ap.parse_args()
-    repo = preview_repo()
-    if not a.list and a.path and preview_repo_problem():
+    repo = Path(a.repo).expanduser().resolve() if a.repo else preview_repo()   # 2.7.6: like gate page --repo
+    if not a.list and a.path and not a.repo and preview_repo_problem():
         sys.exit(preview_repo_problem())
     if a.list or not a.path:
         cur = head(repo)

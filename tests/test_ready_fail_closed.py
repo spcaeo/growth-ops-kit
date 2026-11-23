@@ -195,3 +195,28 @@ def test_ready_asks_a_trailing_slash_site_for_the_slash_form(rdy, monkeypatch):
         cmd = seen[0]
         assert cmd[cmd.index("--url") + 1] == "http://127.0.0.1:9" + want, (cfg, typed)
         assert cmd[cmd.index("page") + 1] == typed.rstrip("/")          # the page key stays without the slash
+
+
+def test_repo_flag_reaches_the_gate(demo_project, monkeypatch, tmp_path):
+    """2.7.6: ready --repo passes the page's worktree to the gate (like gate page --repo)."""
+    monkeypatch.setenv("GROWTH_PROJECT", str(demo_project))
+    sys.path.insert(0, str(TOOLS))
+    import ready
+    (demo_project / "journal").mkdir(exist_ok=True)
+    monkeypatch.setattr(ready, "LEDGER", demo_project / "journal" / "ready.json")
+    monkeypatch.setattr(ready, "CFG", {"preview_url": "http://127.0.0.1:9", "site_repo": "site"})
+    seen = {}
+
+    def fake(cmd):
+        seen["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, gate_out(), "")
+    monkeypatch.setattr(ready, "run_gate", fake)
+    monkeypatch.setattr(ready, "head", lambda repo: "abc1234")
+    wt = tmp_path / "wt-page"
+    wt.mkdir()
+    monkeypatch.setattr(sys, "argv", ["ready", "/x", "--type", "post", "--key", "x", "--repo", str(wt)])
+    try:
+        ready.main()
+    except SystemExit:
+        pass
+    assert "--repo" in seen["cmd"] and str(wt.resolve()) in seen["cmd"]

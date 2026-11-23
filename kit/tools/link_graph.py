@@ -452,8 +452,11 @@ def cmd_crawl(a):
     fetch_rule.assert_may_fetch(origin + "/")
     hosts = hosts_for(origin)
     sm_url = CFG["sitemap_url"]
-    if a.base and fetch_rule.blocked(sm_url):   # no-crawl: the sitemap comes from the preview, not the live site
-        sm_url = origin + (urlparse(sm_url).path or "/sitemap.xml")
+    u = urlparse(sm_url)
+    # a preview's own sitemap: it lists the branch's new pages, and no-crawl keeps the live site out (2.7.6). Only a live
+    # web address is swapped; a saved file or an address already on a local host stays as it is.
+    if a.base and u.scheme in ("http", "https") and u.hostname not in ("127.0.0.1", "localhost", "::1"):
+        sm_url = origin + (u.path or "/sitemap.xml")
     locs = read_sitemap(sm_url)
     paths = []
     for u in locs:

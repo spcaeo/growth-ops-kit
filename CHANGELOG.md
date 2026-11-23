@@ -4,6 +4,12 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.7.6 - 2026-11-23
+
+- ready: `--repo <worktree>` passes the page's worktree to the gate (repo.branch and the evidence dates read the branch the page is built on).
+- link_graph crawl --base: always reads the preview's own sitemap (not only on no-crawl sites), so an unreleased page is crawled and its link checks can run before release.
+- Tests: `tests/test_ready_fail_closed.py::test_repo_flag_reaches_the_gate`, `tests/test_live_site_rule.py::test_a_preview_crawl_reads_the_previews_own_sitemap_on_a_crawl_ok_site_too`.
+
 ## 2.7.5 - 2026-11-23
 
 - links.blue: the '+' marker CSS is found by its own class (`.link-plus`, `.lc-plus`), not a BEM modifier such as `.leadcard--plus`; CSS comments are removed before colours are read.
