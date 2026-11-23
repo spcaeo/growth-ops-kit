@@ -70,6 +70,8 @@ PAGES = {
     "hero3": page(sec("hero", '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">'
                          '<h1 style="height:60px">T</h1><svg width="300" height="200"></svg><aside style="height:120px;border:1px solid #000">A</aside></div>', pad=30),
                   FILL("a")),
+    "inline2": page(HERO, sec("a", '<p style="width:520px">' + "word " * 40 + '<a href="/x" style="padding:0 120px">first link</a> and '
+                                   + '<a href="/y" style="padding:0 120px">second link</a> end.</p>' + block(600))),
     "terms-good": page(sec("text", block(300))),
     "terms-bad": page(sec("text", block(300) + CTA), extra='<div class="sticky-cta"><p>Call us</p></div>'),
 }
@@ -181,3 +183,8 @@ def test_text_meta_row_is_not_a_card_grid(run):
 def test_unlike_hero_parts_are_not_a_card_grid(run):
     """2.6.2: a grid of a heading, a picture and an answer box is a layout, not three cards."""
     assert run("hero3", "layout.card-orphan").level == "OK"
+
+
+def test_inline_links_in_a_paragraph_are_not_columns(run):
+    """2.6.4: two links wrapped inside one paragraph are inline text, not a two-column row."""
+    assert run("inline2", "layout.column-ratio").level == "OK"
