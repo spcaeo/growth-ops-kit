@@ -1,4 +1,4 @@
-"""2.8.3: words.own-copy (rule 157a): a page's folds are its own words; no fold copies another page of the site."""
+"""2.8.4: words.own-copy (rule 157a): a page's folds are its own words; no fold copies another page of the site."""
 from pathlib import Path
 
 from gatelib import CHECKS

@@ -144,7 +144,8 @@ class Graph:
         out = defaultdict(set)
         for l in self.links:
             if l["zone"] in CONTENT and l["words"] and self.live(l["src"]) and l["moved"] != "gone" and not self.is_pager(l) \
-                    and l["words"] not in GENERIC and l["words"] not in brand and l["final"] != l["src"]:
+                    and l["words"] not in GENERIC and l["words"] not in brand and l["final"] != l["src"] \
+                    and same_page(l["final"]) != same_page(l["src"]):   # a language switch to the page's own copy (2.8.3)
                 out[l["words"]].add(same_page(l["final"]))
         return out
 
