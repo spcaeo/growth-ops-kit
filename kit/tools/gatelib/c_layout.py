@@ -87,7 +87,7 @@ MEASURE_JS = r"""
     return {cls: (c.className && c.className.baseVal === undefined ? String(c.className) : c.tagName.toLowerCase()).slice(0, 30) || c.tagName.toLowerCase(),
             top: r.top, height: r.height, cHeight: x.cBottom - x.cTop, width: r.width, text: txt, isMedia, mArea,
             tArea: r.width * (x.cBottom - x.cTop)}; };
-  const rows = [], grids = [];
+  const rows = [], grids = [], pills = [];
   for (const e of main.querySelectorAll('*')) {
     if (isSvg(e) || !shown(e)) continue;
     const kids = [...e.children].filter(k => !isSvg(k) && shown(k) && flow(k));
@@ -98,11 +98,25 @@ MEASURE_JS = r"""
       if (a.width >= 200 && b.width >= 200 && Math.abs(a.top - b.top) <= 60 && (a.right <= b.left + 1 || b.right <= a.left + 1))
         rows.push({fold: names[foldOf(e)] || '', cols: kids.map(colInfo)});
     }
+    // Pills, chips and tags (2.8.3): a wrapping row of small items in the hero or the first fold. The last row must not be one lone item.
+    const fk = foldOf(e);
+    const boxed = k => { const t = cs(k); return parseFloat(t.borderTopWidth) > 0 || parseFloat(t.borderLeftWidth) > 0 || t.boxShadow !== 'none'
+                         || (t.backgroundColor !== 'rgba(0, 0, 0, 0)' && t.backgroundColor !== 'transparent') || t.backgroundImage !== 'none'; };
+    // only a row of drawn pills: nav, breadcrumb and plain-text meta rows (author . date) have no box to orphan
+    if (fk >= 0 && fk <= 1 && kids.length >= 4 && kids.some(boxed) && !e.closest('nav, [aria-label*=readcrumb i], [class*=breadcrumb]') && cs(e).display.includes('flex') && cs(e).flexWrap !== 'nowrap') {
+      const pr = R(e), small = kids.every(k => { const q = R(k); return q.height <= 64 && q.width <= 0.6 * pr.width + 1; });
+      if (small) {
+        const rs = kids.map(k => R(k)).sort((p, q) => p.top - q.top || p.left - q.left), lines = [];
+        rs.forEach(q => { const l = lines[lines.length - 1]; if (l && Math.abs(l[0].top - q.top) <= 10) l.push(q); else lines.push([q]); });
+        const ll = lines[lines.length - 1], lcx = (Math.min(...ll.map(q => q.left)) + Math.max(...ll.map(q => q.right))) / 2;
+        if (lines.length >= 2) pills.push({fold: names[fk] || '', n: kids.length, lastCount: ll.length,
+                                           prevCount: lines[lines.length - 2].length, rows: lines.length,
+                                           centred: Math.abs(lcx - (pr.left + pr.right) / 2) <= 12});
+      }
+    }
     const s = cs(e);
     // A wrapping flex row of plain text (a post's author / date / read-time line) is not a card grid: skip it when no
     // child draws a box (border, background or shadow). Real grids (display:grid) are always measured.
-    const boxed = k => { const t = cs(k); return parseFloat(t.borderTopWidth) > 0 || parseFloat(t.borderLeftWidth) > 0 || t.boxShadow !== 'none'
-                         || (t.backgroundColor !== 'rgba(0, 0, 0, 0)' && t.backgroundColor !== 'transparent') || t.backgroundImage !== 'none'; };
     const isFlexWrap = s.display.includes('flex') && s.flexWrap !== 'nowrap';
     if (isFlexWrap && !s.display.includes('grid') && !kids.some(boxed)) continue;
     // Cards are alike: most children share one tag and first class. A layout grid of unlike parts (a hero's heading,
@@ -203,7 +217,7 @@ MEASURE_JS = r"""
                 ivs: ivs.map(x => [Math.round(x[0] - inTop), Math.round(x[1] - inTop)]),
                 left: Math.max(0, Math.round(Math.min(...rs.map(x => x.l)) - inL)), right: Math.round(Math.max(...rs.map(x => x.r)) - inL)});
   }
-  return {measure, boxes, vh: window.innerHeight, pageH: document.documentElement.scrollHeight, folds, rows, grids, ctas, mech,
+  return {measure, boxes, vh: window.innerHeight, pageH: document.documentElement.scrollHeight, folds, rows, grids, pills, ctas, mech,
           sticky: document.querySelectorAll('.sticky-cta').length, tokenFound: !!rgb};
 }
 """
@@ -343,15 +357,21 @@ def picture_text(ctx):
                 "make the picture larger, or move the small icon into the text column (rule 158a)")
 
 
-@check("layout.card-orphan", "158a", what="the last row of a card grid is full, centred or one wide card (rule 158)", needs="live")
+@check("layout.card-orphan", "158a", what="the last row of a card grid is full, centred or one wide card, and no hero or first-fold pill sits alone on its row (rule 158)", needs="live")
 def card_orphan(ctx):
-    probs, grids = [], 0
+    probs, grids, pills = [], 0, 0
     for w, d in measure(ctx).items():
         for g in d["grids"]:
             grids += 1
             if g["lastCount"] < g["per"] and not g["centred"] and not g["wide"]:
                 probs.append(f"fold '{g['fold'] or '?'}': {g['n']} cards, {g['per']} per row, last row has {g['lastCount']} and sits left at {w}")
-    ctx.verdict(probs, f"{grids} card grid(s) measured, no orphan last row", "pick a column count that divides the cards, centre the last row, or make the last card wide (rule 158a)")
+    for w, d in measure(ctx).items():
+        for g in d.get("pills", []) if w < 800 else []:
+            pills += 1
+            if g["lastCount"] == 1 and g["prevCount"] >= 3 and not g.get("centred"):
+                probs.append(f"fold '{g['fold'] or '?'}': {g['n']} pills, one alone on the last row after a row of {g['prevCount']} at {w}")
+    ctx.verdict(probs, f"{grids} card grid(s) and {pills} pill row(s) measured, no orphan last row",
+                "pick a column count that divides the cards, centre the last row, or make the last card wide; shorten, drop or re-order the pills so the last row holds two or more (rule 158a)")
 
 
 @check("cta.one-per-view", "158a", what="at most one primary button on any screen (rule 32b)", needs="live")

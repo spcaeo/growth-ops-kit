@@ -170,12 +170,32 @@ INTERNAL_CASE = [r"BRAND", r"FACTS", r"OWNER-RULES"]
 # process forms are caught by default (growth.json words.internal adds the bare word for a site that never uses it that way).
 INTERNAL = [r"dossier", r"fold plan", r"(?:research|plan|fold) checkpoints?", r"checkpoints? (?:file|list|plan|notes?|log|status|\d+)",
             r"checkpoints\.md", r"this rebuild", r"before this rebuild", r"the old page", r"growth\.json", r"rule \d+"]
+# Editor notes (2.8.3): wording that points at the page's own structure or the team's checking, never at the buyer's question.
+_MONTH = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
+_DATE = rf"(?:\d{{4}}-\d{{2}}-\d{{2}}|{_MONTH}\.? \d{{1,2}}(?:st|nd|rd|th)?,? \d{{4}}|\d{{1,2}}(?:st|nd|rd|th)? {_MONTH}\.?,? \d{{4}}|{_MONTH}\.? \d{{4}})"
+EDITOR_NOTES = [r"the (?:[\w'-]+ ){0,4}folds? (?:above|below)", r"see the (?:[\w'-]+ ){0,3}fold", r"see this section",
+                r"this section (?:above|below)",
+                rf"as of {_DATE} \(internal\)"]
+# A stamp that stands alone as its whole block ("Checked 2026-11-10", "Verified on March 3, 2026 by the team") is an editor note. The same words
+# inside a source line ("Source: our cost pages. Checked November 22, 2026.", "4.8 on Clutch, checked ...") tell the reader how fresh a fact is
+# (rule 11: name a source by what it is and its date) and stay.
+STAMP = re.compile(rf"(?:checked|verified)(?: on)? {_DATE}(?: by (?:[\w'.-]+ ?){{1,4}})?\.?", re.I)
+
+
+def _review_card(n):
+    """A review or testimonial card (blockquote, or class rcard / testimonial / review): its "Verified Mar 2026" says when the
+    customer's review was checked, which is for the reader, not an editor note (2.8.5)."""
+    return n.tag == "blockquote" or any(re.search(r"rcard|testimonial|review", c, re.I) for c in domx.classes(n))
+
+
+# A visible byline ("Updated 12 May 2026", "Last reviewed May 2026") is for the reader; a note that overlaps one is not an editor note.
+BYLINE = [rf"(?:last )?(?:updated|published|reviewed|posted|modified)(?: on)?:? {_DATE}"]
 
 
 def internal_patterns(ctx):
     """[(compiled regex, label)]: the kit's list plus growth.json words.internal (a regex, or {"pattern", "case_sensitive"})."""
     out = [(re.compile(r"(?<![\w-])" + p + r"(?![\w-])"), p) for p in INTERNAL_CASE]
-    out += [(re.compile(r"(?<![\w-])" + p + r"(?![\w-])", re.I), p) for p in INTERNAL]
+    out += [(re.compile(r"(?<![\w-])" + p + r"(?![\w-])", re.I), p) for p in INTERNAL + EDITOR_NOTES]
     for e in wcfg(ctx, "internal", []) or []:
         pat, cs = (e.get("pattern"), bool(e.get("case_sensitive"))) if isinstance(e, dict) else (e, False)
         if pat:
@@ -183,18 +203,35 @@ def internal_patterns(ctx):
     return out
 
 
-@check("words.internal-labels", "11", what="no internal process wording (dossier, fold plan, checkpoint, this rebuild, BRAND, rule 28) in the page text", needs="live")
+def byline_patterns(ctx):
+    """Regexes of a visible byline that is no editor note: the kit's plus growth.json words.byline (regexes, any case)."""
+    return [re.compile(p, re.I) for p in BYLINE + [str(x) for x in wcfg(ctx, "byline", []) or []]]
+
+
+@check("words.internal-labels", "11", what="no internal process wording (dossier, fold plan, checkpoint, this rebuild, BRAND, rule 28, editor notes like the X fold above or Checked <date>) in the page text", needs="live")
 def internal_labels(ctx):
     """The page speaks to the reader, not to the team: words from the build process must never reach the visible text of <main>.
-    growth.json words.internal adds the project's own; words.internal_ok lists wording that is fine here (a real use of a word)."""
+    growth.json words.internal adds the project's own; words.byline adds a visible byline form that is no note; words.internal_ok lists wording that is fine here (a real use of a word)."""
     pats = internal_patterns(ctx)
+    bylines = byline_patterns(ctx)
+    notes = {p for p in EDITOR_NOTES}
     okay = [str(x).lower() for x in wcfg(ctx, "internal_ok", []) or []]
     probs, seen = [], set()
-    for _, text in mainwalk.units(ctx):
+    allu = mainwalk.units(ctx)
+    inreview = set(allu) - set(mainwalk.units(ctx, _review_card))
+    for unit in allu:
+        _, text = unit
+        if unit not in inreview and STAMP.fullmatch(text.strip()) and not any(x in text.lower() for x in okay):
+            if (text, "stamp") not in seen:
+                seen.add((text, "stamp"))
+                probs.append(f"'{text.strip()}' stands alone as a block")
+            continue
         for sent in mainwalk.sentences(text):
             if any(x in sent.lower() for x in okay):
                 continue
-            hits = [m for rx, _ in pats for m in rx.finditer(sent)]
+            by = [b for rx in bylines for b in rx.finditer(sent)]
+            hits = [m for rx, lab in pats for m in rx.finditer(sent)
+                    if not (lab in notes and any(b.start() < m.end() and m.start() < b.end() for b in by))]
             hits = [m for m in hits if not any(o is not m and o.start() <= m.start() and m.end() <= o.end() and o.end() - o.start() > m.end() - m.start()
                                                for o in hits)]
             for m in hits:

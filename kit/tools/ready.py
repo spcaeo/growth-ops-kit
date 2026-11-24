@@ -96,6 +96,23 @@ def head_moved_at(repo):
     return max(times) if times else None
 
 
+DIRTY_OK = ["next-env.d.ts", "*.tsbuildinfo"]   # files a build or dev server rewrites by itself (Next writes next-env.d.ts)
+
+
+def dirty_files(repo):
+    """Uncommitted or untracked (not ignored) paths of the worktree, minus the files a build rewrites by itself
+    (growth.json ready.dirty_ok, default next-env.d.ts and *.tsbuildinfo)."""
+    import fnmatch
+    ok = list(DIRTY_OK) + list((CFG.get("ready") or {}).get("dirty_ok") or [])
+    out = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True).stdout
+    files = []
+    for ln in out.splitlines():
+        f = ln[3:].split(" -> ")[-1].strip().strip('"')
+        if f and not any(fnmatch.fnmatch(f, pat) or fnmatch.fnmatch(Path(f).name, pat) for pat in ok):
+            files.append(f)
+    return files
+
+
 def build_problem(path, repo=None):
     """Why the build cannot stand for the code now, or None. With growth.json build_dir set, the preview serves that
     build: when it is older than the moment HEAD last moved, the gate would check old pages and READY would be written
@@ -112,6 +129,11 @@ def build_problem(path, repo=None):
         f = None
     if not f:
         return f"{path} is not in the build ({CFG.get('build_dir')}): build the site, then run growth ready again"
+    dirty = dirty_files(repo)
+    if dirty:   # 2.8.5: the build may hold an edit HEAD does not; a page is READY only for committed code
+        return (f"the preview worktree has {len(dirty)} uncommitted or untracked change(s) (first: {dirty[0]}): "
+                "commit them (or ignore them in .gitignore, or list a file the build itself rewrites in growth.json "
+                "ready.dirty_ok), build, then run growth ready again")
     moved = head_moved_at(repo)
     if moved is not None and f.stat().st_mtime <= moved:
         return (f"the build of {path} is older than the code at {head(repo)[:7]}: build the site, then run growth ready "

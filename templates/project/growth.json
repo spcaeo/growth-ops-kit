@@ -146,6 +146,8 @@
     "_repeat_terms": "Promises with no number that count as facts, besides the kit's (free replacement, money-back guarantee, no lock-in): a regex, or {\"pattern\": \"\\\\bNDA\\\\b\", \"as\": \"nda first\"}. repeat_folds (default 3) is the number of folds that makes a repeat; repeat_sentence (default 0.6) is how alike two long sentences of two folds may be.",
     "repeat_terms": [],
     "_internal": "words.internal-labels (rule 11): extra internal wording that must never reach the page, a regex (any case) or {\"pattern\": \"...\", \"case_sensitive\": true}. The kit already catches BRAND, FACTS, OWNER-RULES, dossier, fold plan, checkpoint file, this rebuild, the old page, growth.json and rule N. internal_ok lists wording that is fine as it stands.",
+    "_internal_notes": "words.internal-labels also catches editor notes (the pricing fold above, see the proof fold, this section, Checked <date>, Verified on <date>, as of <date> (internal)). A visible byline (Updated, Published, Reviewed <date>) is allowed; byline adds regexes for other byline forms that must not count as notes. words.named-repeats (rule 28) fails a capitalised or technical phrase of 3+ words, or 2 technical tokens, in repeat_folds folds; repeat_ok lists phrases that may repeat (the firm's own name).",
+    "byline": [],
     "internal": [],
     "internal_ok": [],
     "_old_terms": "migrate.old-terms (rule 36): every item of a short list (5 or more items of 5 words or fewer, or anything marked data-tags) is on an archived old page of the site or in BRAND.md. old_terms_scope \"page\" also needs it on THIS page's own old version; old_terms_ok lists items that are fine as they are.",
@@ -265,6 +267,8 @@
   },
   "layout": {
     "_about": "The measured design limits of rule 158a (layout.*, cta.one-per-view, cta.spacing, cta.legal-quiet, engage.one-mechanic). Every key is optional; these are the defaults. A limit changed for one site needs a \"_why\" next to it. box_* belong to layout.box-fill: a card or panel of at least box_min_w x box_min_h px must have content over box_fill_min of its inner height (gaps under box_gap_merge px count as content), and one at least box_wide_min px wide must not leave more than box_empty_right (and box_empty_px px) of its width empty on the right of a column against its left edge (within box_left_max).",
+    "_card_repeat_ok": "layout.folds-distinct (rule 30) fails two folds with the same card grid (same item shape and classes), on any surface and at any distance. A pair that must share one: [{\"folds\": [\"why\", \"how\"], \"reason\": \"why the same grid is right here\"}]. A reason is required.",
+    "card_repeat_ok": [],
     "section_step": 80,
     "gap_pad": 24,
     "hero_extra": 66,

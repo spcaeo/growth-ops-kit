@@ -27,8 +27,9 @@ def site(tmp_path, demo_project, monkeypatch):
     (repo / "dist" / "a" / "index.html").write_text('<link rel="stylesheet" href="/s.css"><h1>A</h1>')
     (repo / "dist" / "b" / "index.html").write_text('<link rel="stylesheet" href="/s.css"><h1>B</h1>')
     (repo / "src.txt").write_text("one")
+    (repo / ".gitignore").write_text("dist/\n")       # a real site never commits its build
     git(repo.parent, "init", "-q", str(repo))
-    git(repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "add", "src.txt")
+    git(repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "add", "src.txt", ".gitignore")
     git(repo, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "one")
     monkeypatch.setenv("GROWTH_PROJECT", str(demo_project))
     import ready
@@ -290,3 +291,28 @@ def test_a_fresh_check_on_a_stale_build_is_not_ready(site, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         ready.main()
     assert "older than the code" in capsys.readouterr().out and "/a" not in ready.ledger()
+
+
+def test_a_dirty_worktree_is_not_ready(site):
+    """2.8.5: an uncommitted edit can sit in the build while HEAD does not hold it."""
+    import ready
+    touch_build(site)
+    assert ready.build_problem("/a") is None
+    (site / "src.txt").write_text("edited, not committed")
+    assert "uncommitted" in ready.build_problem("/a")
+    commit(site, "edited, not committed")
+    touch_build(site)
+    (site / "new.txt").write_text("untracked")
+    assert "untracked" in ready.build_problem("/a")
+
+
+def test_files_a_build_rewrites_do_not_make_the_tree_dirty(site, monkeypatch):
+    import ready
+    touch_build(site)
+    (site / "next-env.d.ts").write_text("/// <reference types=next />")
+    (site / "tsconfig.tsbuildinfo").write_text("{}")
+    assert ready.build_problem("/a") is None
+    (site / "gen.txt").write_text("x")
+    assert "gen.txt" in ready.build_problem("/a")
+    monkeypatch.setitem(ready.CFG, "ready", {"dirty_ok": ["gen.txt"]})
+    assert ready.build_problem("/a") is None
