@@ -123,6 +123,11 @@ owner: "the process is fully broken, the speed is super slow, the process runs i
 - **Two strikes, then a machine.** A finding class seen on two pages becomes a check (a site test, or a kit check) the
   same day, and every page in the queue and every accepted page is checked against it. A reviewer is for judgement,
   not for counting repeats.
+- **A checklist from past verdicts, before review.** Until a finding class has its check, the project keeps
+  `research/reviews/pre-review-checklist.md`: every BLOCKING from the reviewer's verdicts so far, grouped by kind and
+  ordered by how often it came up. The builder runs it on each page and puts one line per section in the report; no page
+  goes to the reviewer without it. Aim: a first review with 0 or 1 BLOCKING. (2.8.2; from a real project: the first 6
+  reviews returned 3 to 8 BLOCKING each, 31 in all, mostly the same kinds.)
 - **Fix once, carry everywhere.** A fix found on one page is applied to every page with the same problem, by the lane
   that owns the shared code, before the builders' next pages.
 - **Ready runs side by side, after every merge:** `growth ready --batch ledger --stale-only --jobs 3`. READY holds while
