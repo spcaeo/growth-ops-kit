@@ -112,6 +112,11 @@ def build_problem(path, repo=None):
         f = None
     if not f:
         return f"{path} is not in the build ({CFG.get('build_dir')}): build the site, then run growth ready again"
+    dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
+    if dirty:   # 2.8.5: the build may hold an edit HEAD does not; a page is READY only for committed code
+        first = dirty.splitlines()[0].strip()
+        return (f"the preview worktree has {len(dirty.splitlines())} uncommitted or untracked change(s) (first: {first}): "
+                "commit them (or ignore them in .gitignore), build, then run growth ready again")
     moved = head_moved_at(repo)
     if moved is not None and f.stat().st_mtime <= moved:
         return (f"the build of {path} is older than the code at {head(repo)[:7]}: build the site, then run growth ready "
