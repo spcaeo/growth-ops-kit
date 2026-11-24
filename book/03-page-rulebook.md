@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.8.1
+version: 2.8.2
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.8.1 (generic edition) · 23 Nov 2026.**
+**Version 2.8.2 (generic edition) · 23 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -404,6 +404,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-23 | 2.8.2 | Rule 90 counts a page and its language copy (`/x/` and `/en-us/x/`) as one page, so the same link words to both are not a duplicate anchor. |
 | 2026-11-23 | 2.8.1 | `growth ready --batch` reaches the batch (the front door took "ledger" for a page); `--repo` passes through the short form. |
 | 2026-11-23 | 2.8.0 | Four new checks for what a reviewer kept finding by hand: rule 28 (a fact repeated across folds), rule 11 (internal process words), rule 36 (short-list items not on the old site), rule 158a (half-empty boxes). `growth ready --batch` checks many pages side by side, and READY holds while a page's built output is unchanged. |
 | 2026-11-23 | 2.7.6 | `growth ready --repo <worktree>` checks the page's own worktree; `link_graph crawl --base` always reads the preview's own sitemap, so a branch's new page is in the graph before release. |
