@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pull work from the board (kit 3.0, micro kit core): an agent or the machine runner takes the next job it can do.
 
-  growth work next --kit K --agent NAME [--runner R] [--lease 1800] [--wait SECONDS] [--json]
+  growth work next --kit K --agent NAME [--runner R] [--kinds k1,k2] [--lease 1800] [--wait SECONDS] [--json]
         claim one job (a lease; exit 0 and the job printed, exit 3 when there is nothing to claim now). --wait keeps
         asking for up to that many seconds. --runner narrows who the job is for: machine, owner, agent:<role> (research,
         plan, build, review, lead) or agent (any worker role); with none, the jobs of the owner and of the lead (agent:lead) are
@@ -54,6 +54,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     n_ = sub.add_parser("next")
     n_.add_argument("--kit"); n_.add_argument("--runner"); n_.add_argument("--agent")
+    n_.add_argument("--kinds", help="only jobs of these kinds, e.g. shots,click-test")
     n_.add_argument("--lease", type=int, default=board.DEFAULT_LEASE_S)
     n_.add_argument("--wait", type=float, default=0); n_.add_argument("--json", action="store_true")
     b_ = sub.add_parser("beat"); b_.add_argument("job"); b_.add_argument("--agent"); b_.add_argument("--lease", type=int)
@@ -74,7 +75,7 @@ def _run(a) -> int:
     if a.cmd == "next":
         deadline = time.monotonic() + a.wait
         while True:
-            j = board.claim(agent, a.kit, a.runner, a.lease, st=st)
+            j = board.claim(agent, a.kit, a.runner, a.lease, kinds=a.kinds.split(",") if a.kinds else None, st=st)
             if j:
                 print(json.dumps(j, default=str) if a.json else describe(j))
                 return 0

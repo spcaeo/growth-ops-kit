@@ -213,3 +213,16 @@ def test_lock_status(tmp_path):
     growth(project, "lock", "shared-code", "--agent", "builder-2", check=True)
     out = growth(project, "lock", "status", check=True).stdout
     assert "shared-code: held by builder-2" in out and "owner-preview: free" in out
+
+
+def test_claim_can_be_limited_to_some_job_kinds(tmp_path):
+    project, st = fresh(tmp_path)
+    board.add_page("/p", "core", "p", st=st)
+    assert board.claim("m", kinds=["shots", "click-test"], st=st) is None          # not ready yet: nothing of those kinds
+    snap = board.claim("m", kinds=["snapshot"], st=st)
+    assert snap["kind"] == "snapshot"
+    board.done(snap["id"], "m", "https://example.com/s", st=st)
+    assert board.claim("m", kinds=["snapshot", "preflight"], st=st) is None        # record is ready, but it is not asked for
+    assert board.claim("m", kinds=["record"], st=st)["kind"] == "record"
+    r = growth(project, "work", "next", "--agent", "m", "--kinds", "shots,click-test")
+    assert r.returncode == 3

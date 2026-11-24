@@ -23,7 +23,7 @@ has a free slot; the claim is ONE write transaction, so two claimers never get t
 Library use (the machine runner, lanes):
   add_page(path, type, key, cluster=None, task=None, steps=None) -> {"path", "created", "jobs": [ids]}
   add_job(kind, page=None, needs=(), task=None, step=None, priority=0) -> id
-  claim(agent, kit=None, runner=None, lease_s=1800, project=None) -> job dict or None
+  claim(agent, kit=None, runner=None, lease_s=1800, project=None, kinds=None) -> job dict or None (it takes the job's resource itself: use job["port"] / job["resource_slot"], do not acquire it again)
   beat(job, agent, project=None) -> bool · done(job, agent, proof, project=None) -> dict · fail(job, agent, why, project=None) -> dict
   acquire(resource, holder, lease_s=1800, project=None) -> {"resource","slot","holder","until"} or None
   release(resource, holder, project=None) -> bool · held(resource=None, project=None) -> list
@@ -217,9 +217,9 @@ def _public(db, jid) -> dict:
     return j
 
 
-def claim(agent: str, kit: str | None = None, runner: str | None = None, lease_s: int | None = None, project=None, st=None):
+def claim(agent: str, kit: str | None = None, runner: str | None = None, lease_s: int | None = None, project=None, kinds=None, st=None):
     """Claim the next job `agent` may do, atomically. `kit` and `runner` narrow the choice: runner is "machine", "owner",
-    "agent:<role>" or "agent" (any worker role). With no runner, and for runner "agent", the jobs of the owner and of the lead
+    "agent:<role>" or "agent" (any worker role); `kinds` (a list of job kinds) only gives a job of those kinds. With no runner, and for runner "agent", the jobs of the owner and of the lead
     (runner agent:lead, which a project may set in pipeline_overrides) are never given out: ask for them by name. The oldest
     job comes first (a page sent back first of all). A job whose resource has no free slot is skipped, not waited for. A
     done job near its use-by date is refreshed first (refresh_expiring). Returns the job (a dict with "path", "key",
@@ -233,6 +233,9 @@ def claim(agent: str, kit: str | None = None, runner: str | None = None, lease_s
         if kit:
             conds.append("kit=?")
             args.append(kit)
+        if kinds:
+            conds.append(f"kind IN ({','.join('?' * len(kinds))})")
+            args.extend(kinds)
         if runner == "agent":
             conds.append("runner LIKE 'agent:%' AND runner != 'agent:lead'")
         elif runner:
