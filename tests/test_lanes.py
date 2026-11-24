@@ -74,7 +74,7 @@ def test_two_lanes_at_once_on_their_own_ports_and_worktrees(env):
     for r in (a, b):
         assert get(r["port"])[0] == 200
         d = Path(r["dir"]).resolve()
-        assert env.project not in d.parents and env.site.parent not in d.parents      # outside the project and the site's folder
+        assert env.project not in d.parents and env.site not in d.parents      # outside the project and the site repo
         assert env.lanes.resolve() in d.parents
     assert "hello lane" in get(a["port"])[1]
     rows = lane.list_lanes(env.project)
@@ -118,11 +118,18 @@ def test_one_lane_per_agent_and_per_page(env):
         lane.open_lane("/", "b2", project=env.project)
 
 
-@pytest.mark.parametrize("where", ["inside_project", "inside_site_parent"])
-def test_a_lanes_dir_inside_the_project_or_the_sites_folder_is_refused(env, where):
-    bad = env.project / "lanes" if where == "inside_project" else env.site.parent / "lanes"
+def test_lanes_next_to_the_site_repo_are_allowed_so_one_folder_holds_the_whole_project(env):
+    beside = env.site.parent / "lanes"                    # owner, 24 Nov 2026: everything of a project in one folder
+    env.set_cfg(lanes_dir=str(beside))
+    r = lane.open_lane("/", "b1", project=env.project)
+    assert beside.resolve() in Path(r["dir"]).resolve().parents and get(r["port"])[0] == 200
+
+
+@pytest.mark.parametrize("where", ["inside_project", "inside_site_repo"])
+def test_a_lanes_dir_inside_the_project_or_the_site_repo_is_refused(env, where):
+    bad = env.project / "lanes" if where == "inside_project" else env.site / "lanes"
     env.set_cfg(lanes_dir=str(bad))
-    with pytest.raises(lane.LaneError, match="outside"):
+    with pytest.raises(lane.LaneError, match="inside the (project folder|site repo)"):
         lane.open_lane("/", "b1", project=env.project)
     assert not bad.exists()                                # nothing was made
     assert env.board.held("port", project=env.project) == []

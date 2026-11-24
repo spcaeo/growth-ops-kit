@@ -4,6 +4,27 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 3.0.0 - 2026-11-24
+
+Many hands, one database: several agents work on one site at the same time without waiting for each other (book
+chapter `05-board.md`). No rule of the page rulebook changes; a page is READY under 3.0 exactly when it is under 2.8.5.
+- **One database per project** (`state/growth.db`, SQLite in WAL mode, `growth store`): the task list, the page journal,
+  the READY and pre-flight verdicts, the board and an event for every change. The plain files stay as mirrors, written
+  byte for byte as 2.8.5 wrote them; a mirror changed outside the kit is read back in; a lost database is rebuilt from
+  the mirrors. Every reader goes through one access layer (`records.py`), guarded by a test.
+- **Micro kits** (`kit/kits.json`, `growth kits`): the kit in eleven parts, each with its tools, its job kinds, how each
+  job runs (ahead, parallel, page, single, paced, owner) and how long its result counts; one pipeline per page type.
+- **The work board** (`growth board`, `growth work next / beat / done / fail`): jobs are pulled with a lease, finished
+  with a checkable proof that ticks the task step, and go back to the queue when a lease runs out.
+- **Shared doors** (`growth pace google`, `growth lock`): one Google search every 20 to 30 s for all agents together,
+  a 10-minute pause on a robot check; the shared-code and owner-preview locks; the browser and port pools.
+- **Builder lanes** (`growth lane open / check / close`): each builder's own copy of the site, port and preview
+  server, outside the project folder (`lanes_dir`, at most `lane_cap`).
+- **The machine runner** (`growth run --jobs N`): machine jobs side by side under the browser pool and a load guard.
+- Fixes found on the way: the approvals log appends under one lock (8 parallel approvals keep the chain and the ids);
+  two writers of the task list no longer bypass the lock; the journal renders outside its write lock; two f-strings
+  that broke Python 3.10 and 3.11 (with a test that compiles the kit on both).
+
 ## 2.8.5 - 2026-11-23
 
 Finding classes an independent reviewer kept finding on pages the gate passed (#99, #100).

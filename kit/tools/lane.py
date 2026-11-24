@@ -9,8 +9,8 @@
   growth lane close <agent|path> [--force]                            stop its server, remove the worktree (the branch stays)
 
 A lane is a git worktree of the site repo (growth.json "site_repo") kept in growth.json "lanes_dir" (default
-~/lanes/<project folder name>). The lanes folder must be outside the project folder and outside the folder that holds the
-site repo (owner rule, 24 Nov 2026: builder copies outside the project). At most growth.json "lane_cap" lanes (default 3)
+~/lanes/<project folder name>). The lanes folder may sit next to the site repo (one folder for the whole project), but
+never inside the project folder or inside the site repo itself. At most growth.json "lane_cap" lanes (default 3)
 are open at once. The builder checks on its own port; READY stays on the owner's one preview address.
 
 growth.json keys read: site_repo, lanes_dir, lane_cap (3), build_cmd, build_dir (dist, or "." with no build_cmd),
@@ -100,19 +100,19 @@ def site_repo(project, cfg) -> Path:
 
 
 def lanes_dir(project, cfg, repo) -> Path:
-    """Where lanes live. Refused: inside the project folder, or inside the folder that holds the site repo (owner rule,
-    24 Nov 2026). A folder that holds everything (your home folder, the filesystem root) is too wide to count as 'the
-    site's folder', so the second test skips it."""
+    """Where lanes live. Refused: inside the project folder (the growth notes stay free of code copies) and inside the
+    site repo itself (a worktree nested in its own repo confuses git and the build). Next to the site repo is fine, so a
+    whole project can live in one folder (owner, 24 Nov 2026: "keep all things releated to this project in this folder")."""
     given = cfg.get("lanes_dir")
     d = config.resolve_in(project, given) if given else Path.home() / "lanes" / project.name
     d = d.resolve()
     if d == project or project in d.parents:
-        raise LaneError(f"lanes_dir {d} is inside the project folder {project}. Builder copies must live outside it "
-                        f"(owner rule, 24 Nov 2026). Set growth.json lanes_dir to another folder, for example ~/lanes/{project.name}.")
-    parent = repo.parent.resolve()
-    if parent not in (Path.home().resolve(), Path(parent.anchor)) and (d == parent or parent in d.parents):
-        raise LaneError(f"lanes_dir {d} is inside {parent}, the folder that holds the site's code. Builder copies must live "
-                        f"outside it (owner rule, 24 Nov 2026). Set growth.json lanes_dir to a folder elsewhere.")
+        raise LaneError(f"lanes_dir {d} is inside the project folder {project}. Builder copies must live outside it: set "
+                        f"growth.json lanes_dir to another folder, for example one beside the site repo.")
+    site = repo.resolve()
+    if d == site or site in d.parents:
+        raise LaneError(f"lanes_dir {d} is inside the site repo {site}. Keep builder copies next to it, not in it: set "
+                        f"growth.json lanes_dir to a folder beside the site, for example {site.parent / 'lanes'}.")
     return d
 
 

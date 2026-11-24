@@ -174,9 +174,18 @@ def work_files(root: Path) -> list[str]:
         return sorted({f for f in out.split("\0") if f and (root / f).is_file()})
     found = []
     for dp, dn, fn in os.walk(root):
-        dn[:] = [d for d in dn if d not in SKIP_DIRS]
+        dn[:] = [d for d in dn if d not in SKIP_DIRS and not ignores_itself(Path(dp, d))]
         found += [str(Path(dp, f).relative_to(root)) for f in fn]
     return sorted(found)
+
+
+def ignores_itself(d: Path) -> bool:
+    """A folder whose own .gitignore is just "*" can never be committed (kit 3.0: the project database folder state/
+    writes one). Outside git (a snapshot of the staged files, say) it is skipped as git would skip it."""
+    try:
+        return [l.strip() for l in (d / ".gitignore").read_text().splitlines() if l.strip() and not l.startswith("#")] == ["*"]
+    except OSError:
+        return False
 
 
 def chunks(fh):

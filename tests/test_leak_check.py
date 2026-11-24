@@ -223,3 +223,14 @@ def test_text_mode_scans_markdown_headings_and_needs_a_file(tmp_path):
     assert lc.main(["--root", str(tmp_path), "--private-words", str(words), "--text", str(body)]) == 1
     assert lc.main(["--root", str(tmp_path), "--private-words", str(words), "--message", str(body)]) == 0   # commit mode: '#' = comment
     assert lc.main(["--root", str(tmp_path), "--text", "this is the text itself, not a file"]) == 2
+
+
+def test_outside_git_a_folder_that_ignores_itself_is_skipped(tmp_path):
+    """kit 3.0: the project database (state/growth.db, its folder git-ignored by its own .gitignore "*") is no leak."""
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / ".gitignore").write_text("*\n")
+    (tmp_path / "state" / "growth.db").write_bytes(b"SQLite format 3\0")
+    assert run("--root", str(tmp_path), cwd=tmp_path).returncode == 0
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "growth.db").write_bytes(b"SQLite format 3\0")      # not ignored: still flagged
+    assert run("--root", str(tmp_path), cwd=tmp_path).returncode == 1
