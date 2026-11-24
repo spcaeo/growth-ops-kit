@@ -1,0 +1,244 @@
+{
+  "_about": "The micro-kit manifest (kit 3.0, design section 3). Each micro kit owns its tools, its job kinds and its tables, and talks to the others only through the project's database (kit/tools/store.py). Every key of the growth dispatcher's TOOLS dict is in exactly ONE kit; every job kind is in exactly ONE kit; a test checks both. The pipelines at the bottom are data: adding a step to a page's line is a change here, not in code. Keys that start with an underscore are notes, never read by code. A job kind may carry use_by_days: how long its result counts (the gate's freshness rules: AI baseline, research check and review 30 days, inventory 7, link graph 8, outside facts 90); a done job of a page that is not READY yet is refreshed (a new job of the same kind) when it is within 3 days of that.",
+  "version": 1,
+
+  "ways": {
+    "ahead": "ready ahead: it may run as soon as its needs are done, before anyone waits for it",
+    "parallel": "side by side: many of these run at the same time, limited only by their resource",
+    "page": "page by page: one worker (a lane) builds one page",
+    "single": "one at a time in the whole project: a second job of this kind waits while one is held",
+    "paced": "paced by a shared timer: every turn goes through `growth pace`",
+    "owner": "waits for the owner: no agent or machine claims it"
+  },
+
+  "resources": {
+    "none": {"kind": "none", "what": "needs nothing shared"},
+    "google": {"kind": "pacer", "what": "one Google search turn every 20 to 30 s for every agent together; growth pace google (OWNER-RULES: Slow Google searches)"},
+    "browser": {"kind": "pool", "capacity": 3, "what": "a headless browser; growth.json resources.browser changes the number"},
+    "port": {"kind": "pool", "first": 18440, "last": 18459, "what": "a lane's own preview port; growth.json resources.port_range [first, last] changes the range"},
+    "owner-preview": {"kind": "lock", "what": "the one preview address the owner looks at; only the READY run and its move use it"},
+    "shared-code": {"kind": "lock", "what": "one writer of the shared site code (design system, shared components)"}
+  },
+
+  "stages": ["research", "plan", "plan-review", "preflight", "build", "cleanup", "evidence", "review", "ready", "owner", "release", "measure"],
+
+  "kits": {
+    "core": {
+      "purpose": "Bookkeeping: the project's one database, the work board, the task list, the journal, the pacer and the locks.",
+      "group": "I bookkeeping, the store",
+      "tools": ["store", "board", "work", "pace", "lock", "unlock", "kits", "tasks", "journal", "workflow", "statusline", "aliases", "paths"],
+      "libraries": ["atomic", "config"],
+      "jobs": {}
+    },
+    "site": {
+      "purpose": "Groundwork on the whole site: the inventory, the link graph, the sitemaps, the stack, the page tracker and a page's before snapshot.",
+      "group": "A groundwork",
+      "tools": ["inventory", "link_graph", "link_map", "sitemaps", "detect", "page_tracker", "page_snapshot"],
+      "libraries": [],
+      "jobs": {
+        "inventory": {"way": "ahead", "runner": "machine", "resource": "none", "stage": "", "use_by_days": 7, "what": "rebuild the site inventory (not tied to one page; a timer or the lead adds it)"},
+        "link-graph": {"way": "ahead", "runner": "machine", "resource": "none", "stage": "", "use_by_days": 8, "what": "crawl the internal links and refresh the link graph (not tied to one page)"}
+      }
+    },
+    "research": {
+      "purpose": "Find out what buyers and Google show before a page is planned: the page's snapshot, dossier, search figures, AI-answer baseline and the research record.",
+      "group": "B research",
+      "tools": ["research", "research_gate", "vendor_page", "market"],
+      "libraries": ["fact_sources"],
+      "jobs": {
+        "snapshot": {"way": "ahead", "runner": "machine", "resource": "none", "stage": "research", "what": "the page's before snapshot (growth page_snapshot): title, headings, links, schema and its Search Console data"},
+        "dossier": {"way": "ahead", "runner": "agent:research", "resource": "none", "stage": "research", "use_by_days": 90, "what": "the dossier: Part 1 of the money-page playbook answered, competitors read in full",
+                    "_why": "no google resource: the dossier reads competitor pages one by one, not Google result pages. The Google turns are in figures and ai-baseline, which are paced. use_by_days 90: the outside facts in it (vendor and competitor pages) count for 90 days (fact_sources)."},
+        "figures": {"way": "paced", "runner": "agent:research", "resource": "google", "stage": "research", "what": "the search window: who searches, the top results, the target market's figures (growth market)"},
+        "ai-baseline": {"way": "paced", "runner": "agent:research", "resource": "google", "stage": "research", "use_by_days": 30, "what": "the AI-answer baseline taken BEFORE the build: Google's AI answers, 10 or more journal runs in the primary market",
+                        "_why": "google is the only engine the kit assumes: a project's owner may forbid another one as a source. Any other engine comes only from the project's growth.json (a pacer named there, and pipeline_overrides.resource for this job)."},
+        "record": {"way": "ahead", "runner": "agent:research", "resource": "none", "stage": "research", "use_by_days": 30, "what": "file the research record (growth research) and the fact check the gate reads (ev.research-check counts for 30 days)"}
+      }
+    },
+    "plan": {
+      "purpose": "Plan before building: the fact inventory, the fold plan, the plan review and the pre-flight.",
+      "group": "C plan",
+      "tools": ["fold_plan", "preflight", "brief", "checkpoints", "held"],
+      "libraries": [],
+      "jobs": {
+        "fact-inventory": {"way": "ahead", "runner": "agent:plan", "resource": "none", "stage": "plan", "what": "list every fact the page states, its source and the folds it sits in (each fact once in full)"},
+        "fold-plan": {"way": "ahead", "runner": "agent:plan", "resource": "none", "stage": "plan", "what": "growth fold_plan: all detail fields of every fold, until the plan is complete"},
+        "brief": {"way": "ahead", "runner": "machine", "resource": "none", "stage": "plan", "what": "growth brief: the helper's brief (rules in scope, playbook steps, owner instructions); it must exist before the pre-flight (preflight needs ev.brief)"},
+        "plan-review": {"way": "ahead", "runner": "agent:review", "resource": "none", "stage": "plan-review", "what": "the reviewer reads the fact inventory and the fold plan (about 5 minutes), BLOCKING or NIT"},
+        "preflight": {"way": "ahead", "runner": "machine", "resource": "none", "stage": "preflight", "what": "growth preflight must say PASS; it writes the page's checkpoints file"}
+      }
+    },
+    "shared": {
+      "purpose": "Changes to code every page uses (design system, shared components) and the registry that follows them: one writer at a time.",
+      "group": "D shared code",
+      "tools": ["site_design", "registry_sync"],
+      "libraries": [],
+      "jobs": {
+        "shared-change": {"way": "single", "runner": "agent:build", "resource": "shared-code", "stage": "", "what": "a change to shared code; holds the shared-code lock while it runs (not tied to one page)"}
+      }
+    },
+    "build": {
+      "purpose": "Build one page in its own lane: a worktree, its own port, its own preview; then the clean-up before the final evidence.",
+      "group": "E build",
+      "tools": ["lane", "serve_build"],
+      "libraries": [],
+      "jobs": {
+        "build": {"way": "page", "runner": "agent:build", "resource": "port", "stage": "build", "what": "build the page in a lane (growth lane open), gate after every fold; the job holds a preview port from the pool"},
+        "cleanup": {"way": "page", "runner": "agent:build", "resource": "none", "stage": "cleanup", "what": "clear dead code and unused files BEFORE the evidence (any commit after the shots makes them stale)"}
+      }
+    },
+    "check": {
+      "purpose": "The machine's checks: the page gate, READY, contrast, phone, technical SEO, leaks and fingerprints.",
+      "group": "F machine checks",
+      "tools": ["gate", "ready", "contrast_check", "phone_check", "tech_seo_check", "techseo", "leak_check", "fingerprint", "checks"],
+      "libraries": ["gatelib", "techseo"],
+      "jobs": {
+        "ready": {"way": "single", "runner": "machine", "resource": "owner-preview", "stage": "ready", "what": "growth ready: the full gate, 0 FAIL, on the owner's one preview address (the job holds the owner-preview lock)",
+                  "_why": "single and owner-preview together: the owner's address serves one page set at a time, so one READY job holds it; a batch of pages can still go through growth ready --batch inside that one turn. Re-checks of changed pages are new ready jobs (board.add_job)."}
+      }
+    },
+    "evidence": {
+      "purpose": "Proof in the project: full-page shots at the rulebook's widths, the click-test of every control, page archives. Runs in a headless browser from the pool.",
+      "group": "F proof",
+      "tools": ["page_archive", "run"],
+      "libraries": [],
+      "jobs": {
+        "shots": {"way": "parallel", "runner": "machine", "resource": "browser", "stage": "evidence", "what": "screenshots at 1366 and 390 and the other rulebook widths, newer than the page's last change"},
+        "click-test": {"way": "parallel", "runner": "machine", "resource": "browser", "stage": "evidence", "what": "click every control in a real browser after the page's last change"}
+      }
+    },
+    "review": {
+      "purpose": "The independent review on a different model from the builder, and the rule that a helper runs on the model its role calls for.",
+      "group": "G review",
+      "tools": ["review", "agent_models"],
+      "libraries": [],
+      "jobs": {
+        "review": {"way": "parallel", "runner": "agent:review", "resource": "none", "stage": "review", "use_by_days": 30, "what": "the independent review of the built page: BLOCKING or NIT, accepted at 0 BLOCKING; a page sent back goes to the front of the builder's queue (ev.review counts for 30 days)"},
+        "cross-check": {"way": "parallel", "runner": "agent:review", "resource": "none", "stage": "review", "what": "the research cross-check: the built page against the dossier and concept, item by item (every search to own, buyer fear, competitor gap and fold DELIVERED, WEAK or MISSING)"},
+        "cro-audit": {"way": "parallel", "runner": "agent:review", "resource": "none", "stage": "review", "what": "the CRO audit of the built page (playbook cro-audit), only the checks the change touches"}
+      }
+    },
+    "owner": {
+      "purpose": "Everything only the owner decides or signs: approvals, messages, the journal page, setup, health check and the guards that protect the golden rule.",
+      "group": "owner only",
+      "tools": ["approvals", "owner_messages", "owner_journal", "url_guard", "wizard", "wizard_state", "harness", "setup_task", "new_project", "doctor", "front_door", "hook", "install_hooks"],
+      "libraries": ["transcript"],
+      "jobs": {
+        "owner-checkin-1": {"way": "owner", "runner": "owner", "resource": "none", "stage": "preflight", "what": "owner check-in 1: a few one-click questions in chat (claims, offers, old pages to merge), each with a safe default; planning goes on while they wait, the build needs the answers",
+                            "_why": "a project may drop it (growth.json pipeline_overrides.drop)."},
+        "owner-checkin-2": {"way": "owner", "runner": "owner", "resource": "none", "stage": "owner", "what": "owner check-in 2: the owner looks at the page on the one preview address (it is READY by now) and says yes or sends it back; no agent or machine claims it",
+                            "_why": "runner owner: a project whose owner delegated the yes can name another runner (growth.json pipeline_overrides.runner, for example agent:lead). A job for agent:lead is never given out unless the claimer asks for runner agent:lead."}
+      }
+    },
+    "release": {
+      "purpose": "Release one page alone after the owner's yes, get it indexed, then measure it against its baseline at day 7, 14, 28 and 56.",
+      "group": "H release",
+      "tools": ["index_pages", "measure"],
+      "libraries": [],
+      "jobs": {
+        "release": {"way": "single", "runner": "owner", "resource": "none", "stage": "release", "what": "merge after the owner's yes and deploy, one page at a time",
+                    "_why": "runner owner: the release is the lead's own act after the owner's yes (a worker agent never pushes or merges), so it is owner-side work that no agent or machine claims. The lead marks it done with `growth work done`. single keeps two releases from running at once."},
+        "measure": {"way": "ahead", "runner": "machine", "resource": "none", "stage": "measure", "what": "measure against the frozen baseline at day 7, 14, 28 and 56 (growth measure); the page stays at this stage until the last window is read",
+                    "_why": "the page's last stage: the machine runner marks it done only after day 56 (dates are filed by growth measure schedule)."}
+      }
+    }
+  },
+
+  "pipelines": {
+    "_about": "Per page type, the job kinds in order and what each needs (kinds earlier in the same line). A page added to the board gets one job per line, in this order; the page's stage is the stage of its first unfinished job. The line follows the activity map and its check: research -> plan (brief before pre-flight) -> build -> cleanup -> evidence -> review (and cross-check, CRO audit) -> ready -> owner check-in 2 -> release -> measure. A project can drop steps or change who runs one in growth.json pipeline_overrides.",
+    "money": {
+      "_why": "The full research set: money pages carry the dossier (gate check ev.dossier, money and hub only) and the AI-answer baseline taken before the build (ev.ai-baseline, money only). The three research jobs after the snapshot do not wait for each other. The brief comes before the pre-flight (preflight needs ev.brief). Owner check-in 1 (short questions, money-page playbook step 3) is asked as soon as the record is done and sits in the line right before the build: planning goes on while the owner answers, the build needs the answers. The independent review, the research cross-check and the CRO audit come BEFORE ready (ready.py and the gate's ev.review need them) and run side by side; to run them one after the other, change their needs here. Owner check-in 2 (the prototype on the preview) is after READY: the golden rule, no address to the owner before READY.",
+      "jobs": [
+        {"kind": "snapshot", "needs": []},
+        {"kind": "dossier", "needs": ["snapshot"]},
+        {"kind": "figures", "needs": ["snapshot"]},
+        {"kind": "ai-baseline", "needs": ["snapshot"]},
+        {"kind": "record", "needs": ["dossier", "figures", "ai-baseline"]},
+        {"kind": "fact-inventory", "needs": ["record"]},
+        {"kind": "fold-plan", "needs": ["fact-inventory"]},
+        {"kind": "brief", "needs": ["fold-plan"]},
+        {"kind": "plan-review", "needs": ["fold-plan"]},
+        {"kind": "preflight", "needs": ["plan-review", "brief"]},
+        {"kind": "owner-checkin-1", "needs": ["record"]},
+        {"kind": "build", "needs": ["preflight", "owner-checkin-1"]},
+        {"kind": "cleanup", "needs": ["build"]},
+        {"kind": "shots", "needs": ["cleanup"]},
+        {"kind": "click-test", "needs": ["cleanup"]},
+        {"kind": "review", "needs": ["shots", "click-test"]},
+        {"kind": "cross-check", "needs": ["shots", "click-test", "record"]},
+        {"kind": "cro-audit", "needs": ["shots", "click-test"]},
+        {"kind": "ready", "needs": ["shots", "click-test", "review", "cross-check", "cro-audit"]},
+        {"kind": "owner-checkin-2", "needs": ["ready"]},
+        {"kind": "release", "needs": ["owner-checkin-2"]},
+        {"kind": "measure", "needs": ["release"]}
+      ]
+    },
+    "hub": {
+      "_why": "A hub (guide, best-software list, comparison, cluster main page) follows the cluster-redesign playbook: one researcher per page reads who searches and the top 20 results, so it gets the dossier and the search figures. No AI-answer baseline (ev.ai-baseline is money only) and no owner check-in 1 (the playbook has none; its check-in is the page on a local address). It gets the review and the research cross-check, not the CRO audit.",
+      "jobs": [
+        {"kind": "snapshot", "needs": []},
+        {"kind": "dossier", "needs": ["snapshot"]},
+        {"kind": "figures", "needs": ["snapshot"]},
+        {"kind": "record", "needs": ["dossier", "figures"]},
+        {"kind": "fact-inventory", "needs": ["record"]},
+        {"kind": "fold-plan", "needs": ["fact-inventory"]},
+        {"kind": "brief", "needs": ["fold-plan"]},
+        {"kind": "plan-review", "needs": ["fold-plan"]},
+        {"kind": "preflight", "needs": ["plan-review", "brief"]},
+        {"kind": "build", "needs": ["preflight"]},
+        {"kind": "cleanup", "needs": ["build"]},
+        {"kind": "shots", "needs": ["cleanup"]},
+        {"kind": "click-test", "needs": ["cleanup"]},
+        {"kind": "review", "needs": ["shots", "click-test"]},
+        {"kind": "cross-check", "needs": ["shots", "click-test", "record"]},
+        {"kind": "ready", "needs": ["shots", "click-test", "review", "cross-check"]},
+        {"kind": "owner-checkin-2", "needs": ["ready"]},
+        {"kind": "release", "needs": ["owner-checkin-2"]},
+        {"kind": "measure", "needs": ["release"]}
+      ]
+    },
+    "post": {
+      "_why": "The lighter set for a post (new-post playbook): the snapshot, the search figures (the search it answers) and the research record with its fact check. No dossier (ev.dossier is money and hub only), no AI-answer baseline, no check-in 1 (the owner approved the topic before the job). Plan, build and checks are the same as for any page: the gate scopes them to every type. Only the independent review before READY.",
+      "jobs": [
+        {"kind": "snapshot", "needs": []},
+        {"kind": "figures", "needs": ["snapshot"]},
+        {"kind": "record", "needs": ["figures"]},
+        {"kind": "fact-inventory", "needs": ["record"]},
+        {"kind": "fold-plan", "needs": ["fact-inventory"]},
+        {"kind": "brief", "needs": ["fold-plan"]},
+        {"kind": "plan-review", "needs": ["fold-plan"]},
+        {"kind": "preflight", "needs": ["plan-review", "brief"]},
+        {"kind": "build", "needs": ["preflight"]},
+        {"kind": "cleanup", "needs": ["build"]},
+        {"kind": "shots", "needs": ["cleanup"]},
+        {"kind": "click-test", "needs": ["cleanup"]},
+        {"kind": "review", "needs": ["shots", "click-test"]},
+        {"kind": "ready", "needs": ["shots", "click-test", "review"]},
+        {"kind": "owner-checkin-2", "needs": ["ready"]},
+        {"kind": "release", "needs": ["owner-checkin-2"]},
+        {"kind": "measure", "needs": ["release"]}
+      ]
+    },
+    "core": {
+      "_why": "A core page (contact, about, blog index) serves a known job (the money-page playbook treats the home page as a money page, so file it as money), so research is the snapshot and the research record with its fact check; no Google turns. Plan, build and checks are the same as for any page. Only the independent review before READY.",
+      "jobs": [
+        {"kind": "snapshot", "needs": []},
+        {"kind": "record", "needs": ["snapshot"]},
+        {"kind": "fact-inventory", "needs": ["record"]},
+        {"kind": "fold-plan", "needs": ["fact-inventory"]},
+        {"kind": "brief", "needs": ["fold-plan"]},
+        {"kind": "plan-review", "needs": ["fold-plan"]},
+        {"kind": "preflight", "needs": ["plan-review", "brief"]},
+        {"kind": "build", "needs": ["preflight"]},
+        {"kind": "cleanup", "needs": ["build"]},
+        {"kind": "shots", "needs": ["cleanup"]},
+        {"kind": "click-test", "needs": ["cleanup"]},
+        {"kind": "review", "needs": ["shots", "click-test"]},
+        {"kind": "ready", "needs": ["shots", "click-test", "review"]},
+        {"kind": "owner-checkin-2", "needs": ["ready"]},
+        {"kind": "release", "needs": ["owner-checkin-2"]},
+        {"kind": "measure", "needs": ["release"]}
+      ]
+    }
+  }
+}
