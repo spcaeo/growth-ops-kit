@@ -63,7 +63,7 @@ checks it; `[judgment]` means a person or reviewer decides it.
 
 | Rule | What it means |
 | --- | --- |
-| **Money pages are unique** | Each researched on its own (the questioning dossier, 10 to 20 competitors), with its own hook, journey and interactive element; no copy shared with guides or other service pages. [code: ev.dossier, hero.unique, state.url] |
+| **Money pages are unique** | Each researched on its own (the questioning dossier, 10 to 20 competitors), with its own hook, journey and interactive element; no copy shared with guides or other service pages. [code: ev.dossier, hero.unique, state.url, words.own-copy] |
 | **Prototypes are real redesigns, in the real site** | Built inside the real site repo on a branch, shown on a local URL (never stand-alone HTML): a new layout from the research, the page's own interactive element, purposeful animation that honors reduced motion. The owner sees it on laptop and phone width. [code: repo.branch, page.renders, motion.reveal] |
 | **Each cluster gets its own design** | A cluster's pages get UI built for that topic after research, not a copied template. [judgment] |
 | **Deep, not long** | Built around how much the buyer already understands; one fact in one place; detail behind folds. [judgment] |

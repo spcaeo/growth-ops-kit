@@ -4,6 +4,13 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.8.4 - 2026-11-23
+
+- New check `words.own-copy` (rule 157a, also under "Money pages are unique"): a page's folds must not copy another page of the site word for word. An independent reviewer found a "hire experts" page whose 3 folds copied a sibling page (68 to 88% of their 7-word runs); the gate had no cross-page wording check. Each fold of 40+ words is compared, run by run, with every fold of every other page in the built output (`build_dir`): FAIL from 50% shared with one other fold, WARN from 30%; it names the other page and fold and quotes one shared run. Header, nav, footer, forms, buttons, client reviews and runs that 3+ pages share in short blocks are left out. No build is a SKIP. Set it in `growth.json` `words.own_copy` (`fail`, `warn`, `min_words`, `shared_pages`, `shared_max_words`); exceptions go in `words.own_copy_ok` as `{path, fold, reason}` (a reason is required). (#97)
+- `growth ready`: a fresh check on a build older than the code is NOT READY. With `build_dir` set, the page's built file must be newer than the moment HEAD last moved, and the page must be in the build; before, a build step that silently did not run let the gate check the old build while the ledger named the new commit. (#98)
+- Book 04: a checklist from past verdicts (`research/reviews/pre-review-checklist.md`) is run by the builder before a page goes to review, until each finding class has its check.
+- Tests: `tests/test_release_2_8_4_own_copy.py`, `tests/test_release_2_8_0_core.py::test_a_fresh_check_on_a_stale_build_is_not_ready`.
+
 ## 2.8.3 - 2026-11-23
 
 - words.fact-repeats (rule 28): Key takeaways, a contents list and FAQ answers are not read as second statements of a fact (rules 137, 96).
