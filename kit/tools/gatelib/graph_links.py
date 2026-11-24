@@ -140,11 +140,13 @@ class Graph:
                     or re.search(r"/page/\d+$", l["to"]))
 
     def anchors(self, brand):
+        """{link words: {the pages they go to}}, a page and its language copies counted as one page (2.8.2)."""
         out = defaultdict(set)
         for l in self.links:
             if l["zone"] in CONTENT and l["words"] and self.live(l["src"]) and l["moved"] != "gone" and not self.is_pager(l) \
-                    and l["words"] not in GENERIC and l["words"] not in brand and l["final"] != l["src"]:
-                out[l["words"]].add(l["final"])
+                    and l["words"] not in GENERIC and l["words"] not in brand and l["final"] != l["src"] \
+                    and same_page(l["final"]) != same_page(l["src"]):   # a language switch to the page's own copy (2.8.3)
+                out[l["words"]].add(same_page(l["final"]))
         return out
 
     def flags(self, p, anchors, explicit):
@@ -178,9 +180,17 @@ class Graph:
             elif l["to"] not in self.pages and ((t and (t["status"] or 0) >= 400) or (t and not t["status"])):
                 flags.append(("to-unknown", f"\"{l['words']}\" -> {l['to']} (answers {t['status'] or 'nothing'})"))
             elif l["words"] and len(anchors.get(l["words"], ())) > 1:
-                others = sorted(anchors[l["words"]] - {l["final"]})
+                others = sorted(anchors[l["words"]] - {same_page(l["final"])})
                 flags.append(("dup-anchor", f"\"{l['words']}\" -> {l['final']}; the same words also go to {', '.join(others[:3])}"))
         return list(dict.fromkeys(flags))
+
+
+LOCALE = re.compile(r"^/[a-z]{2}-[a-z]{2}(?=/|$)", re.I)
+
+
+def same_page(path):
+    """A language copy (/en-us/x/) is the same page as /x/ for anchor rules: one page in two languages (2.8.2)."""
+    return LOCALE.sub("", path or "") or "/"
 
 
 def load(ctx):

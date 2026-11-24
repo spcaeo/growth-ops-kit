@@ -4,6 +4,17 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.8.3 - 2026-11-23
+
+- words.fact-repeats (rule 28): Key takeaways, a contents list and FAQ answers are not read as second statements of a fact (rules 137, 96).
+- links.anchor-unique (rule 90): a language switch to the page's own copy ("View the US site") is not an anchor to another page.
+- Test: `tests/test_release_2_8_3_repeats_switch.py`.
+
+## 2.8.2 - 2026-11-23
+
+- links.anchor-unique (rule 90): a page and its language copy under a locale folder (`/en-us/`, `/fr-ca/`) count as one page, so the same anchor to both is not flagged.
+- Test: `tests/test_release_2_8_2_locale_anchor.py`.
+
 ## 2.8.1 - 2026-11-23
 
 - `growth ready --batch ...` reaches the batch: the front door took `ledger` for a page path and gated a page called /ledger. Verdicts stream as they land. `growth ready <page> --repo <worktree>` passes `--repo` on. (#96)
