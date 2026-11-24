@@ -200,3 +200,14 @@ def test_command_line_runs_once(env, capsys):
     assert runner.main(["--once", "--jobs", "1", "--poll", "0.2"]) == 0
     out = capsys.readouterr().out
     assert "DONE   fake /a" in out and "Runner finished: 1 done, 0 failed." in out
+
+
+def test_a_job_page_is_read_in_the_boards_shape_and_in_the_older_dict_shape():
+    assert runner.page_of({"page": "/a", "key": "k", "type": "post"}) == {"path": "/a", "key": "k", "type": "post", "cluster": ""}
+    assert runner.page_of({"page": {"path": "/b", "key": "k", "type": "hub", "cluster": "c"}})["cluster"] == "c"
+    assert runner.page_of({"page": None}) == {} and runner.page_of({}) == {}
+
+
+def test_a_resource_named_none_is_no_resource(env):
+    jid = env.board.enqueue("fake", path="/a", key="a", resource="none", project=env.project)
+    assert env.run(jobs=1) == 0 and env.job(jid)["status"] == "done"

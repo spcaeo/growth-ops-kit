@@ -15,7 +15,7 @@ The command for each job kind comes from growth.json "machine_jobs", a map kind 
   {"shots": "{venv_python} tools/page_evidence.py {path} --key {key} --url {preview} --commit {commit} --journal"}
 placeholders: {path} {key} {type} {cluster} {url} {preview} {repo} {commit} {growth} {venv_python} {project}
 ({url}: the page on the preview address, {preview}: the preview address itself). The command runs in the project folder.
-The kit knows its own kinds (gate, ready, link-graph, inventory, fingerprint, tech-seo); a kind with no command fails with
+The kit knows its own kinds (gate, ready, link-graph, inventory, fingerprint, tech-seo, preflight, snapshot); a kind with no command fails with
 a plain message.
 
 growth.json keys read: machine_jobs, preview_url, preview_repo, site_repo, trailing_slash, runner_max_load (CPU count x 2),
@@ -46,6 +46,8 @@ DEFAULTS = {
     "inventory": "{growth} inventory --base {preview}",
     "fingerprint": "{growth} fingerprint record {path} --key {key} --url {url}",
     "tech-seo": "{growth} tech_seo_check {url}",
+    "preflight": "{growth} preflight {path} --type {type} --key {key}",
+    "snapshot": "{growth} page_snapshot {path}",
 }
 FIELDS = ("path", "key", "type", "cluster", "url", "preview", "repo", "commit", "growth", "venv_python", "project")
 NEEDS_PREVIEW = ("url", "preview")
@@ -92,7 +94,7 @@ def render(template: str, job: dict, project: Path, cfg: dict) -> str:
     if unknown:
         raise JobError(f"the command for '{job['kind']}' uses {{{unknown[0]}}}, which is not a placeholder. Known: "
                        + " ".join("{" + f + "}" for f in FIELDS))
-    page = job.get("page") or {}
+    page = page_of(job)
     preview = (cfg.get("preview_url") or "").rstrip("/")
     if used & set(NEEDS_PREVIEW) and not preview:
         raise JobError(f"the command for '{job['kind']}' needs the preview address but growth.json has no preview_url.")
@@ -111,6 +113,18 @@ def render(template: str, job: dict, project: Path, cfg: dict) -> str:
     if (used & {"path", "key", "type"}) and not page:
         raise JobError(f"the command for '{job['kind']}' needs a page (path, key, type) but the job has none.")
     return template.format(**vals)
+
+
+def page_of(job: dict) -> dict:
+    """The page of a job as {path, key, type, cluster}: the board gives the path as text with key and type beside it, an older
+    shape gives a dict; {} for a job that belongs to no page."""
+    pg = job.get("page")
+    if isinstance(pg, dict):
+        return pg
+    path = pg or job.get("path") or ""
+    if not path:
+        return {}
+    return {"path": path, "key": job.get("key") or "", "type": job.get("type") or "", "cluster": job.get("cluster") or ""}
 
 
 def last_error(text: str, code: int) -> str:
@@ -267,13 +281,15 @@ class Runner:
 
     # -- one job
     def _work(self, n, job):
+        job = {**job, "page": page_of(job)}
         agent, jid, kind = f"{self.name}-{n}", job["id"], job["kind"]
         stop_beat = threading.Event()
         lost = threading.Event()
-        label = f"{kind} {((job.get('page') or {}).get('path') or '')}".strip()
+        label = f"{kind} {job['page'].get('path', '')}".strip()
         log = self.project / "journal" / "runs" / f"{re.sub(r'[^A-Za-z0-9._-]+', '-', kind)}-{jid}.log"
         rel = log.relative_to(self.project)
-        res = job.get("resource")
+        res, took = job.get("resource"), False
+        res = None if res in ("", "none") else res
         t0 = time.time()
 
         def beater():
@@ -292,8 +308,8 @@ class Runner:
         try:
             try:
                 cmd = render(command_for(kind, self.cfg), job, self.project, self.cfg)
-                if res and res != "google":
-                    self._take(res, agent, jid, t0)
+                if res and res != "google" and not job.get("resource_slot") and job.get("port") is None:
+                    took = self._take(res, agent, jid, t0)      # the board's claim already holds the job's resource; only an older board does not
                 self.say(f"START  {label}  (job {jid}, {agent})")
                 code, text = self._exec(cmd, jid, log)
             except JobError as e:
@@ -325,7 +341,7 @@ class Runner:
                 pass
         finally:
             stop_beat.set()
-            if res and res != "google":
+            if took:
                 try:
                     self.board.release(res, agent, project=self.project)
                 except Exception:  # noqa: BLE001

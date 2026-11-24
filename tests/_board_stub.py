@@ -32,30 +32,34 @@ def set_pool(resource: str, size: int) -> None:
     POOLS[resource] = size
 
 
+def _take(db, resource, holder):
+    mine = db.execute("SELECT slot FROM stub_res WHERE resource=? AND holder=?", (resource, holder)).fetchone()
+    if mine:
+        return mine["slot"]
+    taken = {r["slot"] for r in db.execute("SELECT slot FROM stub_res WHERE resource=?", (resource,))}
+    if resource == "port":
+        slot = None
+        for _ in range(50):
+            with socket.socket() as k:
+                k.bind(("127.0.0.1", 0))
+                cand = str(k.getsockname()[1])
+            if cand not in taken:
+                slot = cand
+                break
+    elif resource in POOLS:
+        slot = next((str(i) for i in range(1, POOLS[resource] + 1) if str(i) not in taken), None)
+    else:
+        slot = None if "lock" in taken else "lock"
+    if slot is not None:
+        db.execute("INSERT INTO stub_res(resource, slot, holder) VALUES(?,?,?)", (resource, slot, holder))
+    return slot
+
+
 def acquire(resource, holder, lease_s=1800, project=None):
     s = _s(project)
     with s.tx() as db:
-        mine = db.execute("SELECT slot FROM stub_res WHERE resource=? AND holder=?", (resource, holder)).fetchone()
-        if mine:
-            return {"resource": resource, "slot": mine["slot"], "holder": holder, "until": "later"}
-        taken = {r["slot"] for r in db.execute("SELECT slot FROM stub_res WHERE resource=?", (resource,))}
-        if resource == "port":
-            slot = None
-            for _ in range(50):
-                with socket.socket() as k:
-                    k.bind(("127.0.0.1", 0))
-                    cand = str(k.getsockname()[1])
-                if cand not in taken:
-                    slot = cand
-                    break
-        elif resource in POOLS:
-            slot = next((str(i) for i in range(1, POOLS[resource] + 1) if str(i) not in taken), None)
-        else:
-            slot = None if "lock" in taken else "lock"
-        if slot is None:
-            return None
-        db.execute("INSERT INTO stub_res(resource, slot, holder) VALUES(?,?,?)", (resource, slot, holder))
-        return {"resource": resource, "slot": slot, "holder": holder, "until": "later"}
+        slot = _take(db, resource, holder)
+        return None if slot is None else {"resource": resource, "slot": slot, "holder": holder, "until": "later"}
 
 
 def release(resource, holder, project=None):
@@ -83,7 +87,8 @@ def jobs(project=None):
     return [dict(r) for r in _s(project).q("SELECT * FROM stub_jobs ORDER BY id")]
 
 
-def claim(agent, kit=None, runner=None, lease_s=1800, project=None, kinds=None):
+def claim(agent, kit=None, runner=None, lease_s=None, project=None, kinds=None, st=None):
+    """Like the real board: the claim takes the job's resource itself (resource_slot), and a job whose resource is full is skipped."""
     s = _s(project)
     with s.tx() as db:
         sql, args = "SELECT * FROM stub_jobs WHERE status='queued'", []
@@ -93,12 +98,15 @@ def claim(agent, kit=None, runner=None, lease_s=1800, project=None, kinds=None):
             sql += " AND runner=?"; args.append(runner)
         if kinds:
             sql += f" AND kind IN ({','.join('?' * len(kinds))})"; args += list(kinds)
-        row = db.execute(sql + " ORDER BY id LIMIT 1", args).fetchone()
-        if not row:
-            return None
-        db.execute("UPDATE stub_jobs SET status='claimed', holder=?, attempts=attempts+1 WHERE id=?", (agent, row["id"]))
-        page = {"path": row["path"], "key": row["key"], "type": row["type"], "cluster": row["cluster"]} if row["path"] else None
-        return {"id": row["id"], "kind": row["kind"], "kit": row["kit"], "page": page, "resource": row["resource"], "slot": None}
+        for row in db.execute(sql + " ORDER BY id", args).fetchall():
+            slot = _take(db, row["resource"], agent) if row["resource"] else None
+            if row["resource"] and slot is None:
+                continue
+            db.execute("UPDATE stub_jobs SET status='claimed', holder=?, attempts=attempts+1 WHERE id=?", (agent, row["id"]))
+            return {"id": row["id"], "kind": row["kind"], "kit": row["kit"], "resource": row["resource"], "resource_slot": slot,
+                    "port": int(slot) if row["resource"] == "port" else None,
+                    "page": row["path"] or None, "path": row["path"] or None, "key": row["key"], "type": row["type"], "cluster": row["cluster"]}
+    return None
 
 
 def beat(job_id, agent, project=None):
@@ -111,6 +119,7 @@ def done(job_id, agent, proof, project=None):
     s = _s(project)
     with s.tx() as db:
         db.execute("UPDATE stub_jobs SET status='done', proof=? WHERE id=? AND holder=?", (proof, job_id, agent))
+        db.execute("DELETE FROM stub_res WHERE holder=?", (agent,))
     return {"id": job_id, "status": "done"}
 
 
@@ -118,6 +127,7 @@ def fail(job_id, agent, why, project=None):
     s = _s(project)
     with s.tx() as db:
         db.execute("UPDATE stub_jobs SET status='failed', why=? WHERE id=? AND holder=?", (why, job_id, agent))
+        db.execute("DELETE FROM stub_res WHERE holder=?", (agent,))
     return {"id": job_id, "status": "failed"}
 
 
