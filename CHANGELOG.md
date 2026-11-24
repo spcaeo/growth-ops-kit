@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.8.1 - 2026-11-23
+
+- `growth ready --batch ...` reaches the batch: the front door took `ledger` for a page path and gated a page called /ledger. Verdicts stream as they land. `growth ready <page> --repo <worktree>` passes `--repo` on. (#96)
+- Test: `tests/test_front_door.py::test_ready_batch_and_repo_reach_the_ready_tool`.
+
 ## 2.8.0 - 2026-11-23
 
 Many pages at once. One site ran 12 pages through 4 review rounds in a day and accepted none: `ready` checked one page at a time (about 92 s each), any commit made every page not READY, and builders and the reviewer waited for each other. (#93, #94, #95)
