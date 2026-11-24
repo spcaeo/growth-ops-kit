@@ -120,7 +120,10 @@ def _is_reason(n):
 def _drop_for_facts(n):
     """A form's labels and choices, a button, a nav, a dialog, the sticky bar and a drawn example are no statement of fact."""
     return (n.tag in ("nav", "dialog", "form", "select", "option", "textarea", "button") or _is_cta(n) or _is_reason(n)
-            or domx.has_cls(n, r"sticky-cta|exit-offer") or domx.is_example(n))
+            or domx.has_cls(n, r"sticky-cta|exit-offer") or domx.is_example(n)
+            # 2.8.3: a summary repeats the page by design (Key takeaways, rule 137), a contents list repeats the headings,
+            # and a FAQ answer must stand alone for FAQPage (rule 96): none of them is a second statement of a fact
+            or domx.has_cls(n, r".*(takeaway|toc|faq).*") or (n.get("aria-label") or "").lower() in ("on this page", "contents"))
 
 
 def _shingles(s, k=5):
