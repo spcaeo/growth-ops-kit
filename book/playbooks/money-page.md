@@ -17,8 +17,11 @@ their text and code.
 **No shortcuts** ([02-owner-rules.md](../02-owner-rules.md) section 1): every step below, in order, with both owner
 check-ins. Where this sits in the whole process: [01-flow.md](../01-flow.md) stage C.
 
-These pages do **not** go through the parallel lanes. One page at a time, slowly, with two owner check-ins. Each page
-must be unique: its own reader, its own problem, no copying of what the guides and posts already say.
+Each money page is built by **one builder, page by page**, in its own lane, and is released alone, with two owner
+check-ins. Its research and planning may run ahead of the build on the work board, and other pages may be built in
+other lanes at the same time ([05-board.md](../05-board.md); kit 3.0, owner 24 Nov 2026: "introduce parellel processing").
+A money page is never split between builders. Each page must be unique: its own reader, its own problem, no copying of
+what the guides and posts already say.
 
 ---
 
