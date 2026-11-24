@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Task tracker for the growth project.
 
-Data: docs/tasks.json (one file, easy to read, copy and reuse for another project).
+Data: the project's database (state/growth.db), read and written through records.py. The readable mirror docs/tasks.json
+is rewritten after every change (one file, easy to read, copy and reuse for another project); a change made to that
+file outside the store (restored from git, copied from another machine) is imported at the next command.
 
   growth tasks list                       # all tasks with status
   growth tasks show T5                    # one task with every step
@@ -28,12 +30,12 @@ from pathlib import Path
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import CFG, DOCS, PROJECT, TZ as _TZ  # noqa: E402
+from config import CFG, PROJECT, TZ as _TZ  # noqa: E402
 import research_gate  # noqa: E402
-import atomic  # noqa: E402
+import records  # noqa: E402  (the one access layer: database, with docs/tasks.json as its mirror)
 import checkpoints  # noqa: E402  (the one proof rule)
 
-DATA = DOCS / "tasks.json"  # the project's task list (growth.json: project_docs)
+DATA = records.tasks_path(PROJECT)  # the mirror file of the project's task list (growth.json: project_docs)
 TZ = _TZ  # growth.json timezone
 STATUSES = {"todo", "doing", "done", "blocked", "waiting-owner"}
 
@@ -43,22 +45,22 @@ def now() -> str:
 
 
 def load() -> dict:
-    return json.loads(DATA.read_text())
+    return records.tasks_doc(PROJECT)
 
 
 def save(db: dict) -> None:
-    """Whole-file write, atomic (kept for callers that already hold a loaded copy; the tool itself uses update())."""
+    """Whole-list write (kept for callers that already hold a loaded copy; the tool itself uses update())."""
     db["updated"] = now()
-    atomic.write_json(DATA, db)
+    records.tasks_save(PROJECT, db)
 
 
 def update(change):
-    """Read-change-write of the task list under the file lock: two agents ticking steps at once never lose a write."""
+    """Load, change and save the task list in ONE database transaction: two agents ticking steps at once never lose a write."""
     def wrapped(db):
         change(db)
         db["updated"] = now()
         return db
-    return atomic.update_json(DATA, wrapped)
+    return records.tasks_update(PROJECT, wrapped)
 
 
 def find(db: dict, tid: str) -> dict:

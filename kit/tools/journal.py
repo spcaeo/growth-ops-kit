@@ -5,7 +5,8 @@ Like a person's working notes. Every finding, question, decision and check (an A
 Search Console pull, an audit) is filed against the page(s) it concerns, so the next person who works on that page,
 or the re-check on day 21, 28 or 56, has it all at hand and can compare.
 
-Data (plain files, git-friendly, no server):
+Data: the entries live in the project's database (state/growth.db, through records.py); their readable, git-friendly mirror
+is a plain file (no server):
   journal/entries.jsonl         one JSON line per entry (append-only; answers and status changes are new lines)
   journal/runs/<date>/<id>.json the full query and the full response of every check we ran
   journal/pages/<slug>.md       one note per page, rebuilt from the entries (Obsidian-ready: open journal/ as a vault)
@@ -38,10 +39,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import PROJECT, TZ, CFG  # noqa: E402
 import paths  # noqa: E402  (one form of a site path)
-import atomic  # noqa: E402  (lock + atomic write: parallel agents never lose a line)
+import atomic  # noqa: E402  (lock + atomic write: the page notes are rebuilt under one lock)
+import records  # noqa: E402  (the one access layer: ids are taken inside the write transaction, so parallel adds never clash)
 
 J = PROJECT / "journal"
-ENTRIES = J / "entries.jsonl"
+ENTRIES = records.journal_path(PROJECT)   # the mirror file
 PAGES = J / "pages"
 RUNS = J / "runs"
 
@@ -92,10 +94,10 @@ def slug(path):
 def load():
     """Every entry with a readable time. A line with a bad or zone-less time (or broken JSON) is left out and reported on
     stderr, so an edited or damaged entry can never count as fresh."""
-    if not ENTRIES.exists():
+    if not records.journal_present(PROJECT):
         return []
     out = []
-    for n, l in enumerate(ENTRIES.read_text().splitlines(), 1):
+    for n, l in enumerate(records.journal_lines(PROJECT), 1):
         if not l.strip():
             continue
         try:
@@ -128,22 +130,15 @@ def state():
 
 
 def next_id():
-    """The next free id. Only call it while holding the journal lock (main() does), or two writers get the same id.
-    It counts the highest id used, not the lines, so an ignored line never makes an id repeat."""
-    used = []
-    for l in (ENTRIES.read_text().splitlines() if ENTRIES.exists() else []):
-        try:
-            m = re.fullmatch(r"J(\d+)", str(json.loads(l).get("id", "")))
-        except (ValueError, AttributeError):
-            continue
-        if m:
-            used.append(int(m.group(1)))
-    n = max(used or [0]) + 1
-    return f"J{n:04d}"
+    """The id the next entry would get: a peek only. cmd_add and cmd_run take the real id inside the write transaction
+    (records.journal_add), so two writers never get the same one. It counts the highest id used, not the lines, so an
+    ignored line never makes an id repeat."""
+    return records.journal_next_id(PROJECT)
 
 
 def append(obj):
-    atomic.append_line(ENTRIES, json.dumps(obj, ensure_ascii=False))
+    """File an entry that is complete (it has its id, or it is an update line with `of`)."""
+    records.journal_append(PROJECT, obj)
 
 
 def norm_pages(pages):
@@ -176,12 +171,12 @@ def attach_fingerprint(e, url=""):
 
 def cmd_add(a, kind=None, text=None):
     a.recheck = check_date(a.recheck)
-    e = {"id": next_id(), "at": now(), "kind": kind or a.kind, "pages": norm_pages(a.page), "tags": a.tag or [],
+    e = {"id": None, "at": now(), "kind": kind or a.kind, "pages": norm_pages(a.page), "tags": a.tag or [],
          "title": a.title or (text or a.text or "")[:90], "text": text or a.text or "", "source": a.source or "",
          "status": "open" if (kind or a.kind) in ("question", "owner-action", "finding") else ("open" if a.recheck else "done"),
          "recheck_on": a.recheck or "", "by": "lead"}
     attach_fingerprint(e, getattr(a, "url", "") or "")
-    append(e)
+    e = records.journal_add(PROJECT, lambda jid: {**e, "id": jid})     # the id is taken inside the write transaction
     render()
     print(e["id"])
     if e["kind"] == "decision":
@@ -254,29 +249,38 @@ def cmd_close(a):
 
 def cmd_run(a):
     a.recheck = check_date(a.recheck)
-    rid = next_id()
     d = today().isoformat()
     folder = RUNS / d
-    folder.mkdir(parents=True, exist_ok=True)
     import hashlib
     raw = Path(a.response_file).read_bytes() if a.response_file else (a.response or "").encode()
     resp = raw.decode("utf-8", errors="replace")
     sha = hashlib.sha256(raw).hexdigest()
     method = a.capture_method or ("response-file" if a.response_file else "typed-inline")
     market = a.market or CFG.get("market", {}).get("primary_country", "")
-    run = {"id": rid, "at": now(), "kind": a.kind, "engine": a.engine, "market": market, "settings": a.settings or "",
-           "pages": norm_pages(a.page), "query": a.query, "named": a.named or "", "response": resp,
-           "response_sha256": sha, "capture_method": method}
-    rf = folder / f"{rid}-{a.engine}-{slug(norm_pages(a.page)[0])}.json"
-    atomic.write_text(rf, json.dumps(run, ensure_ascii=False, indent=1) + "\n")
-    e = {"id": rid, "at": run["at"], "kind": "run", "pages": run["pages"], "tags": (a.tag or []) + [a.kind, a.engine],
-         "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
-         "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
-         "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method}
-    attach_fingerprint(e, getattr(a, "url", "") or "")
-    append(e)
+    pages = norm_pages(a.page)
+    tags = (a.tag or []) + [a.kind, a.engine]
+    fp = {"tags": tags, "pages": pages}
+    attach_fingerprint(fp, getattr(a, "url", "") or "")      # before the transaction: it may read the preview
+    made = {}
+
+    def make(rid):            # runs inside the write transaction, with the id this entry gets
+        folder.mkdir(parents=True, exist_ok=True)
+        run = {"id": rid, "at": now(), "kind": a.kind, "engine": a.engine, "market": market, "settings": a.settings or "",
+               "pages": pages, "query": a.query, "named": a.named or "", "response": resp,
+               "response_sha256": sha, "capture_method": method}
+        rf = folder / f"{rid}-{a.engine}-{slug(pages[0])}.json"
+        atomic.write_text(rf, json.dumps(run, ensure_ascii=False, indent=1) + "\n")
+        made["rf"] = rf
+        e = {"id": rid, "at": run["at"], "kind": "run", "pages": run["pages"], "tags": tags,
+             "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
+             "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
+             "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method}
+        if "fp" in fp:
+            e["fp"] = fp["fp"]
+        return e
+    e = records.journal_add(PROJECT, make)
     render()
-    print(rid, rf.relative_to(PROJECT))
+    print(e["id"], made["rf"].relative_to(PROJECT))
 
 
 def page_entries(cur, page):
@@ -310,12 +314,15 @@ def fmt(e):
 
 
 def render():
-    _render_notes()
-    try:  # the owner's one-page journal (from a real project: "keeping the journals updated is your job")
-        import owner_journal
-        owner_journal.build()
-    except Exception as e:  # noqa: BLE001  never lose a journal write over the page
-        print(f"owner journal page not rebuilt: {e}", file=sys.stderr)
+    """Rebuild the page notes, the index and the owner's page from the entries. One rebuild at a time (a second one waits and
+    then reads the newest entries), so the notes never go back to an older state."""
+    with atomic.locked(J / "journal"):
+        _render_notes()
+        try:  # the owner's one-page journal (from a real project: "keeping the journals updated is your job")
+            import owner_journal
+            owner_journal.build()
+        except Exception as e:  # noqa: BLE001  never lose a journal write over the page
+            print(f"owner journal page not rebuilt: {e}", file=sys.stderr)
 
 
 def _render_notes():
@@ -414,10 +421,7 @@ def main():
     a = ap.parse_args()
     fn = {"add": cmd_add, "ask": cmd_ask, "answer": cmd_answer, "done": cmd_done, "close": cmd_close, "run": cmd_run, "show": cmd_show,
           "due": cmd_due, "open": cmd_open, "action": cmd_action, "actions": cmd_actions, "render": lambda a: (render(), print("ok"))}[a.cmd]
-    if a.cmd in ("due", "open", "actions"):   # read only
-        return fn(a)
-    with atomic.locked(J / "journal"):         # one writer at a time: ids are taken, the line is added and the notes rebuilt together
-        return fn(a)
+    return fn(a)       # an entry takes its id and adds its line inside one transaction (records.journal_add); render() has its own lock
 
 
 if __name__ == "__main__":
