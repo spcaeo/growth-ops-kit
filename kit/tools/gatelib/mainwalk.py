@@ -32,7 +32,12 @@ def fold_nodes(m):
 def units(ctx, drop=None):
     """[(fold name, text)]: one entry per run of text of <main>, in reading order, each tied to its fold. `drop(node)` true
     cuts that element (and what is inside it) out. Hidden parts, scripts and drawings are never read."""
-    m = domx.main(ctx.root())
+    return units_of(ctx.root(), drop)
+
+
+def units_of(root, drop=None):
+    """The same for any parsed page (2.8.2: words.own-copy reads the site's other built pages)."""
+    m = domx.main(root)
     folds = fold_nodes(m)
     out = []
 

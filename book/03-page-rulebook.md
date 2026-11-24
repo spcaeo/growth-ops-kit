@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.8.2
+version: 2.8.3
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.8.2 (generic edition) · 23 Nov 2026.**
+**Version 2.8.3 (generic edition) · 23 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -352,6 +352,7 @@ says yes; until then the page simply goes without it.
 
 156. **A new or rebuilt page keeps every house feature of its type.** The list per page type is "House features" below the checklist. Before a page is called done, tick each one; a feature left out needs a reason in the pull request. A test per page type checks the built page for each feature's marker. [code: house.features, repo.guard-tests]
 157. **No two sibling pages share a hero, a fold design or an animation.** Rule 30 covers the folds inside one page; this covers the service pages, hubs and posts of one kind. Compare siblings side by side before showing any of them. [judgment: proxy hero.unique, layout.folds-distinct]
+157a. **A page's folds are its own words: no fold copies a fold of another page of the site** (from a real site: a "hire experts" page whose 3 folds copied a sibling hire page, 68 to 88% of their 7-word runs the same). The gate reads the built output: each fold of 40 words or more is cut into 7-word runs and compared with every fold of every other page. It fails when 50% or more of a fold's runs are one other fold's, and warns from 30%; the message names the other page and fold and quotes one shared run. Not counted: the header, nav and footer, forms and buttons, client reviews and quotes, and a run in a short block (40 words or fewer) that 3 or more pages share on purpose (a call to action's reason line, a trust line). Numbers live in `growth.json` `words.own_copy` (`fail`, `warn`, `min_words`, `shared_pages`); `words.own_copy_ok` lists `{path, fold, reason}` that may stay. No build to read is a SKIP. [code: words.own-copy]
 158. **Before showing any page, look at every screen at 1366 and 390 px as a demanding designer:** no big blank gaps, no hollow cards, no empty state that looks broken, no picture shown larger than its file (blurry), and every card that sells has its own next step. Green tests are not good design. [judgment: proxy ev.shots-1366-390]
 158a. **The look of a page is measured in a real browser at 1440x900 and 390x844, and these limits fail the gate.** Limits live in `growth.json` `layout` (defaults here). **White space (rule 158):** the gap between the content of two neighbouring folds is at most 2 x the section step + 24 px (step 80, so 184 px); a fold's empty bottom is at most the step + 24 px (104 px); the hero is at most its content + 66 px, and at most 1,100 px tall at 390 (not on `layout.legal_paths`, default `/terms*`, `/privacy*`, `/cookie*`). **Balance (rule 158):** two columns side by side (each at least 200 px wide, tops within 60 px) differ in content height by at most 1.30 times, a column under 25% of the other is nearly empty, and their tops are within 8 px (not on legal paths); a picture next to a text block has at least 60% of the text block's area (money and core pages); the last row of a card grid is full, centred or one wide card. **Buttons (rule 32b, 49):** at most one primary button (`.book-cta`, or a `.btn` in the colour of `cta.color_token`) on any screen, counting in steps of the viewport height and not counting dialogs or the sticky bar; no two primary buttons in neighbouring folds (the sticky bar and the footer do not count); a legal page has no primary button and no sticky bar. **Fill (rule 158):** a card or panel (a border on three sides or its own background, at least 240 x 160 px; not a form, table, nav or tool) has content over at least 55% of its inner height (gaps under 32 px count as content, so a card stretched to a taller neighbour or a button pinned under an empty middle fails), and a box 560 px or wider does not hold one narrow column against its left edge with more than 45% (and 320 px) of its width empty on the right. **Mechanics (rule 30):** one mechanic class (`layout.mechanics`, default flip, tabs, accordion, slider) appears in at most 2 folds. A page that cannot be measured (no Playwright, no server) is BLOCKED-SKIP, never a pass. [code: layout.fold-gap, layout.hero-height, layout.column-ratio, layout.picture-text, layout.card-orphan, cta.one-per-view, cta.spacing, cta.legal-quiet, engage.one-mechanic, layout.box-fill]
 159. **Every product screenshot on a page has its capture date in the repo** (in its file name or the image map), **and when the product changes, its pictures change in the same round.** [code: img.capture-date]
@@ -404,6 +405,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-23 | 2.8.3 | Rule 157a: a page's folds must not copy another page of the site word for word (`words.own-copy`, from the built output). |
 | 2026-11-23 | 2.8.2 | Rule 90 counts a page and its language copy (`/x/` and `/en-us/x/`) as one page, so the same link words to both are not a duplicate anchor. |
 | 2026-11-23 | 2.8.1 | `growth ready --batch` reaches the batch (the front door took "ledger" for a page); `--repo` passes through the short form. |
 | 2026-11-23 | 2.8.0 | Four new checks for what a reviewer kept finding by hand: rule 28 (a fact repeated across folds), rule 11 (internal process words), rule 36 (short-list items not on the old site), rule 158a (half-empty boxes). `growth ready --batch` checks many pages side by side, and READY holds while a page's built output is unchanged. |

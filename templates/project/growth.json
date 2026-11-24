@@ -149,6 +149,10 @@
     "internal": [],
     "internal_ok": [],
     "_old_terms": "migrate.old-terms (rule 36): every item of a short list (5 or more items of 5 words or fewer, or anything marked data-tags) is on an archived old page of the site or in BRAND.md. old_terms_scope \"page\" also needs it on THIS page's own old version; old_terms_ok lists items that are fine as they are.",
+    "_own_copy": "words.own-copy (rule 157a): a fold of 40+ words that shares 50% (fail) or 30% (warn) of its 7-word runs with one fold of another page of the built site fails or warns. shared_pages (default 3): a run in a short block (shared_max_words, default 40) on this many pages is shared on purpose and not counted. Needs build_dir.",
+    "own_copy": {"fail": 0.5, "warn": 0.3, "min_words": 40, "shared_pages": 3, "shared_max_words": 40},
+    "_own_copy_ok": "Folds that may stay as they are: [{\"path\": \"/hire/x\", \"fold\": \"legal\", \"reason\": \"the same legal wording on purpose\"}]. A reason is required; fold \"*\" excuses the whole page.",
+    "own_copy_ok": [],
     "old_terms_scope": "site",
     "old_terms_ok": []
   },

@@ -267,3 +267,26 @@ def test_the_owners_quoted_words_never_mark_a_row(tmp_path):
     c = Ctx(project=tmp_path, path="/pg/", key="pg", ptype="core", cfg={}, html="", url="", status=200, docs=tmp_path / "docs")
     run_check(c, CHECKS["ev.brief"])
     assert c.lines[-1].level == "FAIL"
+
+
+def test_a_fresh_check_on_a_stale_build_is_not_ready(site, monkeypatch, capsys):
+    """2.8.2: a commit with no build after it: the gate would check the old build and READY would name the new commit."""
+    import ready
+    touch_build(site)
+    assert ready.build_problem("/a") is None
+    old = time.time() - 3600
+    for f in (site / "dist").rglob("*"):
+        if f.is_file():
+            os.utime(f, (old, old))
+    commit(site, "content change, no build")
+    assert "older than the code" in ready.build_problem("/a")
+    assert "not in the build" in ready.build_problem("/nope")
+    monkeypatch.setattr(ready, "run_gate", lambda cmd: subprocess.CompletedProcess(cmd, 0, "OK a\n", ""))
+    for name in ("key_problem", "gate_problem"):
+        monkeypatch.setattr(ready, name, lambda *a: None)
+    monkeypatch.setattr(ready, "manual_problems", lambda *a: [])
+    monkeypatch.setattr(ready, "held_proposals", lambda *a: [])
+    monkeypatch.setattr(sys, "argv", ["ready", "/a", "--type", "post", "--key", "a"])
+    with pytest.raises(SystemExit):
+        ready.main()
+    assert "older than the code" in capsys.readouterr().out and "/a" not in ready.ledger()
