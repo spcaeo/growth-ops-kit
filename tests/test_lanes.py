@@ -1,8 +1,9 @@
 """Builder lanes (kit 3.0, micro kit "build"): two lanes at once on their own ports and worktrees, the cap, the lanes
-folder rule, and a close that stops only its own server, keeps the branch and frees the port. Real git repos and real
+folder rule, and a close that stops only its own server, keeps the branch and frees the port. Real git repos, the real board and real
 servers, all under pytest's tmp_path; every server is stopped by the fixture, pass or fail."""
 import json
 import os
+import random
 import subprocess
 import sys
 import urllib.request
@@ -10,8 +11,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import _board_stub  # noqa: E402
+import board  # noqa: E402  (the real board)
 import lane  # noqa: E402  (kit/tools is on sys.path from conftest)
 
 BUILD = "rm -rf dist && mkdir dist && cp -R src/. dist/"
@@ -40,11 +40,11 @@ def env(tmp_path, monkeypatch):
     sh("git", "config", "user.email", "builder@example.test", cwd=site)
     sh("git", "config", "user.name", "Builder", cwd=site)
     commit(site, "first")
+    lo = random.randint(30000, 60000)                   # other agents' tests use the board's default ports 18440 to 18459 at the same time
     cfg = {"name": "T", "site_url": "https://t.example", "site_repo": str(site), "build_cmd": BUILD, "build_dir": "dist",
-           "lanes_dir": str(lanes)}
+           "lanes_dir": str(lanes), "resources": {"port": [lo, lo + 19]}}
     (project / "growth.json").write_text(json.dumps(cfg))
     monkeypatch.setenv("GROWTH_PROJECT", str(project))
-    board = _board_stub.use_board(monkeypatch)
     e = type("Env", (), {})()
     e.project, e.site, e.lanes, e.board, e.cfg = project.resolve(), site.resolve(), lanes, board, cfg
     e.set_cfg = lambda **kw: (project / "growth.json").write_text(json.dumps({**cfg, **kw}))
