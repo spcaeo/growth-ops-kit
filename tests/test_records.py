@@ -295,3 +295,81 @@ def test_no_lock_file_is_left_by_reads(tmp_path):
     records.verdicts(p, "ready")
     after = {x.name for x in (p / "docs").iterdir()} | {x.name for x in (p / "journal").iterdir()}
     assert not [n for n in after - before if n.endswith(".lock")]
+
+
+# ---- the approvals log: parallel approvals keep the chain ------------------------------------------------------------------
+def test_eight_parallel_delegated_approvals_keep_the_chain_and_the_ids(tmp_path):
+    import approvals
+    p = project(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir()
+    cfg = json.loads((p / "growth.json").read_text())
+    cfg["approvals"] = {"delegate_local": True, "delegated_to": "lead agent", "owner_words": "you approve local things",
+                        "since": "2026-11-19"}
+    (p / "growth.json").write_text(json.dumps(cfg))
+    run_tool(p, "tasks.py", "ask", "May the page name the partner?")
+    script = ("import sys\nsys.path.insert(0, %r)\nimport approvals\n"
+              "sys.exit(approvals.main(['answer', 'Q1', 'yes ' + sys.argv[1], '--delegated']))\n") % str(TOOLS)
+    env = {**os.environ, "HOME": str(home), "GROWTH_PROJECT": str(p), "PYTHONDONTWRITEBYTECODE": "1"}
+    procs = [subprocess.Popen([sys.executable, "-c", script, str(i)], env=env, cwd=p, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for i in range(8)]
+    outs = [pr.communicate(timeout=120) for pr in procs]
+    assert all(pr.returncode == 0 for pr in procs), outs
+    old_home = os.environ.get("HOME")
+    os.environ["HOME"] = str(home)
+    try:
+        entries, problems = approvals.verify(p / "docs")
+    finally:
+        os.environ["HOME"] = old_home
+    assert problems == [], problems                                       # the chain and every signature still verify
+    assert [e["id"] for e in entries] == [f"A{n:04d}" for n in range(1, 9)]
+    assert all(e["mode"] == "delegated" for e in entries)
+
+
+# ---- the journal's render happens after the write, for the touched pages only ----------------------------------------------
+def test_an_entry_rebuilds_only_its_own_pages_notes_and_the_output_matches_a_full_render(tmp_path):
+    p = project(tmp_path)
+    run_tool(p, "journal.py", "add", "--page", "/a", "--title", "first on a")
+    run_tool(p, "journal.py", "add", "--page", "/b", "--title", "first on b")
+    note_b = p / "journal" / "pages" / "b.md"
+    note_b.write_text(note_b.read_text() + "\nMARKER\n")
+    r = run_tool(p, "journal.py", "add", "--page", "/a", "--tag", "x", "--title", "second on a")
+    assert r.returncode == 0, r.stderr
+    assert "MARKER" in note_b.read_text()                                  # /b was not touched, so its note was not rebuilt
+    note_a = (p / "journal" / "pages" / "a.md").read_text()
+    assert "first on a" in note_a and "second on a" in note_a
+    index = (p / "journal" / "INDEX.md").read_text()
+    assert "[[a]] | 2 |" in index and "[[b]] | 1 |" in index              # the index always covers every page
+
+    def stable(text):
+        return [l for l in text.splitlines() if not l.startswith(("updated:", "Rebuilt "))]
+    incremental = {f.name: stable(f.read_text()) for f in (p / "journal" / "pages").iterdir()} | {"INDEX": stable(index)}
+    assert run_tool(p, "journal.py", "render").returncode == 0
+    full = {f.name: stable(f.read_text()) for f in (p / "journal" / "pages").iterdir()} | {"INDEX": stable((p / "journal" / "INDEX.md").read_text())}
+    assert "MARKER" not in note_b.read_text()                              # a full render rebuilds every note
+    assert full["a.md"] == incremental["a.md"] and full["INDEX"] == incremental["INDEX"]
+    assert [l for l in full["b.md"] if l] == [l for l in incremental["b.md"] if l and l != "MARKER"]
+
+
+def test_a_done_update_rebuilds_the_page_of_the_entry_it_closes(tmp_path):
+    p = project(tmp_path)
+    run_tool(p, "journal.py", "add", "--page", "/a", "--title", "finding a")
+    run_tool(p, "journal.py", "add", "--page", "/b", "--title", "finding b")
+    note_b = p / "journal" / "pages" / "b.md"
+    note_b.write_text(note_b.read_text() + "\nMARKER\n")
+    assert run_tool(p, "journal.py", "close", "J0001", "--output", "commit abc1234 fixed it").returncode == 0
+    assert "commit abc1234 fixed it" in (p / "journal" / "pages" / "a.md").read_text()
+    assert "MARKER" in note_b.read_text()
+
+
+def test_parallel_adds_and_renders_leave_one_whole_owner_page(tmp_path):
+    p = project(tmp_path)
+    env = {**os.environ, "GROWTH_PROJECT": str(p), "PYTHONDONTWRITEBYTECODE": "1"}
+    procs = [subprocess.Popen([sys.executable, str(TOOLS / "journal.py"), "add", "--page", f"/p{i % 3}", "--title", f"t{i}"], env=env,
+                              cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for i in range(8)]
+    outs = [pr.communicate(timeout=120) for pr in procs]
+    assert all(pr.returncode == 0 for pr in procs), outs
+    page = (p / "journal" / "owner-journal.html").read_text()
+    assert page.rstrip().endswith("</html>")
+    assert all(f">t{i}<" in page or f"t{i}" in page for i in range(8))     # the last build saw every entry
+    assert not [f for f in (p / "journal").rglob("*.tmp")]

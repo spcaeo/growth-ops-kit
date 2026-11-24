@@ -36,9 +36,11 @@ import os
 import re
 import secrets
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
 import records  # noqa: E402  (the one access layer for tasks, journal and verdicts)
 
 LOG_NAME = "approvals.jsonl"
@@ -90,7 +92,15 @@ def ensure_key() -> bytes:
     p = key_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     k = secrets.token_hex(32).encode()
-    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:       # another process made the key a moment ago: use that one (it may still be being written)
+        for _ in range(100):
+            got = read_key()
+            if got:
+                return got
+            time.sleep(0.02)
+        raise
     with os.fdopen(fd, "wb") as f:
         f.write(k + b"\n")
     return k
@@ -160,17 +170,19 @@ def record(docs, kind: str, ref: str, content, summary: str = "", by: str | None
     """Append one approval (library; `approve` is the owner's door to it)."""
     if kind not in KINDS:
         raise ValueError(f"unknown approval kind {kind}")
-    lines = _lines(docs)
-    entry = {"id": f"A{len(lines) + 1:04d}", "kind": kind, "ref": str(ref), "sha256": digest(content), "summary": summary[:200],
-             "by": by or _who(), "at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "via": via,
-             "prev": hashlib.sha256(lines[-1].encode()).hexdigest() if lines else "", **(extra or {})}
-    key = read_key()
-    if key:
-        entry["sig"] = _sign(entry, key)
     p = log_path(docs)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("a") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    key = read_key()
+    with atomic.locked(p):        # read the last line, chain to it and append under one lock: two approvals at once never share an id or a prev hash
+        lines = _lines(docs)
+        entry = {"id": f"A{len(lines) + 1:04d}", "kind": kind, "ref": str(ref), "sha256": digest(content), "summary": summary[:200],
+                 "by": by or _who(), "at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "via": via,
+                 "prev": hashlib.sha256(lines[-1].encode()).hexdigest() if lines else "", **(extra or {})}
+        if key:
+            entry["sig"] = _sign(entry, key)
+        with p.open("a") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
     return entry
 
 
@@ -462,7 +474,7 @@ def _answer_journal(project, docs, jid: str, text: str, tty) -> int:
     when = journal.now()
     journal.append({"of": jid, "at": when, "status": "answered", "answer": text, "answered_by": "owner", "answered_at": when,
                     "approval": a["id"]})
-    journal.render()
+    journal.render(e.get("pages") or [])
     return 0
 
 
