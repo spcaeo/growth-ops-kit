@@ -81,7 +81,8 @@ def ensure(project, cfg: dict | None = None) -> str:
     db = _load(f, project, cfg)
     task = find(db)
     if task is None:
-        tid = f"T{max((int(t['id'][1:]) for t in db['tasks'] if re.fullmatch(r'T\d+', t['id'])), default=0) + 1}"
+        top = max((int(t['id'][1:]) for t in db['tasks'] if re.fullmatch(r'T\d+', t['id'])), default=0)
+        tid = f"T{top + 1}"
         task = {"id": tid, "title": TITLE, "owner_words": OWNER_WORDS, "status": "doing", "started": _now(cfg),
                 "finished": None, "steps": []}
         db["tasks"].append(task)

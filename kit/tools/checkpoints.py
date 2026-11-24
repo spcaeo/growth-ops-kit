@@ -259,7 +259,8 @@ def manual_status(text, project=None, repos=()):
         k = kind_of(head)
         if k == "removed":
             continue
-        stage = f" [stage: {re.sub(r'\s*\(\d+\)\s*$', '', head or '')[:40]}]"     # which stage the item belongs to (issue #25)
+        head_name = re.sub(r'\s*\(\d+\)\s*$', '', head or '')[:40]
+        stage = f" [stage: {head_name}]"     # which stage the item belongs to (issue #25)
         for ln in lines:
             m = ITEM.match(ln)
             if not m or (k == "generated" and GEN_ITEM.match(m.group(2))):
