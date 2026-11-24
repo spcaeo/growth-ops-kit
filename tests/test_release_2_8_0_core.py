@@ -304,3 +304,15 @@ def test_a_dirty_worktree_is_not_ready(site):
     touch_build(site)
     (site / "new.txt").write_text("untracked")
     assert "untracked" in ready.build_problem("/a")
+
+
+def test_files_a_build_rewrites_do_not_make_the_tree_dirty(site, monkeypatch):
+    import ready
+    touch_build(site)
+    (site / "next-env.d.ts").write_text("/// <reference types=next />")
+    (site / "tsconfig.tsbuildinfo").write_text("{}")
+    assert ready.build_problem("/a") is None
+    (site / "gen.txt").write_text("x")
+    assert "gen.txt" in ready.build_problem("/a")
+    monkeypatch.setitem(ready.CFG, "ready", {"dirty_ok": ["gen.txt"]})
+    assert ready.build_problem("/a") is None
