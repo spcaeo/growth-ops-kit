@@ -471,7 +471,44 @@ def signature(sec):
     return sig(sec, 5)
 
 
-@check("layout.folds-distinct", "30", types=("money", "hub"), what="no two folds of the page share the same structure", needs="live")
+CARD_SKIP = ("nav", "form", "table", "dialog", "select", "dl", "tbody", "thead", "tr", "picture", "figure")
+
+
+def _shape(n, d):
+    """The tags of a card's inner structure, `d` levels down, wrappers collapsed to one generic box (text is ignored)."""
+    return "(" + ",".join(("box" if c.tag in WRAPPERS else c.tag) + (_shape(c, d - 1) if d else "") for c in n.elements()[:6]) + ")"
+
+
+def card_signatures(sec):
+    """{signature: first class of the grid}: every repeated card pattern of a fold (2.8.3). A card grid is a parent with 3 or more
+    children that share one tag and one class set and one inner shape of at least 2 elements (icon + title + text). Plain list items,
+    form rows and table rows are not cards."""
+    out = {}
+    for p in sec.iter():
+        if p.tag in CARD_SKIP or domx.in_chrome(p):
+            continue
+        kids = [k for k in p.elements() if k.tag not in ("script", "style", "template")]
+        if len(kids) < 3:
+            continue
+        sigs = [(k.tag, tuple(sorted(domx.classes(k))), _shape(k, 2)) for k in kids]
+        top = max(set(sigs), key=sigs.count)
+        if sigs.count(top) < max(3, -(-len(kids) * 2 // 3)) or top[0] in ("option", "tr", "td", "th", "button", "span", "p"):
+            continue
+        if len(next(k for k, s in zip(kids, sigs) if s == top).elements()) < 2:
+            continue
+        out.setdefault(top, " ".join(top[1][:2]) or top[0])
+    return out
+
+
+def card_repeat_ok(ctx, a, b):
+    """growth.json layout.card_repeat_ok: [{"folds": ["a", "b"], "reason": "..."}]: two folds that may share a card pattern. A reason is required."""
+    for e in (ctx.cfg.get("layout") or {}).get("card_repeat_ok") or []:
+        if isinstance(e, dict) and str(e.get("reason") or "").strip() and {a, b} <= {str(x) for x in e.get("folds") or []}:
+            return True
+    return False
+
+
+@check("layout.folds-distinct", "30", types=("money", "hub"), what="no two folds of the page share the same structure, or the same card grid twice", needs="live")
 def folds(ctx):
     secs = domx.top_sections(ctx.root())
     if len(secs) < 2:
@@ -483,7 +520,18 @@ def folds(ctx):
         if k in seen:
             probs.append(f"fold {i} has the same shape as fold {seen[k]}")
         seen.setdefault(k, i)
-    ctx.verdict(probs, f"{len(secs)} folds, all with their own shape", "give each fold its own shape and job (rule 30)")
+    # the same card grid twice, on any surface and at any distance (2.8.3): the fold shape differs (another heading, an intro) but the cards are alike
+    cards = [(s.get("data-fold") or f"#{i}", s.get("data-surface") or "plain", card_signatures(s)) for i, s in enumerate(secs, 1)]
+    for i, (na, sa, ga) in enumerate(cards):
+        for nb, sb, gb in cards[i + 1:]:
+            same = set(ga) & set(gb)
+            if same and not card_repeat_ok(ctx, na, nb):
+                # rule 30 is strict: another surface, or distance on the page, does not make the same item form a different shape
+                probs.append(f"folds '{na}' and '{nb}' both use the '{ga[next(iter(same))]}' card grid "
+                             + (f"on the same '{sa}' surface" if sa == sb else f"(surfaces '{sa}' and '{sb}': a new background does not change the shape)"))
+    ctx.verdict(probs, f"{len(secs)} folds, all with their own shape and no card grid twice",
+                "give each fold its own shape and job: change the cards of one fold into a table, a timeline, a diagram or another item form "
+                "(rule 30; growth.json layout.card_repeat_ok [{\"folds\": [\"a\", \"b\"], \"reason\": \"...\"}] allows a pair)")
 
 
 @check("motion.reveal", "141", types=("money", "hub", "core"), what="every fold reveals as it scrolls in (reveal marker on each fold)", needs="live")
