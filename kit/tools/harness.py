@@ -40,6 +40,8 @@ STOP_MESSAGE = "Checking every owner message is logged and every rule has its ch
 READ_ONLY_GIT = ["status", "log", "diff", "show", "branch --list", "branch --show-current", "worktree list", "rev-parse", "remote -v"]
 # Owner-only acts: the agent may not run them (growth approve needs the owner's own terminal anyway).
 OWNER_ONLY = ["approve", "approvals", "wizard confirm", "tasks answer", "journal answer", "install_hooks remove", "install-hooks remove"]
+# In chat mode (growth.json approvals.mode "chat") these are the lead's to run: the owner says yes in the conversation.
+CHAT_AGENT_DOES = ("approve", "approvals", "wizard confirm", "tasks answer", "journal answer")
 # Prefix rules are a speed bump, not a wall: they stop the plain forms an agent types; a determined agent with a shell can
 # find others. The `*` forms cover `git -C . push`, `env git push`, a kit path in front of growth, and flags anywhere.
 DENY_ALWAYS = ["Bash(git push*)", "Bash(git * push*)", "Bash(env git*)", "Bash(command git*)",
@@ -95,8 +97,13 @@ def permissions_wanted(cfg: dict, kit_root: Path = KIT_ROOT) -> tuple[list[str],
     allow = ["Bash(growth *)", "Bash(growth)"]
     allow += [f"Bash(git {g}*)" for g in READ_ONLY_GIT]
     deny = list(DENY_ALWAYS)
-    delegate = (cfg.get("approvals") or {}).get("delegate_local") is True if isinstance(cfg.get("approvals"), dict) else False
+    appr = cfg.get("approvals") if isinstance(cfg.get("approvals"), dict) else {}
+    delegate = appr.get("delegate_local") is True
+    chat = appr.get("mode") == "chat"             # owner, 24 Nov 2026: no owner step in a terminal; the yes is given in the chat
     for cmd in OWNER_ONLY:
+        if chat and cmd in CHAT_AGENT_DOES:        # chat mode: the lead records the owner's yes and the kit's own checks
+            allow += [f"Bash(growth {cmd} *)", f"Bash(*/growth {cmd} *)"]
+            continue
         if delegate and cmd == "approve":      # delegated local approvals: allow only the --delegated form; the rest stays denied
             for never in ("browser", "region", "pending", "key"):
                 deny += [f"Bash(growth approve {never}*)", f"Bash(*/growth approve {never}*)"]

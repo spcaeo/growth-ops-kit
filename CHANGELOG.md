@@ -31,6 +31,13 @@ chapter `05-board.md`). No rule of the page rulebook changes; a page is READY un
   addresses, tags both ways and `x-default`, a canonical per copy, no redirect by the visitor's language (a suggestion
   banner is fine), sitemap alternates. New job kinds `localize` (one per extra locale) and `intl-check` on the work board.
   `growth research ai|paa`, `growth journal run` and `growth pace google` take `--locale`; all locales share the one Google door.
+- **No permission steps (chat mode, the default).** Owner, 24 Nov 2026: "get rid off all such permissions steps from kit";
+  "before its aksing me such permission calude code and the kit should check the chome wa already connected". In
+  `approvals.mode: "chat"` the setup records the research browser and Google region once the agent has checked them
+  (`growth wizard confirm browser|region`), the lead records the owner's yes from the conversation (`growth approve <any
+  kind> --delegated`), and the generated permissions allow it. Nothing is typed in a terminal. The log stays chained and
+  signed. `"mode": "terminal"` keeps the 2.x way. New: `local_only: true` lets doctor A5 (the live-site control check)
+  wait for go-live day on a project built entirely on one machine.
 - Fixes found on the way: the approvals log appends under one lock (8 parallel approvals keep the chain and the ids);
   two writers of the task list no longer bypass the lock; the journal renders outside its write lock; two f-strings
   that broke Python 3.10 and 3.11 (with a test that compiles the kit on both).

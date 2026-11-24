@@ -183,15 +183,18 @@
     "/about"
   ],
   "agent_cap": 4,
+  "local_only": false,
+  "_local_only": "true while the whole site is built and checked on one machine and nothing goes live until go-live day: doctor A5 (the live-site control check) waits for that day.",
   "old_brand_words": "",
   "_old_brand_words": "Words of a previous brand or site, as 'one|two'. Doctor A2 and the word check fail while any is left in the project folder or the built site (build_dir). Lines that ban the words (BRAND.md 'never ...') and the steps log, which quotes the owner, do not count.",
   "approvals": {
+    "mode": "chat",
     "delegate_local": false,
     "delegated_to": "lead agent",
     "owner_words": "",
     "since": ""
   },
-  "_approvals": "Off by default. The owner may let the lead agent approve LOCAL work (decision, review, exception, answer, baseline) with growth approve <kind> <id> --delegated, with no terminal. Fill owner_words (the owner's own words) and since (the date) when turning it on. The log marks those lines delegated; the research browser, Google region and any go-live or release act are never delegated.",
+  "_approvals": "mode chat (default since 3.0): the owner's yes is given in the conversation and recorded by the lead (growth approve <kind> <id> --delegated); the research browser and Google region are recorded once the kit has checked them; no command is typed in a terminal. mode terminal: the 2.x way, each yes typed by the owner in a real terminal. delegate_local (terminal mode only) is off by default. The owner may let the lead agent approve LOCAL work (decision, review, exception, answer, baseline) with growth approve <kind> <id> --delegated, with no terminal. Fill owner_words (the owner's own words) and since (the date) when turning it on. The log marks those lines delegated; the research browser, Google region and any go-live or release act are never delegated.",
   "migration": {
     "on": false,
     "task": ""

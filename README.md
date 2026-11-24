@@ -201,23 +201,20 @@ deleting a branch, changing git hooks, or editing `growth.json`, the settings, t
 records or the approvals log. Some rules match the start of a command only, so treat them as a speed bump, not a wall.
 `growth doctor` (step A13) says when one was removed or a hook is bypassed.
 
-**Your "yes" is yours, and a fake one shows.** Owner acts (a design exception, a decision, an answer to a question, the
-research browser and Google region, signing off a review, taking a baseline again) go through `growth approve`. It runs
-only in your own terminal and only when you type back the code it shows. Each yes is a line in `docs/approvals.jsonl`
-with a fingerprint (sha256) of exactly what you approved, chained to the line before and signed with a key kept in your
-home folder (`~/.config/growth-ops-kit/approvals.key`). The gate fails when an approval is missing, when the approved
-thing changed afterwards, or when the log was edited by hand. A design exception can never excuse evidence checks or a
-page that did not load.
+**No permission steps for you (chat mode, the default since 3.0).** You never type a command or a code in a terminal to
+approve something. The kit and your agent check what they can themselves: which Chrome is connected for research, what
+Google's Results region says, which keys are present. You give a real decision (a design exception, an answer, a
+go-live) in the conversation, and the lead records it with your words. Each record is still a line in
+`docs/approvals.jsonl` with a fingerprint (sha256) of exactly what was approved, chained to the line before and signed with
+a key kept outside the project, so the gate fails when a record is missing, when the approved thing changed afterwards,
+or when the log was edited by hand. A design exception can never excuse evidence checks or a page that did not load.
+From a real project (24 Nov 2026), the owner: "The kit and the growth kit are made to make life easy and smooth and grow
+faster, not to have the bureaucracy of so many permissions".
 
-**Delegated approvals (off by default).** The owner may hand the lead agent the approval of local work only, by writing
-`"approvals": {"delegate_local": true, "delegated_to": "lead agent", "owner_words": "<the owner's own words>", "since": "<date>"}`
-in `growth.json`. Then `growth approve <decision|review|exception|answer|baseline> <id> --delegated` works with no
-terminal and no code. The log line is still signed and chained, but it says `"mode": "delegated"`, `"by": "lead agent
-(delegated by owner <date>)"` and quotes the owner's words, and `growth approve list` marks it `[delegated]`. It is never
-shown as the owner's own typed yes. The research browser, the Google region and any go-live or release act are never
-delegated (the kit has no release approval of its own: that stays outside this log). The gate and READY accept a delegated
-line only while `delegate_local` is on; turn it off and they fail again until the owner approves in their own terminal.
-The generated permissions then allow only the `--delegated` form of `growth approve`.
+**Terminal mode (the 2.x way, opt-in).** Set `"approvals": {"mode": "terminal"}` in `growth.json` and every owner act goes
+through `growth approve`, which runs only in your own terminal and only when you type back the code it shows; the
+research browser and Google region then wait for that typed yes. In terminal mode, `delegate_local: true` (with
+`owner_words` and `since`) lets the lead approve local work with `--delegated`; those lines say `"mode": "delegated"`.
 
 **What it checks, it reads.** A task step needs a proof that names something real (a file, a commit, a journal entry, a
 command with its output, or a web address). Screenshots must be real images of the right width. AI answers need their

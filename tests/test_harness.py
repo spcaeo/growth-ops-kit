@@ -150,7 +150,7 @@ def test_a_removed_deny_entry_or_a_bypassed_git_hook_is_noticed(tmp_path):
     cfg = json.loads((folder / "growth.json").read_text())
     p = folder / ".claude" / "settings.json"
     s = settings(folder)
-    s["permissions"]["deny"].remove("Bash(growth approve*)")
+    s["permissions"]["deny"].remove("Bash(git push*)")
     p.write_text(json.dumps(s))
     row = next(r for r in harness.check(folder, cfg) if r[0] == "Permissions block")
     assert row[1] == "todo" and "missing" in row[2]
