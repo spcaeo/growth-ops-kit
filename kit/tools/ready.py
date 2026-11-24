@@ -96,6 +96,29 @@ def head_moved_at(repo):
     return max(times) if times else None
 
 
+def build_problem(path, repo=None):
+    """Why the build cannot stand for the code now, or None. With growth.json build_dir set, the preview serves that
+    build: when it is older than the moment HEAD last moved, the gate would check old pages and READY would be written
+    against the new commit (2.8.2; from a real project: a build step silently did not run and a page was READY at a
+    commit its build never held)."""
+    repo = repo or preview_repo()
+    if not CFG.get("build_dir") or repo is None or not (repo / ".git").exists():
+        return None
+    try:
+        import fingerprint
+        root = fingerprint.build_root(CFG, PROJECT, repo)
+        f = fingerprint._built_file(root, path) if root and root.is_dir() else None
+    except Exception:  # noqa: BLE001
+        f = None
+    if not f:
+        return f"{path} is not in the build ({CFG.get('build_dir')}): build the site, then run growth ready again"
+    moved = head_moved_at(repo)
+    if moved is not None and f.stat().st_mtime <= moved:
+        return (f"the build of {path} is older than the code at {head(repo)[:7]}: build the site, then run growth ready "
+                "again (a page is only READY for the build it was checked on)")
+    return None
+
+
 def page_fp(path, repo=None):
     """The page's fingerprint from the built output (growth.json build_dir), or None when there is no build, the page is
     not in it, or the build is older than the preview repo's last commit (an old build cannot vouch for the code now)."""
@@ -294,7 +317,7 @@ def main():
     c0, fp0 = head(repo), page_fp(path, repo)
     r = run_gate(cmd)
     fails = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("FAIL")]
-    broken = key_problem(path, a.key) or gate_problem(r, a.type)
+    broken = build_problem(path, repo) or key_problem(path, a.key) or gate_problem(r, a.type)
     if broken:
         fails.insert(0, f"FAIL {broken}")
     fails += [f"FAIL manual checkpoint {m}" for m in manual_problems(path, a.key)]
