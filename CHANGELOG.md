@@ -4,6 +4,11 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 2.8.2 - 2026-11-23
+
+- New check `words.own-copy` (rule 157a, also under "Money pages are unique"): a page's folds must not copy another page of the site word for word. An independent reviewer found a "hire experts" page whose 3 folds copied a sibling page (68 to 88% of their 7-word runs); the gate had no cross-page wording check. Each fold of 40+ words is compared, run by run, with every fold of every other page in the built output (`build_dir`): FAIL from 50% shared with one other fold, WARN from 30%; it names the other page and fold and quotes one shared run. Header, nav, footer, forms, buttons, client reviews and runs that 3+ pages share in short blocks are left out. No build is a SKIP. Set it in `growth.json` `words.own_copy` (`fail`, `warn`, `min_words`, `shared_pages`, `shared_max_words`); exceptions go in `words.own_copy_ok` as `{path, fold, reason}` (a reason is required). (#97)
+- Test: `tests/test_release_2_8_2_own_copy.py`.
+
 ## 2.8.1 - 2026-11-23
 
 - `growth ready --batch ...` reaches the batch: the front door took `ledger` for a page path and gated a page called /ledger. Verdicts stream as they land. `growth ready <page> --repo <worktree>` passes `--repo` on. (#96)
