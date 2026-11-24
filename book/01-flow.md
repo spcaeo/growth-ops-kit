@@ -25,7 +25,8 @@ one step (a playbook, a brief, a tool). If two files disagree about the order of
 installs everything), `growth page <url-or-path>` (opens the page job and writes the brief), `growth check` (runs the gate on
 the open job's page against the preview), `growth ready` (the gate's verdict, with a plain summary first), `growth measure`
 (the day 7/14/28/56 comparison) and `growth status` (what is open and the next step). Every other tool in this book still
-works on its own; the flow below names them.
+works on its own; the flow below names them. With several agents at once, the work is handed out by the work board
+(kit 3.0: `growth board`, `growth work next`, `growth run`), see [05-board.md](05-board.md).
 
 **Three rules hold in every stage** (full list: [02-owner-rules.md](02-owner-rules.md)):
 1. **No shortcuts.** Every step of the job's playbook, in order, with every owner check-in. A skipped step is raised

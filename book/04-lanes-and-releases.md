@@ -54,8 +54,8 @@ host deploys it. Every page goes live on its own as soon as it is ready and appr
 | Audit | The nine-step audit | [playbooks/cro-audit.md](playbooks/cro-audit.md) |
 | Playbook for the job | new post, update, fact, links, redirects, money page | [playbooks/](playbooks/README.md) |
 | Checks | only the checks the change touches (`growth checks`, rule 105), the two studio reports, a look in a browser | [playbooks/change-a-page.md](playbooks/change-a-page.md) |
-| Ready file | Each lane appends `<lane> ready <commit>` (or `blocked <reason>`) to one text file in the scratchpad | `lanes-ready.txt` |
-| Watcher | The lead watches the ready file (for example `tail -f ... \| grep ready`) and reviews each page as its line appears; re-arm it when it expires | the agent tool's monitor |
+| Work board (3.0) | Replaces the ready file and the watcher: each lane pulls its next job (`growth work next`), finishes it with proof (`growth work done`), and the reviewer pulls built pages the same way; `growth board` shows what waits for what | [05-board.md](05-board.md) |
+| Lane copy (3.0) | `growth lane open <path> --agent NAME`: the worktree, its port and its own preview server in one step, outside the project folder; `growth lane close` removes it | [05-board.md](05-board.md) |
 | Release | Push branch, pull request, owner's yes, merge, host deploy, live check, clean up | [release.md](playbooks/release.md) route A |
 | Queue | New posts the owner approved wait on a queue branch; one goes live a day | [release.md](playbooks/release.md) route B |
 

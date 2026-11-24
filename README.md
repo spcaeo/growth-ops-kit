@@ -110,6 +110,7 @@ growth-ops-kit/
     02-owner-rules.md   default working rules for the agent
     03-page-rulebook.md every rule a page must pass, tagged [code: ...] or [judgment]
     04-lanes-and-releases.md
+    05-board.md
     playbooks/          one file per job
     prompts/            brief templates for helper agents
     lessons.md          what went wrong, what it cost, the guard
