@@ -65,6 +65,8 @@ TOOLS = {
     "pace": ("tools/pace.py", "the shared pacer: growth pace google blocks until your turn (20 to 30 s for all agents); --robot pauses 10 minutes"),
     "lock": ("tools/lock.py", "take a lock (shared-code, owner-preview); growth lock status shows who holds what"),
     "unlock": ("tools/unlock.py", "give a lock back"),
+    "lane": ("tools/lane.py", "builder lanes: growth lane open <path> --agent NAME | list | url | rebuild | check | close (own worktree, own port, own preview server)"),
+    "runner": ("tools/runner.py", "(also: growth run) the machine runner: takes the board's machine jobs and runs them side by side under the browser pool and a load guard"),
     "fold_plan": ("tools/fold_plan.py", "fold-by-fold detail plan for a page (rule 36h)"),
     "inventory": ("tools/inventory.py", "full page inventory from the sitemap: every URL, section, stage, size, words, Search Console numbers"),
     "link_graph": ("tools/link_graph.py", "crawl the site's internal links into a graph and report orphans, weak pages and clusters"),
@@ -101,7 +103,7 @@ TOOLS = {
     "checks": ("adapters/nextjs/checks.sh", "(Next.js adapter) run only the tests and build a change touches"),
     "page_tracker": ("page-tracker/tracker.py", "the page tracker: sync, report (did our page changes help?); also serve, ai-summary"),
 }
-ALIASES = {"index": "index_pages", "approve": "approvals", "design": "site_design", "serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker"}
+ALIASES = {"index": "index_pages", "approve": "approvals", "design": "site_design", "serve": "serve_build", "new-project": "new_project", "page-tracker": "page_tracker", "tracker": "page_tracker", "run": "runner"}
 
 
 MENU = """Growth Ops Kit: the commands you need
