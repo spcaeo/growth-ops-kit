@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from .core import ALL, Missing, check, mtime
 import fingerprint  # noqa: E402  kit/tools/fingerprint.py: the page as served
 import paths  # noqa: E402  kit/tools/paths.py: one form of a site path
+import records  # noqa: E402  kit/tools/records.py: the one access layer for tasks, journal and verdicts
 
 FRESH_DAYS = 30
 DOSSIER_WORDS = 20
@@ -352,7 +353,7 @@ def step_order(s):
 
 @check("ev.task-steps", "0", ALL, "the page's task in docs/tasks.json lists the playbook steps; none skipped", needs="project")
 def task_steps(ctx):
-    t = json.loads(ctx.need_file(ctx.need_docs() / "tasks.json", "growth tasks add ...").read_text())
+    t = ctx.need_tasks("growth tasks add ...")
     # the path as a whole token: "/pricing" must not match "page/pricing" in another
     # page's task title (a real mistake: one page read another page's task, found by its path inside a longer path)
     tok = re.compile(r"(?<![\w/-])" + re.escape(paths.key(ctx.need_path())) + r"/?(?![\w/-])")   # with or without its slash
@@ -520,8 +521,7 @@ def brief(ctx):
 def preflight(ctx):
     """From a real project: "when you start a new page the planning and preparation should be done in depth and all
     checkpoints clear set as part of the playbook and workflow." growth preflight records the pass."""
-    led = ctx.project / "journal" / "preflight.json"
-    e = (json.loads(led.read_text()) if led.exists() else {}).get(ctx.need_path().rstrip("/") or "/")
+    e = records.verdicts(ctx.project, "preflight").get(ctx.need_path().rstrip("/") or "/")
     probs = ["no pre-flight run"] if not e else ([] if e.get("ok") else
             [f"pre-flight FAIL ({e.get('site_problems')} site problems, {e.get('plan_missing')} planning items missing)"])
     ctx.verdict(probs, f"pre-flight passed {e.get('at') if e else ''}",

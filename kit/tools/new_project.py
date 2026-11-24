@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import KIT_DIR, TEMPLATES  # noqa: E402
 import harness  # noqa: E402
 import setup_task  # noqa: E402
+import records  # noqa: E402  (the one access layer: the journal starts empty, in the database and as a file)
 
 WORK_DIRS = ("journal", "research", "inventory", "archive", "page-tracker")
 GITIGNORE = """# Growth project: data the tools write, keys and scratch files stay out of git.
@@ -30,6 +31,7 @@ GITIGNORE = """# Growth project: data the tools write, keys and scratch files st
 !.env.example
 *.db
 *.sqlite
+state/
 page-tracker/data.json
 page-tracker/insights*.json
 page-tracker/insights.md
@@ -124,10 +126,8 @@ def make(folder: Path, site: str, name: str = "", stack: str = "static", force: 
     if with_harness:      # the wizard passes harness=False and installs it after the owner's one yes
         made += agent_files(folder, values["name"], site, KIT_DIR.parent, permissions)
     setup_task.ensure(folder)     # setup is the first task (docs/tasks.json): one step per doctor step
-    entries = folder / "journal" / "entries.jsonl"
-    if not entries.exists():
-        entries.write_text("")                       # the page journal starts empty
-        made.append(entries)
+    if records.journal_ensure(folder):               # the page journal starts empty
+        made.append(records.journal_path(folder))
     gi = folder / ".gitignore"
     if not gi.exists():
         gi.write_text(GITIGNORE)

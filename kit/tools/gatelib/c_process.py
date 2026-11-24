@@ -103,7 +103,7 @@ def steps_log(ctx):
 
 @check("proc.tasks", "0", P, "tasks.json: steps numbered 1..n with a status and time; nothing skipped; at least one task", needs="project")
 def tasks(ctx):
-    t = json.loads(ctx.need_file(ctx.need_docs() / "tasks.json", "growth tasks").read_text())
+    t = ctx.need_tasks("growth tasks")
     probs = []
     ids = [x["id"] for x in t["tasks"]]
     if len(ids) != len(set(ids)):

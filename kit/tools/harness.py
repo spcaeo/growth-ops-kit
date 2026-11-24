@@ -52,9 +52,10 @@ DENY_ALWAYS = ["Bash(git push*)", "Bash(git * push*)", "Bash(env git*)", "Bash(c
                "Bash(rm -rf /*)", "Bash(rm -rf ~*)", "Bash(rm -rf ..*)", "Bash(rm -rf $HOME*)", "Bash(rm -fr *)",
                "Bash(rm *.git/hooks*)", "Bash(rm *.claude*)"]
 # Files only the owner (or the kit's own commands) change: the agent's settings, the project's settings and setup memory,
-# the approvals log, the task list and journal (written through growth tasks / growth journal), git hooks, the signing key.
+# the approvals log, the task list and journal (written through growth tasks / growth journal) and the database they live in
+# (state/growth.db: never edited by hand), git hooks, the signing key.
 PROTECTED_FILES = [".claude/settings.json", ".claude/settings.local.json", "growth.json", "setup-state.json", "setup-answers.json",
-                   "approvals.jsonl", "docs/tasks.json", "journal/**", "research/*-record.json", ".git/hooks/**", ".githooks/**"]
+                   "approvals.jsonl", "docs/tasks.json", "journal/**", "state/**", "research/*-record.json", ".git/hooks/**", ".githooks/**"]
 # Allow-list entries older kits wrote that hand the agent arbitrary code (any Python, any test file) or ref changes;
 # install() removes exactly these strings and check() reports them.
 OLD_UNSAFE_ALLOW = ["Bash(git branch*)", "Bash(python3 -m pytest*)", "Bash(pytest*)"]

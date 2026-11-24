@@ -5,7 +5,8 @@ Like a person's working notes. Every finding, question, decision and check (an A
 Search Console pull, an audit) is filed against the page(s) it concerns, so the next person who works on that page,
 or the re-check on day 21, 28 or 56, has it all at hand and can compare.
 
-Data (plain files, git-friendly, no server):
+Data: the entries live in the project's database (state/growth.db, through records.py); their readable, git-friendly mirror
+is a plain file (no server):
   journal/entries.jsonl         one JSON line per entry (append-only; answers and status changes are new lines)
   journal/runs/<date>/<id>.json the full query and the full response of every check we ran
   journal/pages/<slug>.md       one note per page, rebuilt from the entries (Obsidian-ready: open journal/ as a vault)
@@ -38,10 +39,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import PROJECT, TZ, CFG  # noqa: E402
 import paths  # noqa: E402  (one form of a site path)
-import atomic  # noqa: E402  (lock + atomic write: parallel agents never lose a line)
+import atomic  # noqa: E402  (lock + atomic write: the page notes are rebuilt under one lock)
+import records  # noqa: E402  (the one access layer: ids are taken inside the write transaction, so parallel adds never clash)
 
 J = PROJECT / "journal"
-ENTRIES = J / "entries.jsonl"
+ENTRIES = records.journal_path(PROJECT)   # the mirror file
 PAGES = J / "pages"
 RUNS = J / "runs"
 
@@ -92,10 +94,10 @@ def slug(path):
 def load():
     """Every entry with a readable time. A line with a bad or zone-less time (or broken JSON) is left out and reported on
     stderr, so an edited or damaged entry can never count as fresh."""
-    if not ENTRIES.exists():
+    if not records.journal_present(PROJECT):
         return []
     out = []
-    for n, l in enumerate(ENTRIES.read_text().splitlines(), 1):
+    for n, l in enumerate(records.journal_lines(PROJECT), 1):
         if not l.strip():
             continue
         try:
@@ -128,22 +130,15 @@ def state():
 
 
 def next_id():
-    """The next free id. Only call it while holding the journal lock (main() does), or two writers get the same id.
-    It counts the highest id used, not the lines, so an ignored line never makes an id repeat."""
-    used = []
-    for l in (ENTRIES.read_text().splitlines() if ENTRIES.exists() else []):
-        try:
-            m = re.fullmatch(r"J(\d+)", str(json.loads(l).get("id", "")))
-        except (ValueError, AttributeError):
-            continue
-        if m:
-            used.append(int(m.group(1)))
-    n = max(used or [0]) + 1
-    return f"J{n:04d}"
+    """The id the next entry would get: a peek only. cmd_add and cmd_run take the real id inside the write transaction
+    (records.journal_add), so two writers never get the same one. It counts the highest id used, not the lines, so an
+    ignored line never makes an id repeat."""
+    return records.journal_next_id(PROJECT)
 
 
 def append(obj):
-    atomic.append_line(ENTRIES, json.dumps(obj, ensure_ascii=False))
+    """File an entry that is complete (it has its id, or it is an update line with `of`)."""
+    records.journal_append(PROJECT, obj)
 
 
 def norm_pages(pages):
@@ -176,13 +171,13 @@ def attach_fingerprint(e, url=""):
 
 def cmd_add(a, kind=None, text=None):
     a.recheck = check_date(a.recheck)
-    e = {"id": next_id(), "at": now(), "kind": kind or a.kind, "pages": norm_pages(a.page), "tags": a.tag or [],
+    e = {"id": None, "at": now(), "kind": kind or a.kind, "pages": norm_pages(a.page), "tags": a.tag or [],
          "title": a.title or (text or a.text or "")[:90], "text": text or a.text or "", "source": a.source or "",
          "status": "open" if (kind or a.kind) in ("question", "owner-action", "finding") else ("open" if a.recheck else "done"),
          "recheck_on": a.recheck or "", "by": "lead"}
     attach_fingerprint(e, getattr(a, "url", "") or "")
-    append(e)
-    render()
+    e = records.journal_add(PROJECT, lambda jid: {**e, "id": jid})     # the id is taken inside the write transaction
+    render(e["pages"])
     print(e["id"])
     if e["kind"] == "decision":
         print(f"A decision counts only when the owner approves it: the owner runs   growth approve decision {e['id']}   "
@@ -237,7 +232,7 @@ def cmd_answer(a):
 
 def cmd_done(a):
     append({"of": a.id, "at": now(), "status": "done", "done_note": a.text, "done_at": now()})
-    render()
+    render((state().get(a.id) or {}).get("pages") or [])
     print("ok")
 
 
@@ -248,35 +243,44 @@ def cmd_close(a):
     if cur is None:
         sys.exit(f"no entry {a.id}")
     append({"of": a.id, "at": now(), "status": "done", "done_note": a.output.strip(), "done_at": now()})
-    render()
+    render(cur["pages"])
     print("ok")
 
 
 def cmd_run(a):
     a.recheck = check_date(a.recheck)
-    rid = next_id()
     d = today().isoformat()
     folder = RUNS / d
-    folder.mkdir(parents=True, exist_ok=True)
     import hashlib
     raw = Path(a.response_file).read_bytes() if a.response_file else (a.response or "").encode()
     resp = raw.decode("utf-8", errors="replace")
     sha = hashlib.sha256(raw).hexdigest()
     method = a.capture_method or ("response-file" if a.response_file else "typed-inline")
     market = a.market or CFG.get("market", {}).get("primary_country", "")
-    run = {"id": rid, "at": now(), "kind": a.kind, "engine": a.engine, "market": market, "settings": a.settings or "",
-           "pages": norm_pages(a.page), "query": a.query, "named": a.named or "", "response": resp,
-           "response_sha256": sha, "capture_method": method}
-    rf = folder / f"{rid}-{a.engine}-{slug(norm_pages(a.page)[0])}.json"
-    atomic.write_text(rf, json.dumps(run, ensure_ascii=False, indent=1) + "\n")
-    e = {"id": rid, "at": run["at"], "kind": "run", "pages": run["pages"], "tags": (a.tag or []) + [a.kind, a.engine],
-         "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
-         "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
-         "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method}
-    attach_fingerprint(e, getattr(a, "url", "") or "")
-    append(e)
-    render()
-    print(rid, rf.relative_to(PROJECT))
+    pages = norm_pages(a.page)
+    tags = (a.tag or []) + [a.kind, a.engine]
+    fp = {"tags": tags, "pages": pages}
+    attach_fingerprint(fp, getattr(a, "url", "") or "")      # before the transaction: it may read the preview
+    made = {}
+
+    def make(rid):            # runs inside the write transaction, with the id this entry gets
+        folder.mkdir(parents=True, exist_ok=True)
+        run = {"id": rid, "at": now(), "kind": a.kind, "engine": a.engine, "market": market, "settings": a.settings or "",
+               "pages": pages, "query": a.query, "named": a.named or "", "response": resp,
+               "response_sha256": sha, "capture_method": method}
+        rf = folder / f"{rid}-{a.engine}-{slug(pages[0])}.json"
+        atomic.write_text(rf, json.dumps(run, ensure_ascii=False, indent=1) + "\n")
+        made["rf"] = rf
+        e = {"id": rid, "at": run["at"], "kind": "run", "pages": run["pages"], "tags": tags,
+             "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
+             "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
+             "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method}
+        if "fp" in fp:
+            e["fp"] = fp["fp"]
+        return e
+    e = records.journal_add(PROJECT, make)
+    render(e["pages"])
+    print(e["id"], made["rf"].relative_to(PROJECT))
 
 
 def page_entries(cur, page):
@@ -309,8 +313,19 @@ def fmt(e):
     return "\n".join(lines)
 
 
-def render():
-    _render_notes()
+def _page_key(p):
+    return paths.key(p) if p.startswith("/") else p      # /x and /x/ are one page
+
+
+def render(pages=None):
+    """Rebuild the page notes, the index and the owner's page from the entries. `pages` (the pages an entry touched) limits the
+    notes to those pages (and any note that is missing); None rebuilds every note. The notes and the index are rebuilt one
+    rebuild at a time (a second one waits and then reads the newest entries, so they never go back to an older state); the
+    owner's page has its own lock inside owner_journal.build. None of this holds the journal's write lock: an entry is
+    already saved when render runs."""
+    touched = None if pages is None else {_page_key(p) for p in pages}
+    with atomic.locked(J / "journal"):
+        _render_notes(touched)
     try:  # the owner's one-page journal (from a real project: "keeping the journals updated is your job")
         import owner_journal
         owner_journal.build()
@@ -318,29 +333,35 @@ def render():
         print(f"owner journal page not rebuilt: {e}", file=sys.stderr)
 
 
-def _render_notes():
+def _render_notes(touched=None):
     cur = state()
     PAGES.mkdir(parents=True, exist_ok=True)
-    pages = sorted({paths.key(p) if p.startswith("/") else p for e in cur.values() for p in e["pages"]})   # /x and /x/ are one page
+    by_page = {}                                          # one pass over the entries, not one per page
+    for e in cur.values():
+        for k in {paths.key(x) for x in e["pages"]}:
+            by_page.setdefault(k, []).append(e)
+    pages = sorted({_page_key(p) for e in cur.values() for p in e["pages"]})
     idx = ["# Page journal index", "", f"Rebuilt {now()} by `growth journal render`. Open `journal/` as an Obsidian vault.",
            "", "| Page | Entries | Open questions | Re-checks due | Last entry |", "| --- | --- | --- | --- | --- |"]
     for p in pages:
-        es = sorted(page_entries(cur, p), key=lambda e: e["id"])
+        es = sorted(by_page.get(paths.key(p), []), key=lambda e: e["id"])
         openq = [e for e in es if e["kind"] == "question" and e.get("status") == "open"]
         due = [e for e in es if e.get("recheck_on") and e.get("status") == "open"]
-        out = ["---", f"page: \"{p}\"", f"slug: {slug(p)}", f"updated: {now()}",
-               "tags: [" + ", ".join(sorted({t for e in es for t in e.get('tags', [])})) + "]", "---", "",
-               f"# {p}", "", "Rebuilt from `journal/entries.jsonl`; add entries with `growth journal`, never edit this file.", ""]
-        for title, sel in (("Open questions", openq),
-                           ("Re-checks due", due),
-                           ("Findings", [e for e in es if e["kind"] == "finding"]),
-                           ("Decisions", [e for e in es if e["kind"] == "decision"]),
-                           ("Checks we ran (queries and responses)", [e for e in es if e["kind"] == "run"]),
-                           ("Owner action items", [e for e in es if e["kind"] == "owner-action"]),
-                           ("Answered and done questions", [e for e in es if e["kind"] == "question" and e.get("status") != "open"]),
-                           ("Notes", [e for e in es if e["kind"] == "note"])):
-            out += [f"## {title}", ""] + ([fmt(e) for e in sel] or ["- none"]) + [""]
-        atomic.write_text(PAGES / f"{slug(p)}.md", "\n".join(out))
+        note = PAGES / f"{slug(p)}.md"
+        if touched is None or p in touched or not note.exists():
+            out = ["---", f"page: \"{p}\"", f"slug: {slug(p)}", f"updated: {now()}",
+                   "tags: [" + ", ".join(sorted({t for e in es for t in e.get('tags', [])})) + "]", "---", "",
+                   f"# {p}", "", "Rebuilt from `journal/entries.jsonl`; add entries with `growth journal`, never edit this file.", ""]
+            for title, sel in (("Open questions", openq),
+                               ("Re-checks due", due),
+                               ("Findings", [e for e in es if e["kind"] == "finding"]),
+                               ("Decisions", [e for e in es if e["kind"] == "decision"]),
+                               ("Checks we ran (queries and responses)", [e for e in es if e["kind"] == "run"]),
+                               ("Owner action items", [e for e in es if e["kind"] == "owner-action"]),
+                               ("Answered and done questions", [e for e in es if e["kind"] == "question" and e.get("status") != "open"]),
+                               ("Notes", [e for e in es if e["kind"] == "note"])):
+                out += [f"## {title}", ""] + ([fmt(e) for e in sel] or ["- none"]) + [""]
+            atomic.write_text(note, "\n".join(out))
         idx.append(f"| [[{slug(p)}]] | {len(es)} | {len(openq)} | {len(due)} | {es[-1]['at'] if es else ''} |")
     idx += ["", "Owner action items: [[OWNER-ACTIONS]]"]
     atomic.write_text(J / "INDEX.md", "\n".join(idx) + "\n")
@@ -414,10 +435,7 @@ def main():
     a = ap.parse_args()
     fn = {"add": cmd_add, "ask": cmd_ask, "answer": cmd_answer, "done": cmd_done, "close": cmd_close, "run": cmd_run, "show": cmd_show,
           "due": cmd_due, "open": cmd_open, "action": cmd_action, "actions": cmd_actions, "render": lambda a: (render(), print("ok"))}[a.cmd]
-    if a.cmd in ("due", "open", "actions"):   # read only
-        return fn(a)
-    with atomic.locked(J / "journal"):         # one writer at a time: ids are taken, the line is added and the notes rebuilt together
-        return fn(a)
+    return fn(a)       # an entry takes its id and adds its line inside one transaction (records.journal_add); render() has its own lock
 
 
 if __name__ == "__main__":

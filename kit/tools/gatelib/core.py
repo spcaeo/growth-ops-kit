@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import KIT_DIR, SITE_KEYS, site_setting  # noqa: E402
+import records  # noqa: E402  (the one access layer for the journal, the task list and the verdicts)
 
 PAGE_TYPES = ("money", "hub", "post", "core")
 ALL = PAGE_TYPES                    # a check for every page type ("site" scope)
@@ -189,6 +190,12 @@ class Ctx:
             raise Missing(str(p), fix)
         return p
 
+    def need_tasks(self, fix):
+        """The project's task list (a dict), read through records.py. Missing when there is none."""
+        docs = self.need_docs()
+        self.need_file(records.tasks_path(docs.parent, docs), fix)
+        return records.tasks_doc(docs.parent)
+
     def git(self, *args, repo=None):
         r = repo or self.need_repo()
         code, out = run(["git", "-C", str(r), *args], timeout=60)
@@ -199,8 +206,8 @@ class Ctx:
     def journal(self):
         """Journal entries (list of dicts) from the kit's journal/entries.jsonl."""
         if "journal" not in self.cache:
-            f = self.need_file(self.project / "journal" / "entries.jsonl", "growth journal add ... (no journal yet)")
-            self.cache["journal"] = [json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+            self.need_file(records.journal_path(self.project), "growth journal add ... (no journal yet)")
+            self.cache["journal"] = [json.loads(l) for l in records.journal_lines(self.project) if l.strip()]
         return self.cache["journal"]
 
     def page_entries(self):
@@ -314,7 +321,7 @@ class Ctx:
         key = self.need_key()
         pre = key + "-"
         try:
-            others = [k + "-" for k in (json.loads((self.project / "journal" / "preflight.json").read_text()) or {}).values()
+            others = [k + "-" for k in (records.verdicts(self.project, "preflight") or {}).values()
                       for k in [k.get("key", "")] if k.startswith(pre)]
         except (OSError, ValueError, AttributeError):
             others = []

@@ -26,12 +26,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import atomic  # noqa: E402
+import records  # noqa: E402  (verdicts live in the project's database; journal/preflight.json is their mirror)
 from config import CFG, KIT_DIR, PROJECT, TZ  # noqa: E402
 from ready import preview_repo_problem  # noqa: E402
 import checkpoints  # noqa: E402
 import research_gate  # noqa: E402  (merge the checkpoints file, never overwrite it)
 
-LEDGER = PROJECT / "journal" / "preflight.json"
+LEDGER = records.verdict_path(PROJECT, "preflight")      # the mirror file
 PLAN = ["proc.doctor", "proc.owner-messages", "proc.rulebook-current", "ev.inventory", "ev.snapshot", "ev.dossier",
         "ev.brief", "ev.task-steps", "ev.fold-plan", "links.plan", "ev.ai-baseline", "ev.archive-before"]
 # A rebuilt page is still the OLD page at pre-flight, so these two are judged on the plan itself here; the gate judges
@@ -50,8 +51,8 @@ def plan_files(path, key, ptype):
                        capture_output=True, text=True, cwd=PROJECT)
     if r.returncode:
         probs.append("FAIL 36h   [ev.fold-plan] fold plan not complete: " + (r.stdout + r.stderr).strip().splitlines()[-1][:160])
-    jf = PROJECT / "journal" / "entries.jsonl"       # no journal yet is a finding to report, not a crash
-    ents = [json.loads(l) for l in jf.read_text().splitlines() if l.strip()] if jf.exists() else []
+    # no journal yet is a finding to report, not a crash
+    ents = [json.loads(l) for l in records.journal_lines(PROJECT) if l.strip()] if records.journal_present(PROJECT) else []
     planned = [e for e in ents if "internal-link" in (e.get("tags") or []) and path in (e.get("title", "") + " " + e.get("text", ""))
                and (e.get("pages") or []) != [path]]
     if "links.plan" not in scope or (CFG.get("stack") or "static").lower() != "nextjs":
@@ -177,7 +178,7 @@ def main():
     entry = {"ok": ok, "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "site_problems": len(health),
                "plan_missing": len(plan_fails), "plan": plan_file.relative_to(PROJECT).as_posix(),
                "key": a.key}
-    atomic.update_json(LEDGER, lambda d: d.update({path: entry}), default={}, indent=1)
+    records.verdicts_update(PROJECT, "preflight", lambda d: d.update({path: entry}))
     print(f"PRE-FLIGHT {'PASS' if ok else 'FAIL'} {path}: " + ("build may start." if ok else "do not start the build."))
     sys.exit(0 if ok else 1)
 

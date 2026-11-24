@@ -69,8 +69,9 @@ def _git_blob(repo, sha, path):
 
 def _journal_ids(project):
     import json
+    import records
     try:
-        return {json.loads(l).get("id") for l in (Path(project) / "journal" / "entries.jsonl").read_text().splitlines() if l.strip()}
+        return {json.loads(l).get("id") for l in records.journal_lines(project) if l.strip()}
     except (OSError, ValueError):
         return set()
 

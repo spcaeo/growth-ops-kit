@@ -24,9 +24,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import checkpoints  # noqa: E402
+import records  # noqa: E402  (the one access layer for the task list)
 from config import find_project  # noqa: E402
 
-BOOKKEEPING = ("docs/tasks.json", "docs/steps-log.md", "docs/owner-messages-map.json", "journal/", ".claude/", ".tmp")
+BOOKKEEPING = ("state/", "docs/tasks.json", "docs/steps-log.md", "docs/owner-messages-map.json", "journal/", ".claude/", ".tmp")
 STAGE = re.compile(r"\b(research|edit|build|fold|test|gate|hand-?over|ready|publish|release|review)\b", re.I)
 TICK = re.compile(r"\btasks\s+(tick|step)\b")
 
@@ -39,9 +40,8 @@ def load_cfg(project: Path) -> dict:
 
 
 def load_tasks(project: Path) -> list:
-    docs = load_cfg(project).get("project_docs") or "docs"
     try:
-        return json.loads((project / docs / "tasks.json").read_text()).get("tasks") or []
+        return records.tasks_doc(project).get("tasks") or []
     except (OSError, ValueError):
         return []
 
@@ -154,9 +154,8 @@ def cover_time(project: Path, tasks: list):
     starts = [x for x in (_parse_at(project, t.get("started")) for t in tasks) if x]
     if starts:
         return min(starts)
-    docs = load_cfg(project).get("project_docs") or "docs"
     try:
-        res = subprocess.run(["git", "-C", str(project), "log", "-1", "--format=%ct", "--", f"{docs}/tasks.json"],
+        res = subprocess.run(["git", "-C", str(project), "log", "-1", "--format=%ct", "--", records.tasks_rel(project)],
                              capture_output=True, text=True, timeout=20)
         return float(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip() else None
     except (OSError, ValueError, subprocess.SubprocessError):

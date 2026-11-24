@@ -27,3 +27,6 @@ playwright-report/
 # per-project working data (each project keeps its own, outside the kit or git-ignored)
 /project/
 kit/rules/*.lock
+# the demo tests also run the tools in the demo project itself: the database and the lock files they make stay out of git
+examples/demo-site/project/state/
+examples/demo-site/project/**/*.lock

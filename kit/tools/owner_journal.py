@@ -25,6 +25,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, DOCS, PROJECT, TZ  # noqa: E402
+import atomic  # noqa: E402
+import records  # noqa: E402  (the one access layer for the journal)
 
 OUT = PROJECT / "journal" / "owner-journal.html"
 
@@ -44,8 +46,7 @@ def steps():
 def entries():
     """Journal entries with answers and status changes folded in (the file is append-only)."""
     out = {}
-    f = PROJECT / "journal" / "entries.jsonl"
-    for l in (f.read_text().splitlines() if f.is_file() else []):         # a new project has no journal yet
+    for l in (records.journal_lines(PROJECT) if records.journal_present(PROJECT) else []):    # a new project has no journal yet
         if not l.strip():
             continue
         e = json.loads(l)
@@ -68,6 +69,13 @@ def card(title, meta, body, extra="", tags=""):
 
 
 def build():
+    """Rebuild the owner's page. One build at a time: a second waits, then reads the newest entries, so the page never goes
+    back to an older state; the file is replaced in one step."""
+    with atomic.locked(OUT):
+        return _build()
+
+
+def _build():
     st, ens = steps(), entries()
     actions = [e for e in ens if e.get("kind") in ("action", "owner-action") and e.get("status", "open") == "open"]
     tab1 = "".join(card(esc(r["said"]), f'{esc(r["id"])} · {esc(r["date"])}', esc(r["done"]),
@@ -85,7 +93,7 @@ def build():
     page = TEMPLATE.replace("{{name}}", CFG.get("name", "Project")).replace("{{built}}", built).replace("{{n1}}", str(len(st))).replace("{{n2}}", str(len(actions))) \
         .replace("{{n3}}", str(len(ens) - len(actions))).replace("{{tab1}}", tab1).replace("{{tab2}}", tab2).replace("{{tab3}}", tab3)
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(page)
+    atomic.write_text(OUT, page)
     return OUT
 
 
