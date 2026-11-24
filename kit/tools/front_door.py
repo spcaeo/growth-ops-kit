@@ -27,6 +27,7 @@ from urllib.parse import urlsplit
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import records  # noqa: E402  (the one access layer for tasks, journal and verdicts)
 
 PAGE_TYPES = ("post", "money", "core", "hub")
 PLAYBOOK_FOR = {"post": "update-post", "money": "money-page", "core": "change-a-page", "hub": "cluster-redesign"}
@@ -61,13 +62,9 @@ def cfg_of(project: Path) -> dict:
     return json.loads((project / "growth.json").read_text())
 
 
-def tasks_file(project: Path) -> Path:
-    return project / (cfg_of(project).get("project_docs") or "docs") / "tasks.json"
-
-
 def load_tasks(project: Path) -> dict:
     try:
-        return json.loads(tasks_file(project).read_text())
+        return records.tasks_doc(project)
     except (OSError, ValueError):
         return {"tasks": [], "questions": []}
 
@@ -369,14 +366,18 @@ def cmd_page(argv: list[str]) -> int:
             say(f"Exact message: {reason}")
             return 1
         tid = r.stdout.strip().splitlines()[-1]
-        db = load_tasks(project)
-        task = next(t for t in db["tasks"] if t["id"] == tid)
-        task["page"] = {"path": path, "type": ptype, "key": key, "playbook": playbook}
         stamp = dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
-        for line in playbook_lines(playbook):
-            task["steps"].append({"n": len(task["steps"]) + 1, "what": line[:200], "status": "todo", "at": stamp, "output": None})
-        tasks_file(project).write_text(json.dumps(db, indent=2, ensure_ascii=False) + "\n")
-        say(f"  Opened {tid} with {len(task['steps'])} playbook steps.")
+        lines = playbook_lines(playbook)
+        counts = []
+
+        def add_playbook(db):          # one transaction: another agent's change to the list is never lost
+            task = next(t for t in db["tasks"] if t["id"] == tid)
+            task["page"] = {"path": path, "type": ptype, "key": key, "playbook": playbook}
+            for line in lines:
+                task["steps"].append({"n": len(task["steps"]) + 1, "what": line[:200], "status": "todo", "at": stamp, "output": None})
+            counts.append(len(task["steps"]))
+        records.tasks_update(project, add_playbook)
+        say(f"  Opened {tid} with {counts[0]} playbook steps.")
     pre = run_tool(project, "preflight.py", path, "--type", ptype, "--key", key)
     out = (pre.stdout + pre.stderr).strip()
     todo = [l for l in out.splitlines() if l.startswith("FAIL") or l.startswith("  FAIL")]
@@ -487,13 +488,13 @@ def cmd_measure(argv: list[str]) -> int:
     release = flags.get("release")
     if not release:
         try:
-            at = json.loads((project / "journal" / "ready.json").read_text()).get(page["path"], {}).get("at", "")
+            at = records.verdicts(project, "ready").get(page["path"], {}).get("at", "")
         except (OSError, ValueError):
             at = ""
         release = at[:10] if re.match(r"\d{4}-\d{2}-\d{2}", at) else dt.date.today().isoformat()
         say(f"No release day given: using {release} ({'the day it was marked ready' if at else 'today'}). Use --release YYYY-MM-DD to change it.")
     try:
-        entries = [json.loads(l) for l in (project / "journal" / "entries.jsonl").read_text().splitlines() if l.strip()]
+        entries = [json.loads(l) for l in records.journal_lines(project) if l.strip()]
     except (OSError, ValueError):
         entries = []
     scheduled = any("measure" in (e.get("tags") or []) and f"growth measure run {page['path']}" in e.get("title", "") for e in entries)

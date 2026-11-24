@@ -30,9 +30,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import atomic  # noqa: E402
+import records  # noqa: E402  (verdicts live in the project's database; journal/ready*.json are their mirrors)
 from config import CFG, KIT_DIR, PROJECT, TZ  # noqa: E402
 
-LEDGER = PROJECT / "journal" / "ready.json"
+LEDGER = records.verdict_path(PROJECT, "ready")        # the mirror file (the verdicts themselves: records.verdicts)
 
 
 def preview_repo():
@@ -59,7 +60,7 @@ def head(repo):
 
 def ledger():
     try:
-        return json.loads(LEDGER.read_text())
+        return records.verdicts(PROJECT, "ready")
     except (OSError, ValueError):
         return {}
 
@@ -163,12 +164,12 @@ def page_fp(path, repo=None):
         return None
 
 
-FAILED = PROJECT / "journal" / "ready-failed.json"
+FAILED = records.verdict_path(PROJECT, "ready-failed")
 
 
 def failed():
     try:
-        return json.loads(FAILED.read_text())
+        return records.verdicts(PROJECT, "ready-failed")
     except (OSError, ValueError):
         return {}
 
@@ -201,7 +202,7 @@ def manual_problems(path, key):
     import checkpoints
     plan = None
     try:
-        rel = json.loads((PROJECT / "journal" / "preflight.json").read_text()).get(path, {}).get("plan")
+        rel = records.verdicts(PROJECT, "preflight").get(path, {}).get("plan")
         plan = PROJECT / rel if rel else None
     except (OSError, ValueError):
         pass
@@ -268,7 +269,7 @@ def key_problem(path, key):
     """The key a page was pre-flighted with is its key for good: READY refuses another one (a page cannot borrow the
     review, dossier and fact check of a different page by naming its key). "" when it matches."""
     try:
-        e = json.loads((PROJECT / "journal" / "preflight.json").read_text()).get(path, {})
+        e = records.verdicts(PROJECT, "preflight").get(path, {})
     except (OSError, ValueError):
         return ""                        # no pre-flight record: ev.preflight is the check that wants one
     if not e:
@@ -348,10 +349,9 @@ def main():
     oks = sum(1 for l in r.stdout.splitlines() if l.startswith("OK"))
     held_lines = held_proposals(a.key)
     if fails:
-        atomic.update_json(LEDGER, lambda x: x.pop(path, None) and None, default={}, indent=1)
-        atomic.update_json(FAILED, lambda x: x.update({path: {"type": a.type, "key": a.key, "commit": c0,
-                           "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "first": fails[0][:200]}}),
-                           default={}, indent=1)
+        records.verdicts_update(PROJECT, "ready", lambda x: x.pop(path, None) and None)
+        records.verdicts_update(PROJECT, "ready-failed", lambda x: x.update({path: {"type": a.type, "key": a.key, "commit": c0,
+                                "at": dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M %Z"), "first": fails[0][:200]}}))
         print(f"NOT READY {path}: {len(fails)} FAIL, {oks} OK. The URL may not be shared with the owner.")
         for l in fails:
             print(" ", l[:200])
@@ -361,9 +361,9 @@ def main():
              "type": a.type, "key": a.key, "secs": round(time.time() - t0)}
     if fp0:
         entry["fp"] = fp0
-    atomic.update_json(LEDGER, lambda x: x.update({path: entry}), default={}, indent=1)
+    records.verdicts_update(PROJECT, "ready", lambda x: x.update({path: entry}))
     if path in failed():
-        atomic.update_json(FAILED, lambda x: x.pop(path, None) and None, default={}, indent=1)
+        records.verdicts_update(PROJECT, "ready-failed", lambda x: x.pop(path, None) and None)
     d = {path: entry}
     print(f"READY {path}: 0 FAIL, {oks} OK at {d[path]['commit'][:7]}. It may be shared: {url}")
     print_held(held_lines)

@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, DOCS, KEYS, PROJECT, SITE_REPO, connector_on, keys  # noqa: E402
+import records  # noqa: E402  (the one access layer for the task list and the journal)
 
 rows = []
 
@@ -200,7 +201,7 @@ row("A5 Control of the live site proven", _a5_ok, _a5_what,
     "book/01-flow.md A5: tiny visible edit, owner checks, roll back; then fill the row: the commit ids and 'done'")
 # A6 task tracker
 try:
-    t = json.loads((DOCS / "tasks.json").read_text())
+    t = records.tasks_doc(PROJECT)
     open_t = sum(1 for x in t["tasks"] if x.get("status") != "done")
     open_q = sum(1 for q in t.get("questions", []) if not q.get("answer"))
     row("A6 Task tracker", True, f"{len(t['tasks'])} tasks ({open_t} open), {open_q} open owner questions")
@@ -287,7 +288,7 @@ else:
 
 # A9 the owner's journal page is current
 _oj = PROJECT / "journal" / "owner-journal.html"
-_src = [DOCS / "steps-log.md", PROJECT / "journal" / "entries.jsonl"]
+_src = [DOCS / "steps-log.md", records.journal_path(PROJECT)]       # the journal's mirror file: its mtime moves with every entry
 _fresh = _oj.exists() and all(_oj.stat().st_mtime >= p.stat().st_mtime - 1 for p in _src if p.exists())
 _newest = max([p.stat().st_mtime for p in _src if p.exists()] or [0])
 _recent = (datetime.now().timestamp() - _newest) < 15 * 60   # just logged: the Stop hook rebuilds the page when the agent stops

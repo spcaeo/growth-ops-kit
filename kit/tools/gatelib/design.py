@@ -326,7 +326,7 @@ def exception(ctx, cid):
 
 def _task_done(ctx, tid):
     try:
-        f = (ctx.docs or (ctx.project / "docs")) / "tasks.json"
-        return any(t.get("id") == tid and t.get("status") == "done" for t in json.loads(f.read_text())["tasks"])
+        import records
+        return any(t.get("id") == tid and t.get("status") == "done" for t in records.tasks_doc(ctx.docs.parent if ctx.docs else ctx.project)["tasks"])
     except (OSError, ValueError, KeyError):
         return False

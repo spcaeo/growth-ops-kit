@@ -127,3 +127,17 @@ def test_an_outside_edit_of_the_mirror_wins_and_is_an_event(tmp_path):
     assert s.sync("demo", force=True) is True
     assert [r["v"] for r in s.q("SELECT v FROM items")] == ["restored"]
     assert s.events("mirror-import", "demo")
+
+
+def test_eight_processes_opening_a_brand_new_project_at_once_all_get_in(tmp_path):
+    """The switch of a new database to WAL mode is not covered by SQLite's busy timeout: it used to stop some of the
+    eight with "database is locked"."""
+    script = WRITER % str(ROOT / "kit" / "tools")
+    for round_ in range(6):
+        p = tmp_path / f"fresh{round_}"
+        p.mkdir()
+        procs = [subprocess.Popen([sys.executable, "-c", script, str(p), f"w{n}", "1"], stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, text=True) for n in range(8)]
+        outs = [pr.communicate(timeout=60) for pr in procs]
+        assert all(pr.returncode == 0 for pr in procs), outs
+        assert len(store.Store(p).q("SELECT 1 FROM events WHERE kind='w'")) == 8

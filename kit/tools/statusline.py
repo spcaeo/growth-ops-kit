@@ -50,10 +50,6 @@ def settings(project: Path) -> dict:
         return {}
 
 
-def tasks_file(project: Path) -> Path:
-    return project / (settings(project).get("project_docs") or "docs") / "tasks.json"
-
-
 def bar(done: int, total: int, style: str = "bars") -> str:
     on, off = STYLES.get(style, STYLES["bars"])
     filled = round(WIDTH * done / total) if total else 0
@@ -128,7 +124,9 @@ def main() -> None:
         pass
     try:
         project = project_dir()
-        data = json.loads(tasks_file(project).read_text())
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import records
+        data = records.tasks_doc(project)
         print(line(data, settings(project).get("statusline_style") or "bars", manual_checks(project, data)))
     except FileNotFoundError:
         print("no task list yet (docs/tasks.json)")

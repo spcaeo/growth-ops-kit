@@ -27,9 +27,11 @@ import datetime as dt
 import hashlib
 import json
 import os
+import random
 import sqlite3
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -86,11 +88,28 @@ class Store:
             c = sqlite3.connect(self.path, timeout=BUSY_MS / 1000, isolation_level=None, check_same_thread=True)
             c.row_factory = sqlite3.Row
             c.execute(f"PRAGMA busy_timeout={BUSY_MS}")
-            c.execute("PRAGMA journal_mode=WAL")
+            self._wal(c)
             c.execute("PRAGMA synchronous=NORMAL")
             c.execute("PRAGMA foreign_keys=ON")
             self._local.conn, self._local.pid, self._local.depth = c, os.getpid(), 0
         return c
+
+    @staticmethod
+    def _wal(c: sqlite3.Connection) -> None:
+        """Switch a new database to WAL mode. The switch needs the file to itself and SQLite does not wait for it (the busy
+        timeout does not apply), so eight processes opening a brand-new project at once made some stop with "database is
+        locked": ask first, and when the switch is needed, try again until the others have finished (or the timeout)."""
+        if str(c.execute("PRAGMA journal_mode").fetchone()[0]).lower() == "wal":
+            return
+        deadline = time.monotonic() + BUSY_MS / 1000
+        while True:
+            try:
+                c.execute("PRAGMA journal_mode=WAL")
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e) or time.monotonic() > deadline:
+                    raise
+                time.sleep(0.005 + random.random() * 0.02)
 
     @contextlib.contextmanager
     def tx(self):

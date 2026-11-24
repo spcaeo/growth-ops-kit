@@ -36,7 +36,12 @@ import os
 import re
 import secrets
 import sys
+import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import atomic  # noqa: E402
+import records  # noqa: E402  (the one access layer for tasks, journal and verdicts)
 
 LOG_NAME = "approvals.jsonl"
 EXCUSE_MAX_DAYS = 30
@@ -87,7 +92,15 @@ def ensure_key() -> bytes:
     p = key_path()
     p.parent.mkdir(parents=True, exist_ok=True)
     k = secrets.token_hex(32).encode()
-    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:       # another process made the key a moment ago: use that one (it may still be being written)
+        for _ in range(100):
+            got = read_key()
+            if got:
+                return got
+            time.sleep(0.02)
+        raise
     with os.fdopen(fd, "wb") as f:
         f.write(k + b"\n")
     return k
@@ -157,17 +170,19 @@ def record(docs, kind: str, ref: str, content, summary: str = "", by: str | None
     """Append one approval (library; `approve` is the owner's door to it)."""
     if kind not in KINDS:
         raise ValueError(f"unknown approval kind {kind}")
-    lines = _lines(docs)
-    entry = {"id": f"A{len(lines) + 1:04d}", "kind": kind, "ref": str(ref), "sha256": digest(content), "summary": summary[:200],
-             "by": by or _who(), "at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "via": via,
-             "prev": hashlib.sha256(lines[-1].encode()).hexdigest() if lines else "", **(extra or {})}
-    key = read_key()
-    if key:
-        entry["sig"] = _sign(entry, key)
     p = log_path(docs)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with p.open("a") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    key = read_key()
+    with atomic.locked(p):        # read the last line, chain to it and append under one lock: two approvals at once never share an id or a prev hash
+        lines = _lines(docs)
+        entry = {"id": f"A{len(lines) + 1:04d}", "kind": kind, "ref": str(ref), "sha256": digest(content), "summary": summary[:200],
+                 "by": by or _who(), "at": dt.datetime.now().astimezone().isoformat(timespec="seconds"), "via": via,
+                 "prev": hashlib.sha256(lines[-1].encode()).hexdigest() if lines else "", **(extra or {})}
+        if key:
+            entry["sig"] = _sign(entry, key)
+        with p.open("a") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
     return entry
 
 
@@ -270,7 +285,7 @@ def excuses_blocked_skip(project, cfg: dict, cid: str, today: dt.date | None = N
     def done(tid):
         try:
             return any(t.get("id") == tid and t.get("status") == "done"
-                       for t in json.loads((Path(project) / "docs" / "tasks.json").read_text())["tasks"])
+                       for t in records.tasks_doc(project)["tasks"])
         except (OSError, ValueError, KeyError):
             return False
     state, _e, why = exception_state(Path(project) / "docs", cfg, cid, today or dt.date.today(), done)
@@ -303,7 +318,7 @@ def journal_entries(project) -> dict:
     """The journal's entries folded by id (the base line of each, not its later updates)."""
     out = {}
     try:
-        for ln in (Path(project) / "journal" / "entries.jsonl").read_text().splitlines():
+        for ln in records.journal_lines(project):
             if ln.strip():
                 e = json.loads(ln)
                 if "of" not in e and e.get("id"):
@@ -459,7 +474,7 @@ def _answer_journal(project, docs, jid: str, text: str, tty) -> int:
     when = journal.now()
     journal.append({"of": jid, "at": when, "status": "answered", "answer": text, "answered_by": "owner", "answered_at": when,
                     "approval": a["id"]})
-    journal.render()
+    journal.render(e.get("pages") or [])
     return 0
 
 
@@ -474,12 +489,6 @@ def _project():
 
 def _json(p: Path):
     return json.loads(p.read_text())
-
-
-def _save_json(p: Path, data, indent=2):
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=indent, ensure_ascii=False) + "\n")
-    tmp.replace(p)
 
 
 def main(argv=None, tty=None) -> int:
@@ -584,16 +593,20 @@ def main(argv=None, tty=None) -> int:
             raise SystemExit('growth approve answer <Q-id> "the answer"')
         if re.fullmatch(r"J\d+", rest[0], re.I):               # a question filed in the journal (growth journal ask)
             return _answer_journal(project, docs, rest[0].upper(), " ".join(rest[1:]), tty)
-        f = docs / "tasks.json"
-        db = _json(f)
+        db = records.tasks_doc(project)
         q = next((x for x in db.get("questions", []) if x.get("id", "").lower() == rest[0].lower()), None)
         if q is None:
             raise SystemExit(f"no question {rest[0]}")
         new = {**q, "answer": " ".join(rest[1:])}
         e = approve(docs, "answer", q["id"], answer_content(new), f"answer to {q['id']}: {new['answer'][:80]}",
                     f"Question: {q['question']}\nAnswer:   {new['answer']}", tty)
-        q.update(answer=new["answer"], answered=dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"), approval=e["id"])
-        _save_json(f, db)
+        mark = dict(answer=new["answer"], answered=dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"), approval=e["id"])
+
+        def put_answer(cur):         # the owner's yes took a while: apply it to the list as it is now, never to an old copy
+            for x in cur.get("questions", []):
+                if x.get("id") == q["id"]:
+                    x.update(mark)
+        records.tasks_update(project, put_answer)
     elif what == "review":
         if not rest:
             raise SystemExit("growth approve review research/<key>-review-<date>.md")
