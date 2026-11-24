@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import BOOK, CFG, DOCS, PROJECT, REGISTRY  # noqa: E402
+import records  # noqa: E402  (the one access layer for the task list)
 
 def agent_rules():
     ci = CFG.get("commit_identity") or {}
@@ -88,7 +89,7 @@ def main():
     ap.add_argument("--out")
     a = ap.parse_args()
 
-    tasks = json.loads((DOCS / "tasks.json").read_text())
+    tasks = records.tasks_doc(PROJECT)
     task = next((t for t in tasks["tasks"] if t["id"] == a.task), None)
     if not task:
         sys.exit(f"no task {a.task} in docs/tasks.json")

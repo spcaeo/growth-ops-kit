@@ -22,8 +22,12 @@ def commit_identity(ctx):
 def project_start(ctx, repo):
     """The date the project began: the I-1 row of the steps log, else growth.json nextjs.start_date, else the date of the
     project folder's first commit, else the site repo's first commit. Raises Skip when none can be found."""
-    log = "".join(ctx.need_file(ctx.need_docs() / n, "growth tasks / docs/steps-log.md (the project's start date is read from them)").read_text()
-                  for n in ("steps-log.md", "tasks.json"))
+    import records
+    fix = "growth tasks / docs/steps-log.md (the project's start date is read from them)"
+    log = ctx.need_file(ctx.need_docs() / "steps-log.md", fix).read_text()
+    docs = ctx.need_docs()
+    ctx.need_file(records.tasks_path(docs.parent, docs), fix)
+    log += records.tasks_text(docs.parent)
     m = re.search(r"\| I-1 \| (\d{4}-\d\d-\d\d)", log)
     if m:
         return m.group(1), log

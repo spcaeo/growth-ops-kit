@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, DOCS, PROJECT, TZ  # noqa: E402
+import records  # noqa: E402  (the one access layer for the journal)
 
 OUT = PROJECT / "journal" / "owner-journal.html"
 
@@ -44,8 +45,7 @@ def steps():
 def entries():
     """Journal entries with answers and status changes folded in (the file is append-only)."""
     out = {}
-    f = PROJECT / "journal" / "entries.jsonl"
-    for l in (f.read_text().splitlines() if f.is_file() else []):         # a new project has no journal yet
+    for l in (records.journal_lines(PROJECT) if records.journal_present(PROJECT) else []):    # a new project has no journal yet
         if not l.strip():
             continue
         e = json.loads(l)

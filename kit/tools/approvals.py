@@ -38,6 +38,9 @@ import secrets
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import records  # noqa: E402  (the one access layer for tasks, journal and verdicts)
+
 LOG_NAME = "approvals.jsonl"
 EXCUSE_MAX_DAYS = 30
 # Never excused by a growth.json exception: evidence (ev.*) and process (proc.*) checks, and any line that says the check
@@ -270,7 +273,7 @@ def excuses_blocked_skip(project, cfg: dict, cid: str, today: dt.date | None = N
     def done(tid):
         try:
             return any(t.get("id") == tid and t.get("status") == "done"
-                       for t in json.loads((Path(project) / "docs" / "tasks.json").read_text())["tasks"])
+                       for t in records.tasks_doc(project)["tasks"])
         except (OSError, ValueError, KeyError):
             return False
     state, _e, why = exception_state(Path(project) / "docs", cfg, cid, today or dt.date.today(), done)
@@ -303,7 +306,7 @@ def journal_entries(project) -> dict:
     """The journal's entries folded by id (the base line of each, not its later updates)."""
     out = {}
     try:
-        for ln in (Path(project) / "journal" / "entries.jsonl").read_text().splitlines():
+        for ln in records.journal_lines(project):
             if ln.strip():
                 e = json.loads(ln)
                 if "of" not in e and e.get("id"):
@@ -476,12 +479,6 @@ def _json(p: Path):
     return json.loads(p.read_text())
 
 
-def _save_json(p: Path, data, indent=2):
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=indent, ensure_ascii=False) + "\n")
-    tmp.replace(p)
-
-
 def main(argv=None, tty=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
@@ -584,16 +581,20 @@ def main(argv=None, tty=None) -> int:
             raise SystemExit('growth approve answer <Q-id> "the answer"')
         if re.fullmatch(r"J\d+", rest[0], re.I):               # a question filed in the journal (growth journal ask)
             return _answer_journal(project, docs, rest[0].upper(), " ".join(rest[1:]), tty)
-        f = docs / "tasks.json"
-        db = _json(f)
+        db = records.tasks_doc(project)
         q = next((x for x in db.get("questions", []) if x.get("id", "").lower() == rest[0].lower()), None)
         if q is None:
             raise SystemExit(f"no question {rest[0]}")
         new = {**q, "answer": " ".join(rest[1:])}
         e = approve(docs, "answer", q["id"], answer_content(new), f"answer to {q['id']}: {new['answer'][:80]}",
                     f"Question: {q['question']}\nAnswer:   {new['answer']}", tty)
-        q.update(answer=new["answer"], answered=dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"), approval=e["id"])
-        _save_json(f, db)
+        mark = dict(answer=new["answer"], answered=dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"), approval=e["id"])
+
+        def put_answer(cur):         # the owner's yes took a while: apply it to the list as it is now, never to an old copy
+            for x in cur.get("questions", []):
+                if x.get("id") == q["id"]:
+                    x.update(mark)
+        records.tasks_update(project, put_answer)
     elif what == "review":
         if not rest:
             raise SystemExit("growth approve review research/<key>-review-<date>.md")
