@@ -21,6 +21,16 @@ chapter `05-board.md`). No rule of the page rulebook changes; a page is READY un
 - **Builder lanes** (`growth lane open / check / close`): each builder's own copy of the site, port and preview
   server, outside the project folder (`lanes_dir`, at most `lane_cap`).
 - **The machine runner** (`growth run --jobs N`): machine jobs side by side under the browser pool and a load guard.
+- **International sites** (book chapter `06-international.md`, rule 162 of the page rulebook, rulebook version 3.0.0):
+  `growth.json` `market.locales` lists every language and country (`en-US`, `en-CA`, `fr-CA`, `es-US`), each with its folder
+  and Google settings; a project without it is one locale built from the old market fields and nothing changes for it. One
+  helper (`locales.py`) reads and checks the list. `growth wizard answer market '{"locales": [...]}'` records both forms and
+  changes the markets at any time; `growth doctor` (A14) lists every locale. New gate checks `intl.lang`, `intl.copies`,
+  `intl.hreflang`, `intl.canonical`, `intl.no-auto-redirect`, `intl.sitemap` (only with two or more locales): `lang`, a
+  copy for each locale (a missing one is its own "missing translation" finding), hreflang with a self-reference, absolute
+  addresses, tags both ways and `x-default`, a canonical per copy, no redirect by the visitor's language (a suggestion
+  banner is fine), sitemap alternates. New job kinds `localize` (one per extra locale) and `intl-check` on the work board.
+  `growth research ai|paa`, `growth journal run` and `growth pace google` take `--locale`; all locales share the one Google door.
 - Fixes found on the way: the approvals log appends under one lock (8 parallel approvals keep the chain and the ids);
   two writers of the task list no longer bypass the lock; the journal renders outside its write lock; two f-strings
   that broke Python 3.10 and 3.11 (with a test that compiles the kit on both).

@@ -18,7 +18,7 @@ is a plain file (no server):
   growth journal answer J0007 "The owner's answer"   # the owner only: goes through growth approve answer (their own terminal)
   growth journal done J0007 "what was done"
   growth journal close J0007 --output "commit abc1234, the fix and its proof"   # closes a finding; the output is required
-  growth journal run  --page /x --kind ai-answer --engine chatgpt --market US --query "..." \\
+  growth journal run  --page /x --kind ai-answer --engine chatgpt --market US [--locale fr-CA] --query "..." \\
                                 --response-file answer.txt [--capture-method browser] [--title "..."] [--named yes|no] [--recheck ...]
   growth journal action --page /x --due 2026-11-30 --tag listings "What the owner must do" [--why "..."]
   growth journal actions              # the owner's own to-do list (also journal/OWNER-ACTIONS.md)
@@ -257,6 +257,15 @@ def cmd_run(a):
     sha = hashlib.sha256(raw).hexdigest()
     method = a.capture_method or ("response-file" if a.response_file else "typed-inline")
     market = a.market or CFG.get("market", {}).get("primary_country", "")
+    loc = None
+    import locales
+    try:                                           # --locale (default the primary, when the project has several): the market the question was asked in
+        locs = locales.from_cfg(CFG)
+        if getattr(a, "locale", None) or len(locs) > 1:
+            loc = locales.find(locs, getattr(a, "locale", None))
+            market = a.market or loc["country"]
+    except locales.LocaleError as e:
+        sys.exit(f"refused: {e}")
     pages = norm_pages(a.page)
     tags = (a.tag or []) + [a.kind, a.engine]
     fp = {"tags": tags, "pages": pages}
@@ -267,14 +276,15 @@ def cmd_run(a):
         folder.mkdir(parents=True, exist_ok=True)
         run = {"id": rid, "at": now(), "kind": a.kind, "engine": a.engine, "market": market, "settings": a.settings or "",
                "pages": pages, "query": a.query, "named": a.named or "", "response": resp,
-               "response_sha256": sha, "capture_method": method}
+               "response_sha256": sha, "capture_method": method, **({"locale": loc["locale"]} if loc else {})}
         rf = folder / f"{rid}-{a.engine}-{slug(pages[0])}.json"
         atomic.write_text(rf, json.dumps(run, ensure_ascii=False, indent=1) + "\n")
         made["rf"] = rf
         e = {"id": rid, "at": run["at"], "kind": "run", "pages": run["pages"], "tags": tags,
              "title": a.title or f"{a.engine} ({market}): {a.query[:70]}", "text": a.summary or "",
              "source": str(rf.relative_to(PROJECT)), "status": "open" if a.recheck else "done", "recheck_on": a.recheck or "",
-             "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method}
+             "by": "lead", "named": a.named or "", "market": market, "response_sha256": sha, "capture_method": method,
+             **({"locale": loc["locale"]} if loc else {})}
         if "fp" in fp:
             e["fp"] = fp["fp"]
         return e
@@ -422,6 +432,7 @@ def main():
     s.add_argument("--page", action="append"); s.add_argument("--tag", action="append")
     s.add_argument("--kind", default="ai-answer"); s.add_argument("--engine", required=True)
     s.add_argument("--market"); s.add_argument("--settings"); s.add_argument("--query", required=True)
+    s.add_argument("--locale", help="the locale the question was asked in (growth.json market.locales; default the primary); --market defaults to its country")
     s.add_argument("--response-file"); s.add_argument("--response"); s.add_argument("--title")
     s.add_argument("--url", default=""); s.add_argument("--summary"); s.add_argument("--named"); s.add_argument("--recheck")
     s.add_argument("--capture-method", help="how the answer was captured: browser, api, copied, ... (default: response-file or typed-inline)")

@@ -360,13 +360,22 @@ row("A13 Agent harness complete", None if _todo else True,
 
 # A14 the research browser is connected and Google is set to the target country (a FAIL, not a TODO, when jobs need web research)
 import research_gate as _gate
+import locales as _locales
+try:
+    _locs = _locales.from_cfg(CFG)
+except _locales.LocaleError:
+    _locs = []        # a bad list is reported by the gate's problems() below (when the gate is on) and by growth gate
+_loc_note = f"; {len(_locs)} locales: " + _locales.describe(_locs) if len(_locs) > 1 else ""
+_loc_bad = _locales.problems(CFG)
 if not _gate.required(CFG):
-    row("A14 Research browser connected, market region set", True, "not required (growth.json research_browser.required is not true)")
+    row("A14 Research browser connected, market region set", False if _loc_bad else True,
+        ("; ".join(_loc_bad)) if _loc_bad else "not required (growth.json research_browser.required is not true)" + _loc_note,
+        "fix market.locales in growth.json (growth wizard answer market '{\"locales\": [...]}')")
 else:
     _gp = _gate.problems(PROJECT, CFG)
     _m = CFG.get("market") or {}
     row("A14 Research browser connected, market region set", False if _gp else True,
-        ("; ".join(_gp)) if _gp else f"research browser connected, Google region {_gate.country_name(_m)} confirmed, parameters {_m.get('google_params')}",
+        ("; ".join(_gp)) if _gp else f"research browser connected, Google region {_gate.country_name(_m)} confirmed, parameters {_m.get('google_params')}" + _loc_note,
         "growth wizard (it walks you through both: connect the browser with /chrome, set Google's Results region, confirm)")
 
 # A15 work is tracked: files changed in the project or the site repo with no open task is work outside the workflow (#24)

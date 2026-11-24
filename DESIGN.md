@@ -30,6 +30,8 @@ growth-ops-kit/
     02-owner-rules.md       default working rules for the agent (a project may add its own)
     03-page-rulebook.md     every rule a page must pass, each tagged [code: check-id] or [judgment]
     04-lanes-and-releases.md
+    05-board.md             kit 3.0: the database, the work board, jobs, resources, lanes, the machine runner
+    06-international.md     kit 3.0: a site in several languages and countries (locales, rule 162, localize jobs)
     playbooks/*.md          one per job: new money page, change a page, new post, release, lost pages, CRO audit ...
     prompts/*.md            brief templates for helper agents
     lessons.md              what went wrong and what it cost, from real projects (no client names)

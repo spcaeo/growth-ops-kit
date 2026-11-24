@@ -5,6 +5,10 @@
   growth pace google --max-wait 30    give up (exit 3) when the turn is more than 30 s away; 0 = ask once, never wait
   growth pace google --robot          Google showed its robot check: no agent gets a turn for 10 minutes
   growth pace google --status         when the next turn may be taken
+  growth pace google --locale fr-CA   the same one turn; also prints that locale's Google parameters and files the locale on the turn
+
+Every locale of a project (growth.json market.locales) searches through this ONE door: the pacer does not know markets, so
+three locales never get three times the turns.
 
 Rule (OWNER-RULES "Slow Google searches"): at most one Google search every 20 to 30 seconds, for ALL agents together;
 when Google's robot check appears, pause 10 minutes. After each turn the next one is set a random 20 to 30 s later, and a
@@ -38,7 +42,7 @@ def settings(st, name: str) -> dict:
 
 
 def turn(name: str = "google", agent: str | None = None, max_wait: float | None = None, st=None,
-         sleep=time.sleep, clock=time.time):
+         sleep=time.sleep, clock=time.time, locale: str | None = None):
     """Wait for the turn and take it. Returns {"at", "waited_s", "next_at"} or None when the turn is farther away than max_wait."""
     st = st or store.open()
     board_schema.ready(st)
@@ -53,7 +57,7 @@ def turn(name: str = "google", agent: str | None = None, max_wait: float | None 
                 nxt = now + random.uniform(cfg["min_s"], cfg["max_s"])
                 db.execute("INSERT INTO pacers(name, last_turn, next_at, paused_until) VALUES(?, ?, ?, ?) ON CONFLICT(name) DO UPDATE "
                            "SET last_turn=excluded.last_turn, next_at=excluded.next_at", (name, now, nxt, row["paused_until"] if row else None))
-                st.event("pace-turn", name, {"t": now, "next_at": nxt, "waited_s": round(now - started, 3)}, who=agent)
+                st.event("pace-turn", name, {"t": now, "next_at": nxt, "waited_s": round(now - started, 3), **({"locale": locale} if locale else {})}, who=agent)
                 return {"at": now, "waited_s": now - started, "next_at": nxt}
         wait = ready_at - now
         if max_wait is not None and (now - started) + wait > max_wait:
@@ -92,6 +96,7 @@ def main(argv=None) -> int:
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--max-wait", type=float, default=None, help="seconds; give up (exit 3) when the turn is farther away")
     ap.add_argument("--agent", default=None)
+    ap.add_argument("--locale", default=None, help="the project's locale this search is for (growth.json market.locales); printed with its Google parameters")
     a = ap.parse_args(argv)
     agent = a.agent or store.actor()
     try:
@@ -103,12 +108,20 @@ def main(argv=None) -> int:
             s = status(a.name)
             print(f"{a.name}: next turn in {s['in_s']:.0f} s" + (" (paused: robot check)" if s["paused"] else ""))
         else:
-            r = turn(a.name, agent, a.max_wait)
+            loc = None
+            if a.locale:
+                import locales
+                try:
+                    loc = locales.find(locales.from_cfg(resources.project_cfg(store.open())), a.locale)
+                except locales.LocaleError as e:
+                    print(f"growth pace: {e}", file=sys.stderr)
+                    return 2
+            r = turn(a.name, agent, a.max_wait, locale=loc["locale"] if loc else None)
             if r is None:
                 s = status(a.name)
                 print(f"{a.name}: the next turn is {s['in_s']:.0f} s away (more than --max-wait)")
                 return 3
-            print(f"{a.name}: your turn (waited {r['waited_s']:.0f} s)")
+            print(f"{a.name}: your turn (waited {r['waited_s']:.0f} s)" + (f"; {loc['locale']}: use {loc['google_params']}" if loc else ""))
     except KeyError as e:
         print(f"growth pace: {e.args[0]}", file=sys.stderr)
         return 2

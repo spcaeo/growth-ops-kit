@@ -27,10 +27,24 @@ import kits  # noqa: E402
 import store  # noqa: E402
 
 
+def _copy_line(j: dict) -> str:
+    """For a localize job: where its copy lives, so the builder never guesses the folder."""
+    try:
+        import locales
+        from boardlib import resources
+        locs = locales.from_cfg(resources.project_cfg(store.open()))
+        loc = locales.find(locs, j["locale"])
+        return f"; write the copy at {locales.path_in(loc, locales.locale_of_path(locs, j['page'])[1])}"
+    except Exception:  # noqa: BLE001  a missing or odd config only loses this hint
+        return ""
+
+
 def describe(j: dict) -> str:
-    lines = [f"job {j['id']}: {j['kind']}" + (f" for {j['page']} ({j['page_type']}, key {j['page_key']})" if j["page"] else " (no page)"),
+    lines = [f"job {j['id']}: {j['kind']}" + (f" {j['locale']}" if j.get("locale") else "") + (f" for {j['page']} ({j['page_type']}, key {j['page_key']})" if j["page"] else " (no page)"),
              f"  kit {j['kit']}, runs {j['way']}, for {j['runner']}",
              f"  what: {kits.jobs().get(j['kind'], {}).get('what', '')}"]
+    if j.get("locale"):
+        lines.append(f"  locale: {j['locale']} (growth.json market.locales)" + _copy_line(j))
     if j["needs_info"]:
         lines.append("  needs (all done): " + ", ".join(f"{n['id']} {n['kind']}" for n in j["needs_info"]))
     res = j["resource"]

@@ -22,6 +22,8 @@ has a free slot; the claim is ONE write transaction, so two claimers never get t
 
 Library use (the machine runner, lanes):
   add_page(path, type, key, cluster=None, task=None, steps=None) -> {"path", "created", "jobs": [ids]}
+      (a project with 2+ locales, growth.json market.locales, also gets one `localize` job per non-primary locale, each carrying its
+       locale and needing the page's READY, and one `intl-check` that needs them all)
   add_job(kind, page=None, needs=(), task=None, step=None, priority=0) -> id
   claim(agent, kit=None, runner=None, lease_s=1800, project=None, kinds=None) -> job dict or None (it takes the job's resource itself: use job["port"] / job["resource_slot"], do not acquire it again)
   beat(job, agent, project=None) -> bool · done(job, agent, proof, project=None) -> dict · fail(job, agent, why, project=None) -> dict
@@ -107,13 +109,24 @@ def pipeline_overrides(st) -> dict:
     return ov
 
 
-def _new_job(db, st, kind, page, needs, task=None, step=None, priority=0, refresh=0, overrides=None) -> int:
+def _new_job(db, st, kind, page, needs, task=None, step=None, priority=0, refresh=0, overrides=None, locale=None) -> int:
     d = kits.job(kind, overrides)
     cur = db.execute(
-        "INSERT INTO jobs(kind, kit, page, way, runner, resource, needs, priority, refresh, task, step, created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-        (kind, d["kit"], page, d["way"], d["runner"], d["resource"], json.dumps(sorted(needs)), priority, refresh, task, step, store.now()))
-    st.event("job-created", str(cur.lastrowid), {"kind": kind, "kit": d["kit"], "page": page, "needs": sorted(needs), "refresh": bool(refresh)})
+        "INSERT INTO jobs(kind, kit, page, way, runner, resource, needs, priority, refresh, task, step, created, locale) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (kind, d["kit"], page, d["way"], d["runner"], d["resource"], json.dumps(sorted(needs)), priority, refresh, task, step, store.now(), locale))
+    st.event("job-created", str(cur.lastrowid), {"kind": kind, "kit": d["kit"], "page": page, "needs": sorted(needs), "refresh": bool(refresh),
+                                                **({"locale": locale} if locale else {})})
     return cur.lastrowid
+
+
+def project_locales(st) -> list:
+    """The project's locales (growth.json market.locales; one locale built from the old market fields when there is no list).
+    BoardError with the plain problem when the list in growth.json is not usable."""
+    import locales
+    try:
+        return locales.from_cfg(resources.project_cfg(st))
+    except locales.LocaleError as e:
+        raise BoardError(str(e))
 
 
 def add_page(path: str, type: str, key: str, cluster: str | None = None, task: str | None = None,
@@ -124,6 +137,7 @@ def add_page(path: str, type: str, key: str, cluster: str | None = None, task: s
     path = paths.normalize(path)
     ov = pipeline_overrides(st)
     line = kits.pipeline(type, ov)                               # raises a plain KeyError for an unknown type
+    locs = project_locales(st)
     with st.tx() as db:
         old = db.execute("SELECT path FROM pages WHERE path=?", (path,)).fetchone()
         if old:
@@ -139,8 +153,29 @@ def add_page(path: str, type: str, key: str, cluster: str | None = None, task: s
                            (steps or {}).get(step["kind"]), overrides=ov)
             by_kind[step["kind"]] = jid
             ids.append(jid)
+        ids += _locale_jobs(db, st, path, by_kind, locs, ov)
         st.event("page-added", path, {"type": type, "key": key, "cluster": cluster, "jobs": len(ids)})
         return {"path": path, "created": True, "jobs": ids}
+
+
+def _locale_jobs(db, st, path, by_kind, locs, ov) -> list:
+    """A project with two or more locales: one `localize` job per locale that is not the primary (the job carries its locale; it
+    needs the page's primary copy READY, else the first later step the page has), then one `intl-check` that needs them all."""
+    extra = [e for e in locs if not e["primary"]]
+    if not extra:
+        return []
+    drop = set(ov.get("drop") or [])
+    anchor = next((by_kind[k] for k in ("ready", "owner-checkin-2", "release") if k in by_kind), None)
+    made, loc_ids = [], []
+    if "localize" not in drop:
+        for e in extra:
+            jid = _new_job(db, st, "localize", path, [anchor] if anchor else [], overrides=ov, locale=e["locale"])
+            loc_ids.append(jid)
+            made.append(jid)
+    if "intl-check" not in drop:
+        needs = loc_ids or ([anchor] if anchor else [])
+        made.append(_new_job(db, st, "intl-check", path, needs, overrides=ov))
+    return made
 
 
 def add_job(kind: str, page: str | None = None, needs=(), task: str | None = None, step: int | None = None,
@@ -708,10 +743,10 @@ def _run(a) -> int:
         if not p:
             raise BoardError(f"{path} is not on the board")
         print(f"{p['path']}  type {p['type']}  key {p['key']}  cluster {p['cluster'] or '-'}  stage {p['stage']}  holder {p['holder'] or '-'}")
-        _table([(j["id"], j["kind"], j["status"], j["runner"], j["resource"], j["holder"] or "-", ",".join(map(str, j["needs"])) or "-", j["attempts"])
+        _table([(j["id"], j["kind"] + (f" {j['locale']}" if j.get("locale") else ""), j["status"], j["runner"], j["resource"], j["holder"] or "-", ",".join(map(str, j["needs"])) or "-", j["attempts"])
                 for j in jobs_view(page=path, st=st)], ["job", "kind", "status", "runner", "resource", "holder", "needs", "tries"])
     elif cmd == "jobs":
-        _table([(j["id"], j["kind"], j["status"], j["page"] or "-", j["kit"], j["way"], j["runner"], j["resource"], j["holder"] or "-")
+        _table([(j["id"], j["kind"] + (f" {j['locale']}" if j.get("locale") else ""), j["status"], j["page"] or "-", j["kit"], j["way"], j["runner"], j["resource"], j["holder"] or "-")
                 for j in jobs_view(a.kit, a.status, a.page, a.kind, st=st)],
                ["job", "kind", "status", "page", "kit", "way", "runner", "resource", "holder"])
     elif cmd == "times":

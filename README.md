@@ -85,6 +85,22 @@ Then, in your agent (Claude Code), open the project folder and type `/onboard`: 
 (it asks one question at a time, fills `growth.json`, `BRAND.md` and `SETUP.md`, and stops when `growth doctor` says every step
 is OK). After that, pick a job from [book/playbooks/](book/playbooks/README.md).
 
+## A site in several languages or countries
+
+One answer to the market question can list every language and country the site serves (`en-US`, `en-CA`, `fr-CA`, `es-US`),
+each with its own folder (`/`, `/en-ca/`, `/fr-ca/`, `/es-us/`) and its own Google settings:
+
+```
+growth wizard answer market '{"locales": [{"locale": "en-US", "primary": true}, "en-CA", "fr-CA", "es-US"]}'
+```
+
+Run it again with another list to change the markets later (one edit of `growth.json`, nothing else). With two or more
+locales the gate also checks, on every built page, `lang`, a self-referencing hreflang, one hreflang per copy, `x-default`,
+a canonical per copy, no redirect by the visitor's language (a banner that suggests the other language is fine), and the
+sitemap's alternates (rule 162); a copy not written yet is reported as a "missing translation". `growth board add` makes one
+`localize` job per extra locale and an `intl-check`. A site with one locale is unchanged. Chapter:
+[book/06-international.md](book/06-international.md).
+
 ## What you get per stack
 
 Checks that read the live page (the gate's page, SEO, link and speed checks, the page tracker, the link graph, the owner
@@ -115,6 +131,7 @@ growth-ops-kit/
     03-page-rulebook.md every rule a page must pass, tagged [code: ...] or [judgment]
     04-lanes-and-releases.md
     05-board.md
+    06-international.md  a site in several languages and countries (locales, hreflang, localize jobs)
     playbooks/          one file per job
     prompts/            brief templates for helper agents
     lessons.md          what went wrong, what it cost, the guard

@@ -6,8 +6,12 @@ page against it, and the measure step (growth measure) uses its baseline numbers
 
   growth research init <path> --key K                       start a record (empty sections)
   growth research search <path> --key K [--days 28]         fill the search section from the page tracker (window recorded)
-  growth research paa <path> --key K "question" --source <URL or saved file> [--declined "reason"] [--answered-in "words"]
-  growth research ai <path> --key K --engine E --market US --query "..." --summary "..." --source <saved answer file or URL> [--seen-on D]
+  growth research paa <path> --key K "question" --source <URL or saved file> [--declined "reason"] [--answered-in "words"] [--locale fr-CA]
+  growth research ai <path> --key K --engine E --market US --query "..." --summary "..." --source <saved answer file or URL> [--seen-on D] [--locale fr-CA]
+                                                            --locale (a project with market.locales): the market the search was made
+                                                            in, default the primary locale; it is recorded on the row, and --market
+                                                            defaults to that locale's country. Run growth pace google first, always:
+                                                            all locales share the one Google door.
   growth research fact <path> --key K --vendor V --fact "..." --value '$12' --view Monthly --how raw|browser \\
         --source-url URL --quote "the vendor's own words" [--raw-file research/raw/x.txt] [--read-on D] [--shown-as "$12"]
                                                             --how raw needs --raw-file (growth vendor_page saves it): the
@@ -22,8 +26,8 @@ Record layout (every date is YYYY-MM-DD):
   search        {scope: "page", source, window: {from, to}, definition, totals: {clicks, impressions, position},
                  queries: [{query, clicks, impressions, position}]}      the page's own numbers, never the site's
   site_search   the same shape with scope "site": site-wide numbers, kept apart so they are never shown as the page's
-  ai_answers    [{engine, market, query, seen_on, summary}]           what an AI answer said when we looked
-  paa           [{question, status: chosen|declined, reason, answered_in}]   People also ask questions
+  ai_answers    [{engine, market, locale?, query, seen_on, summary}]  what an AI answer said when we looked
+  paa           [{question, status: chosen|declined, reason, answered_in, locale?}]   People also ask questions
   vendor_facts  [{vendor, fact, value, shown_as, view, how_read: raw|browser|summary, source_url, quote, read_on}]
   *_none        a reason for an empty section ("paa_none": "no People also ask box for this search"; "queries_none":
                 "8 impressions, every query anonymised by Search Console")
@@ -366,12 +370,27 @@ def main(argv=None):
     ap.add_argument("--declined", default="")
     ap.add_argument("--answered-in", default="")
     ap.add_argument("--refreeze", action="store_true")
-    for f in ("source", "raw-file", "reason", "engine", "market", "query", "summary", "seen-on", "vendor", "fact", "value", "view", "how", "source-url", "quote", "read-on", "shown-as"):
+    for f in ("source", "raw-file", "reason", "engine", "market", "query", "summary", "seen-on", "vendor", "fact", "value", "view", "how", "source-url", "quote", "read-on", "shown-as", "locale"):
         ap.add_argument("--" + f, default="")
     a = ap.parse_args(argv)
     from config import PROJECT
     with atomic.locked(record_path(PROJECT, a.key)):      # load, change and save of one record under one lock
         return _command(a)
+
+
+def _locale(a, cfg):
+    """The locale a search was made in (--locale, default the primary) when the project has several or one was named; else None
+    (a one-locale project files its rows exactly as before). Prints the Google parameters to use. Exits with a plain reason."""
+    import locales
+    try:
+        locs = locales.from_cfg(cfg)
+        if not a.locale and len(locs) < 2:
+            return None
+        loc = locales.find(locs, a.locale or None)
+    except locales.LocaleError as e:
+        sys.exit(f"refused: {e}")
+    print(f"locale {loc['locale']}: Google parameters {loc['google_params']} (take your turn with growth pace google first)")
+    return loc
 
 
 def _command(a):
@@ -419,14 +438,21 @@ def _command(a):
         why = source_problem(a.source, PROJECT)
         if why:
             sys.exit(f"--source: {why} (where you saw the question: the results page address or a saved capture)")
-        rec["paa"].append({"question": q, "status": "declined" if a.declined else "chosen", "reason": a.declined, "answered_in": a.answered_in,
-                           "source": a.source})
+        row = {"question": q, "status": "declined" if a.declined else "chosen", "reason": a.declined, "answered_in": a.answered_in,
+               "source": a.source}
+        loc = _locale(a, CFG)
+        if loc:
+            row["locale"] = loc["locale"]
+        rec["paa"].append(row)
     elif a.cmd == "ai":
         why = source_problem(a.source, PROJECT) or future(a.seen_on, today)
         if why:
             sys.exit(f"refused: {why} (save the AI's full answer to a file, e.g. with growth journal run, and pass it as --source)")
-        row = {"engine": a.engine, "market": a.market, "query": a.query, "summary": a.summary, "seen_on": a.seen_on or today.isoformat(),
-               "source": a.source}
+        loc = _locale(a, CFG)
+        row = {"engine": a.engine, "market": a.market or (loc["country"] if loc else ""), "query": a.query, "summary": a.summary,
+               "seen_on": a.seen_on or today.isoformat(), "source": a.source}
+        if loc:
+            row["locale"] = loc["locale"]
         if (PROJECT / a.source).is_file():
             import hashlib
             row["source_sha256"] = hashlib.sha256((PROJECT / a.source).read_bytes()).hexdigest()

@@ -1,7 +1,7 @@
 """The work board's tables (kit 3.0, micro kit core), registered once with store.ensure("core.board", ...).
 
   pages   one row per page on the board: path, key, type, cluster, stage, holder, updated
-  jobs    one row per job (see board.py for the life of a job)
+  jobs    one row per job (see board.py for the life of a job); locale is set on a localize job (one per extra locale)
   resources, leases   what the resources are and who holds which slot (resources.py)
   pacers  the next time a paced door (google) may take a turn (pace.py)
 
@@ -10,7 +10,7 @@ The DDL holds no semicolon inside a statement: store.ensure splits on them.
 from __future__ import annotations
 
 NAME = "core.board"
-VERSION = 1
+VERSION = 2
 
 DDL = """
 CREATE TABLE IF NOT EXISTS pages (
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','claimed','done','failed','blocked','cancelled')),
     holder TEXT, lease_until TEXT, lease_s INTEGER, attempts INTEGER NOT NULL DEFAULT 0, slot INTEGER,
     priority INTEGER NOT NULL DEFAULT 0, refresh INTEGER NOT NULL DEFAULT 0, proof TEXT, why TEXT, task TEXT, step INTEGER,
-    created TEXT NOT NULL, started TEXT, finished TEXT);
+    created TEXT NOT NULL, started TEXT, finished TEXT, locale TEXT);
 CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(status, kit);
 CREATE INDEX IF NOT EXISTS jobs_page ON jobs(page);
 CREATE TABLE IF NOT EXISTS resources (name TEXT PRIMARY KEY, kind TEXT NOT NULL, capacity INTEGER, info TEXT);
@@ -34,9 +34,15 @@ CREATE TABLE IF NOT EXISTS pacers (name TEXT PRIMARY KEY, last_turn REAL, next_a
 """
 
 
+def migrate(db, old: int) -> None:
+    """Version 2 added jobs.locale (the locale a localize job writes); an older database gets the column."""
+    if "locale" not in {r[1] for r in db.execute("PRAGMA table_info(jobs)")}:
+        db.execute("ALTER TABLE jobs ADD COLUMN locale TEXT")
+
+
 def ready(st) -> None:
     """Make sure the board's tables exist in this store (once per store object)."""
     if getattr(st, "_board_ready", False):
         return
-    st.ensure(NAME, VERSION, DDL)
+    st.ensure(NAME, VERSION, DDL, migrate)
     st._board_ready = True

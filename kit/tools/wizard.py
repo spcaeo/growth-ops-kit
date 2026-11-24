@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import detect  # noqa: E402
 import harness  # noqa: E402
+import locales  # noqa: E402
 import research_gate as gate  # noqa: E402
 import setup_task  # noqa: E402
 import wizard_state as ws  # noqa: E402
@@ -39,7 +40,7 @@ KIT_DIR = Path(__file__).resolve().parent.parent
 WAIT = 3
 ORDER = ["market", "site_repo", "analytics", "live_rule", "approver", "harness", "detect", "browser", "region"]
 QUESTIONS = {
-    "market": 'Which country and language is the target market? answer: {"country": "US", "language": "en"} (asked first; every search, AI answer and keyword uses it)',
+    "market": 'Which country and language is the target market? answer: {"country": "US", "language": "en"} (asked first; every search, AI answer and keyword uses it). A site in several languages or countries: {"locales": [{"locale": "en-US", "primary": true}, {"locale": "en-CA"}, {"locale": "fr-CA"}, {"locale": "es-US"}]} (the folders default to /en-ca/, /fr-ca/, /es-us/); answer again any time to change it',
     "site_repo": 'Where is the site repo (path, or a git address to clone), or none? answer: {"path": "~/code/site"} or {"path": "", "clone": "<git address>"} or "none"',
     "analytics": 'Analytics / Search Console: the keys file path (outside git, mode 600; the one-time code goes in it, never in chat), or "later". answer: {"keys_file": "~/.config/growth/site.env"} or "later"',
     "live_rule": 'The live-site rule and the preview address. answer: {"rule": "no-crawl", "preview_url": "http://127.0.0.1:4321"} (no-crawl = never read the live site page by page)',
@@ -98,21 +99,44 @@ class Session:
 # ---- the steps -------------------------------------------------------------------------------------------------------
 
 def step_market(s: Session) -> str:
+    """The market answer is the old object ({"country": "US", "language": "en"}) or {"locales": [...]} (or the list itself).
+    Both forms write the old single-market fields (the primary locale's values); the second also writes `market.locales`."""
     v, src = s.answer("market")
+    if isinstance(v, list):
+        v = {"locales": v}
     if isinstance(v, str):
         v = {"country": v}
-    code = str(v.get("country") or v.get("primary_country") or "").upper()
-    if not code or len(code) != 2:
-        raise SystemExit('market: give the two-letter country code, e.g. {"country": "US", "language": "en"}')
-    lang = (v.get("language") or gate.COUNTRIES.get(code, ("", "en"))[1]).lower()
     cfg = cfg_of(s.project)
     m = cfg.setdefault("market", {})
-    m.update({"primary_country": code, "country_name": v.get("country_name") or gate.COUNTRIES.get(code, (code, ""))[0],
-              "language": f"{lang}-{code}", "google_params": gate.google_params(code, lang)})
+    if v.get("locales"):
+        try:
+            locs = locales.normalize(v["locales"])
+            bad = locales.validate(locs)
+            if bad:
+                raise locales.LocaleError("; ".join(bad))
+        except locales.LocaleError as e:
+            raise SystemExit(f"market: {e}")
+        p = locales.primary(locs)
+        m.update(locales.market_fields(locs))
+        m.update({"country_name": gate.COUNTRIES.get(p["country"], (p["country"], ""))[0], "locales": locales.stored(locs)})
+        answer = {"locales": locales.stored(locs)}
+        code = p["country"]
+    else:
+        code = str(v.get("country") or v.get("primary_country") or "").upper()
+        if not code or len(code) != 2:
+            raise SystemExit('market: give the two-letter country code, e.g. {"country": "US", "language": "en"}, or {"locales": [{"locale": "en-US", "primary": true}, ...]}')
+        lang = (v.get("language") or gate.COUNTRIES.get(code, ("", "en"))[1]).lower()
+        m.pop("locales", None)                           # an answer in the old form makes the market one locale again
+        m.update({"primary_country": code, "country_name": v.get("country_name") or gate.COUNTRIES.get(code, (code, ""))[0],
+                  "language": f"{lang}-{code}", "google_params": gate.google_params(code, lang)})
+        answer = {"country": code, "language": lang}
+        locs = locales.from_market(m)
     save_cfg(s.project, cfg)
     test = {"command": "growth.json market.google_params", "result": m["google_params"]}
-    ws.record(s.project, "market", "done", answer={"country": code, "language": lang}, source=src, test=test)
-    return f"{m['country_name']}, {lang}; Google parameters {m['google_params']}"
+    ws.record(s.project, "market", "done", answer=answer, source=src, test=test)
+    if len(locs) > 1:
+        return f"{m['country_name']}, {len(locs)} locales: {locales.describe(locs)}"
+    return f"{m['country_name']}, {locs[0]['language']}; Google parameters {m['google_params']}"
 
 
 def step_site_repo(s: Session) -> str:
@@ -387,6 +411,12 @@ def write_setup_md(project: Path) -> None:
     m = cfg.get("market") or {}
     b, r = st.get("browser") or {}, st.get("region") or {}
     rows = [f"**Target market:** {gate.country_name(m) or 'not set'}, {m.get('language', '')}; Google parameters `{m.get('google_params', '')}`"]
+    try:
+        _locs = locales.from_cfg(cfg)
+    except locales.LocaleError:
+        _locs = []
+    if len(_locs) > 1:
+        rows.append("**Locales:** " + "; ".join(f"{e['locale']}{' (primary)' if e['primary'] else ''} at `{e['prefix']}`, Google `{e['google_params']}`" for e in _locs))
     if b.get("status") == "done":
         rows.append(f"**Research browser:** {b['answer'].get('name')} (Claude in Chrome, \"By default: on\"), confirmed {b['date'][:10]}")
     else:
@@ -512,6 +542,8 @@ def cmd_check(project: Path) -> int:
             m = cfg.get("market") or {}
             ok = f"gl={str(m.get('primary_country', '')).lower()}" in m.get("google_params", "") and "pws=0" in m.get("google_params", "")
             result = ("OK", m.get("google_params", "")) if ok else ("CHANGED", f"google_params \"{m.get('google_params')}\" no longer fits the market")
+            if ok and locales.problems(cfg):
+                result = ("CHANGED", locales.problems(cfg)[0])
         else:
             result = ("OK", "recorded")
         if result[0] != "OK":
@@ -613,6 +645,13 @@ def main(argv=None) -> int:
         data = json.loads(path.read_text()) if path.is_file() else {}
         data[a.what[0]] = parse_value(" ".join(a.what[1:]))
         path.write_text(json.dumps(data, indent=2) + "\n")
+        if a.what[0] == "market" and ws.get(project, "market").get("status") in ws.CLOSED:
+            # the market is already set: this is a change (a country or language added or dropped), so apply it now
+            msg = step_market(Session(project, {"market": data["market"]}))
+            say(f"market changed: {msg}")
+            write_setup_md(project)
+            run_doctor(project)
+            return 0
         say(f"recorded the answer for {a.what[0]} (setup-answers.json); run growth wizard to use it")
         return 0
     if sub == "confirm":

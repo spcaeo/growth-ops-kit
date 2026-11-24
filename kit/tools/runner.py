@@ -15,7 +15,7 @@ The command for each job kind comes from growth.json "machine_jobs", a map kind 
   {"shots": "{venv_python} tools/page_evidence.py {path} --key {key} --url {preview} --commit {commit} --journal"}
 placeholders: {path} {key} {type} {cluster} {url} {preview} {repo} {commit} {growth} {venv_python} {project}
 ({url}: the page on the preview address, {preview}: the preview address itself). The command runs in the project folder.
-The kit knows its own kinds from kits.json (ready, link-graph, inventory, preflight, snapshot); a kind with no command fails with
+The kit knows its own kinds from kits.json (ready, link-graph, inventory, preflight, snapshot, intl-check); a kind with no command fails with
 a plain message.
 
 growth.json keys read: machine_jobs, preview_url, preview_repo, site_repo, trailing_slash, runner_max_load (CPU count x 2),
@@ -39,12 +39,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config  # noqa: E402
 
 KIT_ROOT = Path(__file__).resolve().parent.parent.parent
+INTL_CHECKS = ("intl.lang", "intl.copies", "intl.hreflang", "intl.canonical", "intl.no-auto-redirect", "intl.sitemap")   # rule 162 (gatelib/c_intl.py)
 DEFAULTS = {
     "ready": "{growth} ready {path} --type {type} --key {key}",
     "link-graph": "{growth} link_graph crawl --base {preview}",
     "inventory": "{growth} inventory --base {preview}",
     "preflight": "{growth} preflight {path} --type {type} --key {key}",
     "snapshot": "{growth} page_snapshot {path}",
+    "intl-check": "{growth} gate page {path} --url {url} --type {type} --key {key} --only " + ",".join(INTL_CHECKS),
 }
 FIELDS = ("path", "key", "type", "cluster", "url", "preview", "repo", "commit", "growth", "venv_python", "project")
 NEEDS_PREVIEW = ("url", "preview")

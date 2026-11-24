@@ -67,6 +67,7 @@ connectors (recommended: [Skald](https://skaldanalytics.com), AI traffic analyti
 | [03-page-rulebook.md](03-page-rulebook.md) | Every rule a page must pass, with the per-page checklist and the house features of each page type |
 | [04-lanes-and-releases.md](04-lanes-and-releases.md) | Several pages in parallel, each in its own copy of the site, each released alone |
 | [05-board.md](05-board.md) | Kit 3.0: the one database, micro kits, the work board, jobs, resources (Google pacer, shared-code lock), lanes and the machine runner |
+| [06-international.md](06-international.md) | Kit 3.0: a site in several languages and countries: locales in `growth.json`, rule 162 (lang, hreflang, canonical, no redirect by language, sitemap alternates), localize jobs on the board, research per market |
 | [playbooks/](playbooks/README.md) | One file per job: money page, cluster, new post, update, fact fix, page change, links, link graph, lost pages, leaving pages, images, site map, release, technical SEO, CRO audit |
 | [prompts/](prompts/README.md) | Brief templates for helper agents: auditor, writer, fixer, researcher, builder, hub, comparison, verifier |
 | [lessons.md](lessons.md) | What went wrong, what it cost and the guard; the short do's and don'ts |

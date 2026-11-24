@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.8.5
-updated: 2026-11-22
+version: 3.0.0
+updated: 2026-11-24
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.8.5 (generic edition) · 23 Nov 2026.**
+**Version 3.0.0 (generic edition) · 24 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -75,6 +75,7 @@ growth gate page <path> --url <local URL> --repo . --type <type>   # every rule 
 - [ ] Both pass. If one fails, say so; do not call the work done (rule 105).
 - [ ] Look at the production build in a browser at 360, 390, 820, 1280 and 1920 wide; click the logo from a scrolled page and land at the top (rules 106, 107).
 - [ ] Check the share preview and the search snippet (rule 108).
+- [ ] A site in several languages or countries: every copy exists, each page has its own `lang` and canonical, hreflang points both ways with an x-default, no redirect by language (rule 162).
 - [ ] Speed scores did not drop for a layout or script change (rule 101).
 
 **6. Publish**
@@ -260,7 +261,7 @@ and box (149).
 91. **A link to another site is `noopener`; add `nofollow` or `sponsored` on any link you do not vouch for or that is paid.** Follow only official sources and real certificates. [code: seo.external-links]
 92. **No `<a>` without an `href`, and no placeholder `href` such as `about:blank`. No `<img>` without `src`.** A crawler resolves them against the page and asks for addresses that do not exist (one site got hundreds of such requests). [code: seo.placeholder-links]
 93. **One spelling for the whole site.** The project picks one (for example US English: "color", "optimize"; Canadian: "colour", "optimize"; British: "colour", "optimise") in `growth.json` `spelling`: `en-US`, `en-CA` or `en-GB`, or a locale per path (`{"/": "en-CA", "/en-us/": "en-US"}`), or `html_lang` to read each page's own `<html lang>`. Words that are real in the other locales (check, meter, program) are never flagged. Keep it in titles, descriptions, alt text and body. A real product name goes on the reviewed allowlist (`spelling_allow`, or the file named in `spelling_allow_file`) only after you read it in place; never add a misspelling to pass a check. [code: words.us-spelling]
-94. **If a language or region is added later, every locale copy needs reciprocal hreflang, its own canonical, and the right `lang`.** A one-language site needs none. [code: seo.hreflang]
+94. **If a language or region is added later, every locale copy needs reciprocal hreflang, its own canonical, and the right `lang`.** A one-language site needs none. A site with two or more locales in `growth.json` also runs rule 162. [code: seo.hreflang]
 
 ### G. Structured data
 
@@ -358,6 +359,7 @@ says yes; until then the page simply goes without it.
 159. **Every product screenshot on a page has its capture date in the repo** (in its file name or the image map), **and when the product changes, its pictures change in the same round.** [code: img.capture-date]
 160. **Click every button, tab, slider and toggle on the page in a real browser before you show it.** A control that does nothing on click is a broken page. [judgment: proxy ev.click-test]
 161. **No rule is dropped because it is "not in our notes".** A rule is dropped only for a fit reason: it is tied to a tool, editor or server the project does not run, to another business's facts, brand or vendor, or to a kind of page the project does not have (say which). A feature the reader sees is never dropped for having been absent; it is adapted. Every drop is a row in the project's own "Dropped rules" table (see the end of this file) with its fit reason. [code: proc.dropped-reasons]
+162. **A site in several languages or countries tells Google which copy is for whom, and never moves a visitor by language on its own.** Applies when `growth.json` `market.locales` lists two or more locales (en-US, en-CA, fr-CA, es-US ...; see [06-international.md](06-international.md)); a one-locale site runs none of it. Each locale has its own folder (the primary at `/`, the others at `/en-ca/`, `/fr-ca/` ...), set in `growth.json`, and each copy is its own page. On every built page: `<html lang>` is the page's locale (`lang`); every other locale's copy of the page exists, and a copy not written yet is a "missing translation" finding of its own, a WARN by default (`market.missing_copy` makes it a FAIL), never mistaken for a wrong tag (`copies`); the page lists itself in hreflang, has one absolute hreflang for every copy that exists, each pointing at the same page in that locale's folder, each copy links back with a tag of its own, and `x-default` is the primary locale's address (`hreflang`, Google's "Tell Google about localized versions of your page"); the canonical is the page itself, never another language's copy (`canonical`); no script that reads the browser's language and then changes the address, no meta refresh, no server redirect by `Accept-Language`: a banner that suggests the other language is allowed (`no-auto-redirect`, Google's "Managing multi-regional and multilingual sites"); and when the build has a sitemap, the page's entry lists an `xhtml:link` alternate for itself and each copy (`sitemap`). Why: a copy Google cannot connect to its siblings is dropped as a duplicate, and an automatic redirect by language hides every other version from a crawler that sends no language. [code: intl.lang, intl.copies, intl.hreflang, intl.canonical, intl.no-auto-redirect, intl.sitemap]
 
 ## Mistakes already caught, and the guard
 
@@ -405,6 +407,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-24 | 3.0.0 | New rule 162: international sites. A project with two or more locales (`market.locales`) gets `intl.lang`, `intl.copies`, `intl.hreflang`, `intl.canonical`, `intl.no-auto-redirect` and `intl.sitemap`: lang, a copy for every locale (a missing translation is its own finding), hreflang with a self-reference, absolute addresses, tags both ways and x-default, a canonical per copy, no redirect by language, sitemap alternates. A one-locale site is unchanged. |
 | 2026-11-23 | 2.8.5 | Rule 30 compares the card form of folds on any surface; rule 11 catches editor notes; rule 28 adds named phrases (`words.named-repeats`); rule 158a adds text past its box, content under the sticky header, a clipped breadcrumb at 390 and a lone pill; `growth ready` refuses a worktree with uncommitted changes. |
 | 2026-11-23 | 2.8.4 | Rule 157a: a page's folds must not copy another page of the site word for word (`words.own-copy`, from the built output). |
 | 2026-11-23 | 2.8.3 | Rule 28's repeat check skips Key takeaways, the contents list and FAQ answers (each restates the page by design); rule 90 skips a language switch to the page's own copy. |

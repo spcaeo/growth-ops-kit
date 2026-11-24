@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 
+import locales
 import wizard_state
 
 # code -> (name Google shows, default language)
@@ -34,7 +35,7 @@ def country_name(market: dict) -> str:
 
 
 def google_params(code: str, lang: str) -> str:
-    return f"gl={code.lower()}&hl={(lang or 'en').split('-')[0].lower()}&pws=0"
+    return locales.google_params(code, lang)
 
 
 def region_matches(seen, market: dict) -> bool:
@@ -104,6 +105,7 @@ def problems(project, cfg: dict) -> list[str]:
         params = market.get("google_params", "")
         if "pws=0" not in params or f"gl={str(market['primary_country']).lower()}" not in params:
             out.append(f"market.google_params must carry gl={str(market['primary_country']).lower()} and pws=0 (now \"{params}\")")
+        out += locales.problems(cfg)                         # every locale: its tag, folder, and its own gl= and pws=0
     return out
 
 

@@ -28,6 +28,20 @@ not able to do many things at a time ... something very central ... all goes to 
 | Lanes | One private copy of the site per builder (a worktree, its own port, its own preview server), outside the project folder. | `growth lane open / check / close` |
 | The machine runner | Takes the machine jobs (build, link graph, gate, shots, click-tests, READY) and runs several side by side, under the browser pool and a load guard. | `growth run --jobs 3` |
 
+## Sites with more than one locale
+
+A project whose `growth.json` `market.locales` lists two or more locales ([06-international.md](06-international.md)) gets two
+more kinds of job when a page goes on the board, after the page's usual line:
+
+| Job | Who | What |
+| --- | --- | --- |
+| `localize` | a builder agent (way: page) | one for each locale that is not the primary; the job carries its locale and needs the page's primary copy READY; it writes that locale's copy in its own folder |
+| `intl-check` | the machine (way: parallel) | one per page; needs every `localize` job of the page; runs the `intl.*` gate checks (rule 162) |
+
+`growth work next --kinds localize` prints the job's locale and the folder to write to; `growth board show <path>` lists
+each `localize` job with its locale. A project with one locale gets neither job. A project with its own way of making copies
+drops them with `pipeline_overrides.drop`.
+
 ## How each kind of work runs
 
 | Way | Meaning | Examples |
@@ -75,4 +89,4 @@ growth board                                       # what is where; growth board
 
 | Date | Version | What changed |
 | --- | --- | --- |
-| 2026-11-24 | 3.0.0 | First version: the database, micro kits, the board, jobs, resources, lanes and the machine runner. |
+| 2026-11-24 | 3.0.0 | First version: the database, micro kits, the board, jobs, resources, lanes and the machine runner. Sites with more than one locale: the `localize` and `intl-check` jobs. |

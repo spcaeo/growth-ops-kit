@@ -1,5 +1,5 @@
 {
-  "_about": "The micro-kit manifest (kit 3.0, design section 3). Each micro kit owns its tools, its job kinds and its tables, and talks to the others only through the project's database (kit/tools/store.py). Every key of the growth dispatcher's TOOLS dict is in exactly ONE kit; every job kind is in exactly ONE kit; a test checks both. The pipelines at the bottom are data: adding a step to a page's line is a change here, not in code. Keys that start with an underscore are notes, never read by code. A job kind may carry use_by_days: how long its result counts (the gate's freshness rules: AI baseline, research check and review 30 days, inventory 7, link graph 8, outside facts 90); a done job of a page that is not READY yet is refreshed (a new job of the same kind) when it is within 3 days of that.",
+  "_about": "The micro-kit manifest (kit 3.0, design section 3). Two job kinds are not in any page type's pipeline: localize and intl-check are added by board.add_page after the pipeline, only for a project with two or more locales. Each micro kit owns its tools, its job kinds and its tables, and talks to the others only through the project's database (kit/tools/store.py). Every key of the growth dispatcher's TOOLS dict is in exactly ONE kit; every job kind is in exactly ONE kit; a test checks both. The pipelines at the bottom are data: adding a step to a page's line is a change here, not in code. Keys that start with an underscore are notes, never read by code. A job kind may carry use_by_days: how long its result counts (the gate's freshness rules: AI baseline, research check and review 30 days, inventory 7, link graph 8, outside facts 90); a done job of a page that is not READY yet is refreshed (a new job of the same kind) when it is within 3 days of that.",
   "version": 1,
 
   "ways": {
@@ -27,7 +27,7 @@
       "purpose": "Bookkeeping: the project's one database, the work board, the task list, the journal, the pacer and the locks.",
       "group": "I bookkeeping, the store",
       "tools": ["store", "board", "work", "pace", "lock", "unlock", "kits", "tasks", "journal", "workflow", "statusline", "aliases", "paths"],
-      "libraries": ["atomic", "config"],
+      "libraries": ["atomic", "config", "locales"],
       "jobs": {}
     },
     "site": {
@@ -84,7 +84,9 @@
       "libraries": [],
       "jobs": {
         "build": {"way": "page", "runner": "agent:build", "resource": "port", "stage": "build", "what": "build the page in a lane (growth lane open), gate after every fold; the job holds a preview port from the pool"},
-        "cleanup": {"way": "page", "runner": "agent:build", "resource": "none", "stage": "cleanup", "what": "clear dead code and unused files BEFORE the evidence (any commit after the shots makes them stale)"}
+        "cleanup": {"way": "page", "runner": "agent:build", "resource": "none", "stage": "cleanup", "what": "clear dead code and unused files BEFORE the evidence (any commit after the shots makes them stale)"},
+        "localize": {"way": "page", "runner": "agent:build", "resource": "none", "stage": "", "what": "write one language or country copy of a READY page (the job carries its locale, growth.json market.locales): its own folder prefix, lang, title, description, canonical and hreflang set (rule 162)",
+                     "_why": "not in a page's line: board.add_page makes one localize job per non-primary locale of the project, and only when the project has 2 or more locales. It needs the page's primary copy READY (the original is final before it is copied). Stage is empty, so a page waiting only for its copies shows the stage 'localize'. A project with its own copy process can drop it (pipeline_overrides.drop)."}
       }
     },
     "check": {
@@ -94,7 +96,9 @@
       "libraries": ["gatelib", "techseo"],
       "jobs": {
         "ready": {"way": "single", "runner": "machine", "resource": "owner-preview", "stage": "ready", "what": "growth ready: the full gate, 0 FAIL, on the owner's one preview address (the job holds the owner-preview lock)",
-                  "_why": "single and owner-preview together: the owner's address serves one page set at a time, so one READY job holds it; a batch of pages can still go through growth ready --batch inside that one turn. Re-checks of changed pages are new ready jobs (board.add_job)."}
+                  "_why": "single and owner-preview together: the owner's address serves one page set at a time, so one READY job holds it; a batch of pages can still go through growth ready --batch inside that one turn. Re-checks of changed pages are new ready jobs (board.add_job)."},
+        "intl-check": {"way": "parallel", "runner": "machine", "resource": "none", "stage": "", "what": "the international gate checks (rule 162, intl.*) on the page: lang, hreflang, canonical, no automatic redirect, sitemap alternates, every copy present",
+                       "_why": "added by board.add_page after the localize jobs, and needs them all; only a project with 2 or more locales gets one. It reads the preview only (growth gate page --only intl.*), so it runs side by side with others."}
       }
     },
     "evidence": {
