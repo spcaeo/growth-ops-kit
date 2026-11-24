@@ -1,13 +1,13 @@
 ---
 title: The page rulebook
-version: 2.8.4
+version: 2.8.5
 updated: 2026-11-22
 license: CC BY 4.0
 ---
 
 # The page rulebook
 
-**Version 2.8.4 (generic edition) · 23 Nov 2026.**
+**Version 2.8.5 (generic edition) · 23 Nov 2026.**
 
 The standing rules for creating, changing and publishing any page of a website. Most of them started as a correction
 an owner made after a real mistake. Each rule says why it exists.
@@ -405,6 +405,7 @@ apply" or "the stack has no adapter yet, so rule 98 is checked by hand". "Not in
 
 | Date | Version | What changed |
 | --- | --- | --- |
+| 2026-11-23 | 2.8.5 | Rule 30 compares the card form of folds on any surface; rule 11 catches editor notes; rule 28 adds named phrases (`words.named-repeats`); rule 158a adds text past its box, content under the sticky header, a clipped breadcrumb at 390 and a lone pill; `growth ready` refuses a worktree with uncommitted changes. |
 | 2026-11-23 | 2.8.4 | Rule 157a: a page's folds must not copy another page of the site word for word (`words.own-copy`, from the built output). |
 | 2026-11-23 | 2.8.3 | Rule 28's repeat check skips Key takeaways, the contents list and FAQ answers (each restates the page by design); rule 90 skips a language switch to the page's own copy. |
 | 2026-11-23 | 2.8.2 | Rule 90 counts a page and its language copy (`/x/` and `/en-us/x/`) as one page, so the same link words to both are not a duplicate anchor. |
