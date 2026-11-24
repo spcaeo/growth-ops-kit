@@ -15,7 +15,7 @@ The command for each job kind comes from growth.json "machine_jobs", a map kind 
   {"shots": "{venv_python} tools/page_evidence.py {path} --key {key} --url {preview} --commit {commit} --journal"}
 placeholders: {path} {key} {type} {cluster} {url} {preview} {repo} {commit} {growth} {venv_python} {project}
 ({url}: the page on the preview address, {preview}: the preview address itself). The command runs in the project folder.
-The kit knows its own kinds (gate, ready, link-graph, inventory, fingerprint, tech-seo, preflight, snapshot); a kind with no command fails with
+The kit knows its own kinds from kits.json (ready, link-graph, inventory, preflight, snapshot); a kind with no command fails with
 a plain message.
 
 growth.json keys read: machine_jobs, preview_url, preview_repo, site_repo, trailing_slash, runner_max_load (CPU count x 2),
@@ -40,12 +40,9 @@ import config  # noqa: E402
 
 KIT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULTS = {
-    "gate": "{growth} gate page {path} --url {url} --type {type} --key {key}",
     "ready": "{growth} ready {path} --type {type} --key {key}",
     "link-graph": "{growth} link_graph crawl --base {preview}",
     "inventory": "{growth} inventory --base {preview}",
-    "fingerprint": "{growth} fingerprint record {path} --key {key} --url {url}",
-    "tech-seo": "{growth} tech_seo_check {url}",
     "preflight": "{growth} preflight {path} --type {type} --key {key}",
     "snapshot": "{growth} page_snapshot {path}",
 }

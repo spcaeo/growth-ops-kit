@@ -1,8 +1,9 @@
 """Builder lanes (kit 3.0, micro kit "build"): two lanes at once on their own ports and worktrees, the cap, the lanes
-folder rule, and a close that stops only its own server, keeps the branch and frees the port. Real git repos and real
+folder rule, and a close that stops only its own server, keeps the branch and frees the port. Real git repos, the real board and real
 servers, all under pytest's tmp_path; every server is stopped by the fixture, pass or fail."""
 import json
 import os
+import random
 import subprocess
 import sys
 import urllib.request
@@ -10,8 +11,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import _board_stub  # noqa: E402
+import board  # noqa: E402  (the real board)
 import lane  # noqa: E402  (kit/tools is on sys.path from conftest)
 
 BUILD = "rm -rf dist && mkdir dist && cp -R src/. dist/"
@@ -40,11 +40,11 @@ def env(tmp_path, monkeypatch):
     sh("git", "config", "user.email", "builder@example.test", cwd=site)
     sh("git", "config", "user.name", "Builder", cwd=site)
     commit(site, "first")
+    lo = random.randint(30000, 60000)                   # other agents' tests use the board's default ports 18440 to 18459 at the same time
     cfg = {"name": "T", "site_url": "https://t.example", "site_repo": str(site), "build_cmd": BUILD, "build_dir": "dist",
-           "lanes_dir": str(lanes)}
+           "lanes_dir": str(lanes), "resources": {"port": [lo, lo + 19]}}
     (project / "growth.json").write_text(json.dumps(cfg))
     monkeypatch.setenv("GROWTH_PROJECT", str(project))
-    board = _board_stub.use_board(monkeypatch)
     e = type("Env", (), {})()
     e.project, e.site, e.lanes, e.board, e.cfg = project.resolve(), site.resolve(), lanes, board, cfg
     e.set_cfg = lambda **kw: (project / "growth.json").write_text(json.dumps({**cfg, **kw}))
@@ -200,3 +200,36 @@ def test_command_line_open_list_url_close(env, capsys):
     assert lane.main(["close", "b1"]) == 0
     assert lane.main(["close", "b1"]) == 1
     assert "no open lane" in capsys.readouterr().err
+
+
+def test_close_leaves_the_port_really_free_so_the_next_lane_can_take_it_at_once(env):
+    env.set_cfg(resources={"port": [env.cfg["resources"]["port"][0], env.cfg["resources"]["port"][0]]})      # a pool of one port
+    a = lane.open_lane("/", "b1", project=env.project)
+    lane.close_lane("b1", project=env.project)
+    assert lane.port_free(a["port"])                       # not "still shutting down"
+    b = lane.open_lane("/about", "b2", project=env.project)
+    assert b["port"] == a["port"] and get(b["port"])[0] == 200
+
+
+def test_a_port_bound_by_something_else_is_skipped_for_the_next_one(env, monkeypatch):
+    first = []
+    real = lane.port_free
+
+    def busy_once(port):                                   # the first port the board hands out turns out to be bound by a stranger
+        if not first:
+            first.append(port)
+        return False if port == first[0] else real(port)
+    monkeypatch.setattr(lane, "port_free", busy_once)
+    a = lane.open_lane("/", "b1", project=env.project)
+    assert a["port"] != first[0] and get(a["port"])[0] == 200
+    assert [h["slot"] for h in env.board.held("port", project=env.project)] == [str(a["port"])]       # the parked slot was given back
+
+
+def test_when_no_port_of_the_pool_is_usable_open_fails_in_plain_words_and_holds_nothing(env, monkeypatch):
+    lo = env.cfg["resources"]["port"][0]
+    env.set_cfg(resources={"port": [lo, lo + 2]})
+    monkeypatch.setattr(lane, "port_free", lambda port: False)
+    with pytest.raises(lane.LaneError, match="no preview port is free|every preview port"):
+        lane.open_lane("/", "b1", project=env.project)
+    assert env.board.held("port", project=env.project) == []
+    assert not (env.lanes / "b1-home").exists() and lane.list_lanes(env.project) == []

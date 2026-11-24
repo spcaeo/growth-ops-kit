@@ -122,6 +122,41 @@ def port_free(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) != 0
 
 
+def wait_port_free(port: int, seconds: float = 5.0) -> bool:
+    """Wait (polling) until nothing listens on the port, up to `seconds`. A server that was just stopped may still be closing."""
+    end = time.time() + seconds
+    while True:
+        if port_free(port):
+            return True
+        if time.time() >= end:
+            return False
+        time.sleep(0.1)
+
+
+def take_port(agent: str, project, tries: int = 40) -> int:
+    """A port from the board's pool that nothing is listening on. A port bound by something else is parked under a helper
+    holder name (so the board hands out the next one), and every parked slot is given back at the end. Fails in plain words
+    only when no port of the pool is usable."""
+    board, parked = _board(), []
+    try:
+        for i in range(tries):
+            lease = board.acquire("port", agent, project=project)
+            if not lease:
+                raise LaneError("no preview port is free right now (the board's port pool is used up or every free port is "
+                                "in use by something else). Close a lane, or free a port, and try again.")
+            port = int(lease["slot"])
+            if wait_port_free(port, 0.5 if i == 0 else 0.0):
+                return port
+            board.release("port", agent, project=project)               # busy: park it under another name, ask for the next
+            helper = f"{agent}~busy{i}"
+            if board.acquire("port", helper, project=project):
+                parked.append(helper)
+        raise LaneError("every preview port of the pool is in use by something else. Free one, then try again.")
+    finally:
+        for h in parked:
+            board.release("port", h, project=project)
+
+
 def run_log(project: Path, name: str) -> Path:
     p = project / "journal" / "runs"
     p.mkdir(parents=True, exist_ok=True)
@@ -188,7 +223,7 @@ def start_server(project, cfg, agent, root: Path, port: int) -> int:
     answers. Returns its pid. serve_build.py is started directly, so the recorded pid is the server itself."""
     if not root.is_dir():
         raise LaneError(f"there is no folder {root} to serve: the build made no {root.name}/ (growth.json build_dir).")
-    if not port_free(port):
+    if not wait_port_free(port, 3.0):
         raise LaneError(f"port {port} is already in use by something else; close what uses it or free the port, then rebuild.")
     log = open(run_log(project, f"lane-{agent}-server.log"), "ab")
     proc = subprocess.Popen([sys.executable, str(SERVE), str(root), "--port", str(port)], stdout=log, stderr=log,
@@ -282,10 +317,7 @@ def open_lane(path, agent, ref=None, branch=None, project=None) -> dict:
     wt = base / f"{agent}-{slug(page)}"
     if wt.exists():
         raise LaneError(f"{wt} already exists. Remove it, or pick another agent name.")
-    lease = _board().acquire("port", agent, project=project)
-    if not lease:
-        raise LaneError("no preview port is free right now (the board's port pool is used up). Close a lane or wait.")
-    port = int(lease["slot"])
+    port = take_port(agent, project)
     s.event("lane-port", agent, {"port": port, "page": page})
     try:
         base.mkdir(parents=True, exist_ok=True)
@@ -374,6 +406,8 @@ def close_lane(who, force=False, project=None) -> dict:
             raise LaneError(f"lane {r['agent']} has changes that are not committed ({', '.join(d[:5])}"
                             f"{'...' if len(d) > 5 else ''}). Commit them, or close with --force to throw them away.")
     stopped = stop_server(r["pid"], r["port"])
+    if r["port"]:
+        wait_port_free(int(r["port"]))                   # the next lane may get this port at once: it must really be free
     s.event("lane-server-stopped", r["agent"], {"pid": r["pid"], "was_running": stopped})
     if wt.is_dir():
         link = wt / "node_modules"
