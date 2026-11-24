@@ -173,12 +173,21 @@ INTERNAL = [r"dossier", r"fold plan", r"(?:research|plan|fold) checkpoints?", r"
 # Editor notes (2.8.3): wording that points at the page's own structure or the team's checking, never at the buyer's question.
 _MONTH = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
 _DATE = rf"(?:\d{{4}}-\d{{2}}-\d{{2}}|{_MONTH}\.? \d{{1,2}}(?:st|nd|rd|th)?,? \d{{4}}|\d{{1,2}}(?:st|nd|rd|th)? {_MONTH}\.?,? \d{{4}}|{_MONTH}\.? \d{{4}})"
-EDITOR_NOTES = [r"the (?:[\w'-]+ ){0,4}folds? (?:above|below)", r"see the (?:[\w'-]+ ){0,3}fold", r"this section",
+EDITOR_NOTES = [r"the (?:[\w'-]+ ){0,4}folds? (?:above|below)", r"see the (?:[\w'-]+ ){0,3}fold", r"see this section",
+                r"this section (?:above|below)",
                 rf"as of {_DATE} \(internal\)"]
 # A stamp that stands alone as its whole block ("Checked 2026-11-10", "Verified on March 3, 2026 by the team") is an editor note. The same words
 # inside a source line ("Source: our cost pages. Checked November 22, 2026.", "4.8 on Clutch, checked ...") tell the reader how fresh a fact is
 # (rule 11: name a source by what it is and its date) and stay.
 STAMP = re.compile(rf"(?:checked|verified)(?: on)? {_DATE}(?: by (?:[\w'.-]+ ?){{1,4}})?\.?", re.I)
+
+
+def _review_card(n):
+    """A review or testimonial card (blockquote, or class rcard / testimonial / review): its "Verified Mar 2026" says when the
+    customer's review was checked, which is for the reader, not an editor note (2.8.5)."""
+    return n.tag == "blockquote" or any(re.search(r"rcard|testimonial|review", c, re.I) for c in domx.classes(n))
+
+
 # A visible byline ("Updated 12 May 2026", "Last reviewed May 2026") is for the reader; a note that overlaps one is not an editor note.
 BYLINE = [rf"(?:last )?(?:updated|published|reviewed|posted|modified)(?: on)?:? {_DATE}"]
 
@@ -208,8 +217,11 @@ def internal_labels(ctx):
     notes = {p for p in EDITOR_NOTES}
     okay = [str(x).lower() for x in wcfg(ctx, "internal_ok", []) or []]
     probs, seen = [], set()
-    for _, text in mainwalk.units(ctx):
-        if STAMP.fullmatch(text.strip()) and not any(x in text.lower() for x in okay):
+    allu = mainwalk.units(ctx)
+    inreview = set(allu) - set(mainwalk.units(ctx, _review_card))
+    for unit in allu:
+        _, text = unit
+        if unit not in inreview and STAMP.fullmatch(text.strip()) and not any(x in text.lower() for x in okay):
             if (text, "stamp") not in seen:
                 seen.add((text, "stamp"))
                 probs.append(f"'{text.strip()}' stands alone as a block")

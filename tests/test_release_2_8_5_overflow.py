@@ -33,6 +33,11 @@ PAGES = {
     "hdr-bad": page("<section><h1>Title under the bar</h1><p>Words.</p></section>", HDR_FIXED),
     "hdr-ok": page("<section style='padding-top:90px'><h1>Title under the bar</h1><p>Words.</p></section>", HDR_FIXED),
     "hdr-sticky": page("<section><h1>Title under the bar</h1><p>Words.</p></section>", HDR_OK),
+    "clip-table": page(f"<section><div style='width:140px;border:2px solid #000;overflow-x:auto'><table style='width:400px'><tr><td style='white-space:nowrap'>{LONG}</td></tr></table></div></section>"),
+    "clip-ellipsis": page(f"<section><div style='width:140px;border:2px solid #000'><p style='white-space:nowrap;overflow:hidden;text-overflow:ellipsis'>{LONG}</p></div></section>"),
+    "clip-slide": page(f"<section><div style='width:200px;overflow:hidden'><div style='display:flex;width:600px'>"
+                       f"<div style='width:150px;border:1px solid #000'>One</div><div style='width:150px;border:1px solid #000;margin-left:20px'><p style='white-space:nowrap'>{LONG}</p></div></div></div></section>"),
+    "hdr-none": page("<section><h1>Title</h1><p>Words.</p></section>"),
     "crumb-bad": page("<section><h1>T</h1></section>", "<nav class='breadcrumb' aria-label='Breadcrumb' style='width:200px;overflow:hidden'>"
                       "<ol style='display:flex;justify-content:flex-end;list-style:none;margin:0;padding:0;white-space:nowrap'><li><a href='/'>Home</a></li>"
                       "<li>/ Long section name here</li><li>/ Another long level name</li></ol></nav>"),
@@ -97,3 +102,13 @@ def test_a_breadcrumb_with_its_first_item_scrolled_out_fails(run):
     bad = run("crumb-bad", "layout.breadcrumb-390")
     assert bad.level == "FAIL" and "first item" in bad.what, bad.text()
     assert run("crumb-ok", "layout.breadcrumb-390").level == "OK"
+
+
+def test_clipping_elements_between_the_text_and_its_box_are_not_overflow(run):
+    for name in ("clip-table", "clip-ellipsis"):
+        assert run(name, "layout.text-overflow").level == "OK", name
+    assert run("clip-slide", "layout.text-overflow").level == "OK"
+
+
+def test_a_page_with_no_sticky_header_is_a_skip_not_an_ok(run):
+    assert run("hdr-none", "layout.under-header").level == "SKIP"

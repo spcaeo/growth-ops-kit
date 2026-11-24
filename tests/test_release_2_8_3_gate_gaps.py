@@ -67,7 +67,7 @@ def test_a_card_pair_may_be_allowed_with_a_reason_only():
 # ---- 2. editor notes -------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text", [
     "Pricing is set out in the pricing fold above.", "Compare the plans in the process fold below.", "See the proof fold for the numbers.",
-    "This section explains our method.", 
+    "See this section for our method.", "The rates are listed in this section below.",
     "Rates as of 3 Nov 2026 (internal).",
 ])
 def test_editor_notes_fail(text):
@@ -188,3 +188,51 @@ def test_a_lone_pill_on_the_last_row_fails_at_390(serve):
 def test_a_full_last_row_of_pills_passes(serve):
     ln = pill(serve, 6)
     assert ln.level == "OK" and "1 pill row(s)" in ln.what, ln.text()
+
+
+# ---- 2.8.5 review fixes ----------------------------------------------------------------------------------------
+def test_this_section_in_ordinary_prose_passes():
+    body = "<section data-fold='a'><p>The terms in this section apply to every order. Nothing else in this section changes them.</p></section>"
+    assert run("words.internal-labels", body).level == "OK"
+
+
+def test_a_review_cards_lone_verified_stamp_passes_a_bare_one_fails():
+    card = "<section data-fold='a'><blockquote><p>Great team.</p><p>Verified Mar 2026</p></blockquote></section>"
+    assert run("words.internal-labels", card).level == "OK"
+    rc = "<section data-fold='a'><div class='rcard'><p>Great team.</p><p>Verified Mar 2026</p></div></section>"
+    assert run("words.internal-labels", rc).level == "OK"
+    assert run("words.internal-labels", "<section data-fold='a'><p>Verified Mar 2026</p></section>").level == "FAIL"
+
+
+def test_topic_words_and_all_caps_pairs_are_not_named_repeats():
+    t = lambda n, x: f"<section data-fold='{n}'><p>{x}</p></section>"  # noqa: E731
+    body = t("a", "We build HL7 and FHIR links.") + t("b", "Our HL7 and FHIR work is deep.") + t("c", "Teams use HL7 and FHIR daily.")
+    head = "<h1>EHR software with HL7 and FHIR</h1>"
+    assert run("words.named-repeats", head + body).level == "OK"
+    assert run("words.named-repeats", body, {"words": {"topic_terms": ["HL7 and FHIR"]}}).level == "OK"
+    assert run("words.named-repeats", body).level == "OK"             # a joined list of two names is no pair
+    r4 = t("a", "We build FHIR R4 links.") + t("b", "Our FHIR R4 work is deep.") + t("c", "Teams use FHIR R4 daily.")
+    assert run("words.named-repeats", r4).level == "FAIL"             # an adjacent pair with a digit still counts
+    assert run("words.named-repeats", "<h1>FHIR R4 software</h1>" + r4).level == "OK"   # unless it is the page's topic
+    ai = t("a", "Use AI ML here.") + t("b", "We ship AI ML daily.") + t("c", "Expect AI ML tools.")
+    assert run("words.named-repeats", ai).level == "OK"
+
+
+def test_a_real_repeat_still_fails_on_a_page_with_a_topic():
+    ln = run("words.named-repeats", "<h1>EHR software development</h1>" + three(NAME, "Our team knows HL7 FHIR R4 and SMART on FHIR well.",
+                                                                           "Expect HL7 FHIR R4 and SMART on FHIR support."))
+    assert ln.level == "FAIL" and "HL7 FHIR R4 and SMART on FHIR" in ln.what, ln.text()
+
+
+def test_no_text_runs_is_a_skip_not_an_ok():
+    assert run("words.named-repeats", "").level == "SKIP"
+
+
+def test_a_plain_checklist_is_not_a_card_grid_but_boxed_grids_still_fail():
+    ck = "<ul>" + "".join(f"<li><svg></svg><span>Item {i}</span></li>" for i in range(4)) + "</ul>"
+    assert run("layout.folds-distinct", fold("a", "<h2>A</h2>" + ck) + fold("b", "<h2>B</h2><p>x</p>" + ck)).level == "OK"
+    box = "<div>" + "".join(f"<div class='tile'><svg></svg><span>Item {i}</span></div>" for i in range(3)) + "</div>"
+    ln = run("layout.folds-distinct", fold("a", "<h2>A</h2>" + box) + fold("b", "<h2>B</h2><p>x</p>" + box))
+    assert ln.level == "FAIL" and "card grid" in ln.what, ln.text()
+    styled = "<ul>" + "".join(f"<li style='border:1px solid #000'><svg></svg><span>Item {i}</span></li>" for i in range(3)) + "</ul>"
+    assert run("layout.folds-distinct", fold("a", "<h2>A</h2>" + styled) + fold("b", "<h2>B</h2><p>x</p>" + styled)).level == "FAIL"

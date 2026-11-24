@@ -8,10 +8,16 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 Finding classes an independent reviewer kept finding on pages the gate passed (#99, #100).
 - `layout.folds-distinct` (rule 30): two folds whose cards have the same form (tag, classes, inner shape) fail on any surface and at any distance; the message says whether the surface is the same. `layout.card_repeat_ok` allows a pair with a reason.
-- `words.internal-labels` (rule 11): editor notes such as "the cost fold above", "see the X fold", "this section", a "Checked/Verified <date>" stamp standing alone, "as of <date> (internal)". `words.internal` and `words.byline` are configurable; an "Updated <date>" byline and a source line's check date are not notes.
+- `words.internal-labels` (rule 11): editor notes such as "the cost fold above", "see the X fold", "see this section", "this section above/below", a "Checked/Verified <date>" stamp standing alone, "as of <date> (internal)". `words.internal` and `words.byline` are configurable; an "Updated <date>" byline and a source line's check date are not notes.
 - New check `words.named-repeats` (rule 28): a named phrase (3+ capitalised or technical words, or 2 technical tokens such as "HL7 FHIR") in `repeat_folds` or more folds. Skips what fact-repeats skips; honours `repeat_ok`.
 - `layout.card-orphan` (rule 158a): a lone pill on the last wrapped row at 390 px after a row of 3 or more, in the hero and first fold.
 - New checks `layout.text-overflow` (text past its card or drawn box at 1024, 1440 and 390), `layout.under-header` (text under the sticky header at scroll 0) and `layout.breadcrumb-390` (first crumb clipped or scrolled out). (#100)
+- `words.named-repeats` leaves out the page's own topic: a phrase made only of words from the H1, the `<title>`, the last breadcrumb item or `growth.json` `words.topic_terms` never counts as a repeat. A pair of two technical tokens needs a digit in one of them ("FHIR R4", "HL7 v2"; "AI ML" is no pair), 3 or more named words stay, title-case lines are read the same way everywhere, and a page with no text runs is a SKIP.
+- `layout.text-overflow` measures a text against the clipping or scrolling element between it and its box (a scrolling table wrapper, an ellipsis label, a slide in a carousel) and leaves clipped-on-purpose text alone.
+- `layout.under-header` takes any fixed or sticky element at the top that is 60% of the width or more as the header; a page with none is a SKIP, not an OK.
+- `words.internal-labels`: "this section" is an editor note only as "see this section" or "this section above/below"; a review or testimonial card's own "Verified Mar 2026" is for the reader.
+- `layout.folds-distinct`: an item is a card only if it draws a box (border, background or shadow) or holds a heading; a plain checklist of icon and label rows is not a card grid.
+- `layout.card-orphan`: the lone-pill check reads only rows of drawn pills (not nav, breadcrumb or plain-text meta rows) and accepts a centred last row.
 - `growth ready`: a preview worktree with uncommitted or untracked (not ignored) changes is NOT READY: the build may hold an edit HEAD does not. (#100)
 
 ## 2.8.4 - 2026-11-23

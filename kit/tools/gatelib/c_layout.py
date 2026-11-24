@@ -100,20 +100,23 @@ MEASURE_JS = r"""
     }
     // Pills, chips and tags (2.8.3): a wrapping row of small items in the hero or the first fold. The last row must not be one lone item.
     const fk = foldOf(e);
-    if (fk >= 0 && fk <= 1 && kids.length >= 4 && cs(e).display.includes('flex') && cs(e).flexWrap !== 'nowrap') {
+    const boxed = k => { const t = cs(k); return parseFloat(t.borderTopWidth) > 0 || parseFloat(t.borderLeftWidth) > 0 || t.boxShadow !== 'none'
+                         || (t.backgroundColor !== 'rgba(0, 0, 0, 0)' && t.backgroundColor !== 'transparent') || t.backgroundImage !== 'none'; };
+    // only a row of drawn pills: nav, breadcrumb and plain-text meta rows (author . date) have no box to orphan
+    if (fk >= 0 && fk <= 1 && kids.length >= 4 && kids.some(boxed) && !e.closest('nav, [aria-label*=readcrumb i], [class*=breadcrumb]') && cs(e).display.includes('flex') && cs(e).flexWrap !== 'nowrap') {
       const pr = R(e), small = kids.every(k => { const q = R(k); return q.height <= 64 && q.width <= 0.6 * pr.width + 1; });
       if (small) {
         const rs = kids.map(k => R(k)).sort((p, q) => p.top - q.top || p.left - q.left), lines = [];
         rs.forEach(q => { const l = lines[lines.length - 1]; if (l && Math.abs(l[0].top - q.top) <= 10) l.push(q); else lines.push([q]); });
-        if (lines.length >= 2) pills.push({fold: names[fk] || '', n: kids.length, lastCount: lines[lines.length - 1].length,
-                                           prevCount: lines[lines.length - 2].length, rows: lines.length});
+        const ll = lines[lines.length - 1], lcx = (Math.min(...ll.map(q => q.left)) + Math.max(...ll.map(q => q.right))) / 2;
+        if (lines.length >= 2) pills.push({fold: names[fk] || '', n: kids.length, lastCount: ll.length,
+                                           prevCount: lines[lines.length - 2].length, rows: lines.length,
+                                           centred: Math.abs(lcx - (pr.left + pr.right) / 2) <= 12});
       }
     }
     const s = cs(e);
     // A wrapping flex row of plain text (a post's author / date / read-time line) is not a card grid: skip it when no
     // child draws a box (border, background or shadow). Real grids (display:grid) are always measured.
-    const boxed = k => { const t = cs(k); return parseFloat(t.borderTopWidth) > 0 || parseFloat(t.borderLeftWidth) > 0 || t.boxShadow !== 'none'
-                         || (t.backgroundColor !== 'rgba(0, 0, 0, 0)' && t.backgroundColor !== 'transparent') || t.backgroundImage !== 'none'; };
     const isFlexWrap = s.display.includes('flex') && s.flexWrap !== 'nowrap';
     if (isFlexWrap && !s.display.includes('grid') && !kids.some(boxed)) continue;
     // Cards are alike: most children share one tag and first class. A layout grid of unlike parts (a hero's heading,
@@ -365,7 +368,7 @@ def card_orphan(ctx):
     for w, d in measure(ctx).items():
         for g in d.get("pills", []) if w < 800 else []:
             pills += 1
-            if g["lastCount"] == 1 and g["prevCount"] >= 3:
+            if g["lastCount"] == 1 and g["prevCount"] >= 3 and not g.get("centred"):
                 probs.append(f"fold '{g['fold'] or '?'}': {g['n']} pills, one alone on the last row after a row of {g['prevCount']} at {w}")
     ctx.verdict(probs, f"{grids} card grid(s) and {pills} pill row(s) measured, no orphan last row",
                 "pick a column count that divides the cards, centre the last row, or make the last card wide; shorten, drop or re-order the pills so the last row holds two or more (rule 158a)")

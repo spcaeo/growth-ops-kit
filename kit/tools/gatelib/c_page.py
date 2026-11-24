@@ -479,7 +479,31 @@ def _shape(n, d):
     return "(" + ",".join(("box" if c.tag in WRAPPERS else c.tag) + (_shape(c, d - 1) if d else "") for c in n.elements()[:6]) + ")"
 
 
-def card_signatures(sec):
+BOX_HINT = re.compile(r"(?:^|[-_])(?:card|tile|panel|box|boxed|bordered|border|shadow|elevated|surface)(?:$|[-_s])|^bg-|^shadow|^border", re.I)
+BOX_CSS = re.compile(r"border(?:-[a-z]+)?\s*:\s*(?!0|none)|box-shadow\s*:\s*(?!none)|background(?:-color)?\s*:\s*(?!none|transparent|inherit|0)", re.I)
+
+
+def boxed_classes(html):
+    """Class names that a <style> block of the page gives a border, a background or a shadow (a page with only an external
+    stylesheet is judged by its class names and inline styles)."""
+    out = set()
+    for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", "".join(re.findall(r"(?is)<style[^>]*>(.*?)</style>", html or ""))):
+        if BOX_CSS.search(m.group(2)):
+            out.update(re.findall(r"\.([\w-]+)", m.group(1)))
+    return out
+
+
+def draws_card(k, boxed=frozenset()):
+    """A card draws a box (border, background, shadow: inline style, a box-like class, or a class the page's CSS boxes) or holds a
+    heading. A plain li, a or details row (an icon and a label) is a checklist, not a card (2.8.5)."""
+    if any(n.tag in ("h1", "h2", "h3", "h4", "h5", "h6") for n in k.iter() if n is not k):
+        return True
+    if BOX_CSS.search(k.get("style") or ""):
+        return True
+    return any(BOX_HINT.search(c) or c in boxed for c in domx.classes(k))
+
+
+def card_signatures(sec, boxed=frozenset()):
     """{signature: first class of the grid}: every repeated card pattern of a fold (2.8.3). A card grid is a parent with 3 or more
     children that share one tag and one class set and one inner shape of at least 2 elements (icon + title + text). Plain list items,
     form rows and table rows are not cards."""
@@ -494,7 +518,8 @@ def card_signatures(sec):
         top = max(set(sigs), key=sigs.count)
         if sigs.count(top) < max(3, -(-len(kids) * 2 // 3)) or top[0] in ("option", "tr", "td", "th", "button", "span", "p"):
             continue
-        if len(next(k for k, s in zip(kids, sigs) if s == top).elements()) < 2:
+        first = next(k for k, s in zip(kids, sigs) if s == top)
+        if len(first.elements()) < 2 or not draws_card(first, boxed):
             continue
         out.setdefault(top, " ".join(top[1][:2]) or top[0])
     return out
@@ -521,7 +546,8 @@ def folds(ctx):
             probs.append(f"fold {i} has the same shape as fold {seen[k]}")
         seen.setdefault(k, i)
     # the same card grid twice, on any surface and at any distance (2.8.3): the fold shape differs (another heading, an intro) but the cards are alike
-    cards = [(s.get("data-fold") or f"#{i}", s.get("data-surface") or "plain", card_signatures(s)) for i, s in enumerate(secs, 1)]
+    bx = boxed_classes(ctx.need_html())
+    cards = [(s.get("data-fold") or f"#{i}", s.get("data-surface") or "plain", card_signatures(s, bx)) for i, s in enumerate(secs, 1)]
     for i, (na, sa, ga) in enumerate(cards):
         for nb, sb, gb in cards[i + 1:]:
             same = set(ga) & set(gb)

@@ -2,7 +2,6 @@
 Measured in a real headless browser at 1024, 1440 and 390 px, scrollY 0. One pass per URL; the three checks read the cache."""
 from __future__ import annotations
 
-from .c_layout import is_legal  # noqa: F401  (kept for symmetry with the layout checks)
 from .core import Skip, check
 
 WIDTHS = ((1024, 768), (1440, 900), (390, 844))
@@ -18,15 +17,26 @@ PROBE_JS = r"""
   // (a) text past its own bordered box. HTML: a text node whose line box crosses the border box of the nearest bordered ancestor.
   const bordered = e => { const s = cs(e); return ['Top', 'Right', 'Bottom', 'Left'].filter(k => parseFloat(s['border' + k + 'Width']) > 0
                           && s['border' + k + 'Style'] !== 'none').length >= 3; };
+  const clips = e => { const s = cs(e); return s.overflowX !== 'visible' || s.overflowY !== 'visible'; };
   const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT);
   for (let n; (n = walker.nextNode());) {
     const t = lbl(n.textContent); if (!t || !n.parentElement || n.parentElement.closest('svg, script, style, [aria-hidden=true]')) continue;
     if (!vis(n.parentElement)) continue;
     const rg = document.createRange(); rg.selectNodeContents(n); const q = rg.getBoundingClientRect(); if (q.width < 2) continue;
-    let a = n.parentElement; while (a && a !== main && !bordered(a)) a = a.parentElement;
+    let a = n.parentElement, clip = null;
+    // walk from the text up to the box; an element that clips or scrolls on the way (overflow other than visible) is what the text is
+    // measured against: a scrolling table wrapper, an ellipsis label or a carousel slide shows part of its text on purpose
+    while (a && a !== main && !bordered(a)) { if (!clip && clips(a)) clip = a; a = a.parentElement; }
     if (!a || a === main || !vis(a)) continue;
+    if (!clip && clips(a)) clip = a;
     const s = cs(a);
     const r = R(a), bl = parseFloat(s.borderLeftWidth) || 0, br = parseFloat(s.borderRightWidth) || 0;
+    if (clip && clip !== a) continue;      // the clipping element sits between the text and the box: the box is not what the text runs past
+    if (cs(n.parentElement).textOverflow === 'ellipsis' || (clip === a && ['auto', 'scroll'].includes(cs(a).overflowX))) continue;   // ellipsis or a scroller: cut on purpose
+    // above the box: a clipping ancestor (a carousel) that hides part of this text means it is only partly shown: leave it
+    let hidePart = false;
+    for (let u = a.parentElement; u && u !== main && !hidePart; u = u.parentElement) if (clips(u)) { const c = R(u); hidePart = q.right > c.right + 1 || q.left < c.left - 1; }
+    if (hidePart) continue;
     const over = Math.max(r.left + bl - q.left, q.right - (r.right - br));
     if (over > 1.5 && q.right > 0 && q.left < innerWidth) out.overflow.push({text: t, by: Math.round(over), kind: 'html', box: (a.className && a.className.baseVal === undefined ? String(a.className) : a.tagName.toLowerCase()).slice(0, 30)});
   }
@@ -46,8 +56,8 @@ PROBE_JS = r"""
   }
   // (b) the sticky header, and whatever shows beneath it at scrollY 0
   window.scrollTo(0, 0);
-  const hs = [...document.querySelectorAll('header, nav, [role=banner], .site-header')].filter(e => ['sticky', 'fixed'].includes(cs(e).position)
-              && vis(e) && R(e).top <= 1 && R(e).width >= innerWidth * 0.6 && !e.closest('main'));
+  const hs = [...document.querySelectorAll('body *')].filter(e => ['sticky', 'fixed'].includes(cs(e).position)
+              && vis(e) && R(e).top <= 1 && R(e).width >= innerWidth * 0.6 && R(e).height < innerHeight * 0.5 && !e.closest('main') && !(e instanceof SVGElement));
   const h = hs.sort((p, w) => R(w).bottom - R(p).bottom)[0];
   if (h) {
     const hb = R(h).bottom; out.header = {bottom: Math.round(hb), tag: h.tagName.toLowerCase()};
@@ -129,6 +139,8 @@ def under_header(ctx):
             heads += 1
         for o in d["hidden"][:3]:
             probs.append(f"'{o['text']}' is {o['under']} px under the sticky header at {w} (header bottom {d['header']['bottom']} px)")
+    if not heads and not probs:
+        raise Skip("no fixed or sticky element at the top (60% of the width or more) found at 1024, 1440 or 390, so there is no header to hide content")
     ctx.verdict(probs, f"{heads} sticky header(s) measured, nothing beneath them at scroll position 0",
                 "pad the page's first content by the header's height (or html scroll-padding and a body offset) so the first line starts below it (rule 158a)")
 
