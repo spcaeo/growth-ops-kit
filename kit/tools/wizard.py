@@ -308,10 +308,18 @@ def step_browser(s: Session) -> str:
     if cur.get("status") == "done":
         return f"research browser {cur['answer'].get('name')} confirmed {cur.get('date', '')[:10]}"
     if "browser" in s.answers:
-        confirm_browser(s.project, (s.answers["browser"] or {}).get("name", "") if isinstance(s.answers["browser"], dict) else str(s.answers["browser"]), "answers-file")
+        done = confirm_browser(s.project, (s.answers["browser"] or {}).get("name", "") if isinstance(s.answers["browser"], dict) else str(s.answers["browser"]), "answers-file")
+        if done:
+            return f"research browser {ws.get(s.project, 'browser')['answer'].get('name')} checked and recorded"
         say("WAITING browser: the owner confirms it in their own terminal: growth approve browser")
         raise Waiting("browser")
     ws.record(s.project, "browser", "asked")
+    if _chat(s.project):
+        say("The research browser is not recorded yet; the agent checks which one is connected before asking anyone.")
+        say("WAITING browser: the agent checks first (not the owner): ask Claude in Chrome which browser is connected (list_connected_browsers).")
+        say("  Connected: growth wizard confirm browser --name \"<its name>\"  (done at once; nothing for the owner to do)")
+        say("  None connected: only then ask the owner to type /chrome in Claude Code and pick the browser.")
+        raise Waiting("browser")
     say("The research browser is not connected yet. Open Chrome, type /chrome in Claude Code and pick your browser.")
     say(f"WAITING browser: {QUESTIONS['browser']}")
     raise Waiting("browser")
@@ -323,6 +331,11 @@ def _owner_approval(project: Path, kind: str, content, summary: str) -> str:
     return approvals.record(project / "docs", kind, kind, content, summary, via="growth setup (terminal)")["id"]
 
 
+def _chat(project: Path) -> bool:
+    import approvals
+    return approvals.chat_mode(project)
+
+
 def confirm_browser(project: Path, name: str, source: str = "agent") -> bool:
     """Record the browser the agent sees. It is done only with the owner's approval: source "owner" is the owner at
     `growth setup` in their own terminal; anyone else leaves it "tested" until the owner runs growth approve browser."""
@@ -330,6 +343,11 @@ def confirm_browser(project: Path, name: str, source: str = "agent") -> bool:
         raise SystemExit('confirm browser needs the browser\'s name: --name "Browser 1" (what list_connected_browsers shows)')
     import approvals
     test = {"command": "list_connected_browsers", "result": f"{name.strip()} connected"}
+    if source != "owner" and _chat(project):     # chat mode: the agent saw it connected; that is the check, no owner step
+        aid = approvals.record_checked(project / "docs", "browser", approvals.browser_content(name.strip()),
+                                       f"research browser {name.strip()}", "list_connected_browsers")["id"]
+        ws.record(project, "browser", "done", answer={"name": name.strip(), "approval": aid}, source=source, test=test)
+        return True
     if source == "owner":
         aid = _owner_approval(project, "browser", approvals.browser_content(name.strip()), f"research browser {name.strip()}")
         ws.record(project, "browser", "done", answer={"name": name.strip(), "approval": aid}, source=source, test=test)
@@ -348,6 +366,12 @@ def confirm_region(project: Path, seen: str, owner_confirmed: bool, source: str 
         ws.record(project, "region", "asked", answer={"seen": seen, "owner_confirmed": False}, source=source, test=test)
         return False, (f"Google's region reads \"{seen}\", not {want}. Fix: " + gate.REGION_FIX.format(country=want)
                        + f"; read it again, then: growth wizard confirm region --seen \"{want}\"")
+    if source != "owner" and _chat(project):     # chat mode: Google's own settings page says the right country; that is the check
+        import approvals
+        aid = approvals.record_checked(project / "docs", "region", approvals.region_content(seen, want),
+                                       f"Google results region {seen}", "Google's Search settings page, read in the research browser")["id"]
+        ws.record(project, "region", "done", answer={"seen": seen, "owner_confirmed": False, "approval": aid}, source=source, test=test)
+        return True, f"Google region {seen} checked for {want} and recorded"
     if not (owner_confirmed and source == "owner"):      # only the owner at `growth setup` in their terminal, or growth approve
         ws.record(project, "region", "tested", answer={"seen": seen, "owner_confirmed": False}, source=source, test=test)
         return False, (f"Google reports {seen}: matches {want}. Not done until the owner confirms it in their own terminal: "
@@ -370,6 +394,11 @@ def step_region(s: Session) -> str:
         raise Waiting("region")
     ws.record(s.project, "region", "asked")
     want = gate.country_name(cfg_of(s.project).get("market") or {}) or "your target country"
+    if _chat(s.project):
+        say(f"WAITING region: the agent checks it (not the owner): in the research browser open https://www.google.com/preferences?hl=en , read "
+            f"\"Results region\" (set it to {want} if it differs, then Save), and record what it says:")
+        say(f"  growth wizard confirm region --seen \"<what the page says>\"   (done at once when it is {want})")
+        raise Waiting("region")
     say(f"Google's results region is not confirmed as {want} yet. Open Google's search settings, read the Results region, tell me what it says.")
     say(f"WAITING region: {QUESTIONS['region']}")
     raise Waiting("region")
@@ -620,8 +649,10 @@ def main(argv=None) -> int:
             say("--owner-confirmed is no longer taken from a command line: the owner confirms in their own terminal with "
                 f"growth approve {(a.what or ['region'])[0]}")
         if a.what[:1] == ["browser"]:
-            confirm_browser(project, a.name)
-            say(f"research browser {a.name} recorded; not done until the owner runs, in their own terminal: growth approve browser")
+            if confirm_browser(project, a.name):
+                say(f"research browser {a.name} checked and recorded: done")
+            else:
+                say(f"research browser {a.name} recorded; not done until the owner runs, in their own terminal: growth approve browser")
         elif a.what[:1] == ["region"]:
             ok, msg = confirm_region(project, a.seen, False)
             say(msg)

@@ -197,6 +197,8 @@ else:
 setup_f = PROJECT / "SETUP.md"
 setup = setup_f.read_text() if setup_f.exists() else ""
 _a5_ok, _a5_what = a5_state(setup, SITE_REPO if CFG.get("site_repo") and (SITE_REPO / ".git").exists() else None)
+if not _a5_ok and CFG.get("local_only") is True:      # nothing goes live until go-live day: the control check is done then
+    _a5_ok, _a5_what = True, "local-only project (growth.json local_only): the live-site control check is done on go-live day"
 row("A5 Control of the live site proven", _a5_ok, _a5_what,
     "book/01-flow.md A5: tiny visible edit, owner checks, roll back; then fill the row: the commit ids and 'done'")
 # A6 task tracker

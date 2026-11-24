@@ -11,11 +11,16 @@ import wizard_state as ws  # noqa: E402
 from wizard_helpers import growth, owner_approve  # noqa: E402
 
 
-def project(tmp_path, country="US"):
+def project(tmp_path, country="US", mode="terminal"):
+    """These tests guard terminal mode (the 2.x way: the owner approves in their own terminal); chat mode, the 3.0
+    default, has its own tests at the end of this file."""
     folder, _ = new_project.make(tmp_path / "p", "https://shop.example")
     cfg = json.loads((folder / "growth.json").read_text())
+    cfg["approvals"]["mode"] = mode
     cfg["market"].update({"primary_country": country, "google_params": gate.google_params(country, "en")})
     (folder / "growth.json").write_text(json.dumps(cfg))
+    import harness
+    harness.install(folder, cfg.get("name") or "Shop", "https://shop.example")     # the agent permissions follow the mode
     return folder, cfg
 
 
@@ -125,3 +130,20 @@ def test_the_owner_can_confirm_both_in_one_command_each(tmp_path, monkeypatch):
     assert rc != 0 and "not United States" in out
     assert owner_approve(tmp_path, "region", "--seen", "United States", cwd=folder)[0] == 0
     assert gate.problems(folder, cfg) == []
+
+
+def test_chat_mode_the_kit_checks_browser_and_region_itself_and_nothing_waits_for_the_owner(tmp_path):
+    """Owner, 24 Nov 2026: "before its aksing me such permission calude code and the kit should check the chome wa already
+    connected". In chat mode (the default) the agent's check is the confirmation: no terminal, no code."""
+    folder, _ = project(tmp_path, mode="chat")
+    assert growth(tmp_path, "wizard", "confirm", "browser", "--name", "Browser 1", cwd=folder).returncode == 0
+    r = growth(tmp_path, "wizard", "confirm", "region", "--seen", "United States", cwd=folder)
+    assert r.returncode == 0 and "checked" in r.stdout
+    assert gate.problems(folder, json.loads((folder / "growth.json").read_text())) == []
+    log = [json.loads(l) for l in (folder / "docs" / "approvals.jsonl").read_text().splitlines()]
+    assert [e["kind"] for e in log] == ["browser", "region"] and all(e["via"].startswith("checked:") for e in log)
+
+
+def test_chat_mode_a_wrong_region_is_still_refused(tmp_path):
+    folder, _ = project(tmp_path, mode="chat")
+    assert growth(tmp_path, "wizard", "confirm", "region", "--seen", "India", cwd=folder).returncode == 1

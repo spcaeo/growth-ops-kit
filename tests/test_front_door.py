@@ -18,15 +18,8 @@ def run_setup(tmp, port=18999, repo_answers=True):
     f = answers(tmp, repo, live_rule={"rule": "no-crawl", "preview_url": f"http://127.0.0.1:{port}"},
                 browser={"name": "Browser 1"}, region={"seen": "United States", "owner_confirmed": True})
     args = ("setup", str(tmp / "proj"), "--site", "https://shop.example", "--answers", str(f), "--sitemap", str(index))
-    r = growth(tmp, *args)
-    # audit C4: an answers file (which an agent can write) no longer confirms the browser or the region; the owner approves
-    # both in their own terminal, then setup finishes
-    assert r.returncode == 3, r.stdout + r.stderr
-    for step in ("browser", "region"):
-        if step == "region":
-            growth(tmp, *args)                               # the run after the browser approval records the region it was told
-        rc, out = owner_approve(tmp, step, cwd=tmp / "proj")
-        assert rc == 0, out
+    # chat mode (the 3.0 default; owner, 24 Nov 2026): the browser and region the agent checked are recorded at once, so
+    # setup finishes in one run with nothing for the owner to type
     r = growth(tmp, *args)
     return tmp / "proj", r, repo
 
@@ -51,7 +44,7 @@ def test_the_wizard_says_the_problem_in_plain_words_before_the_command(tmp_path)
     r = growth(tmp_path, "setup", str(tmp_path / "proj"), "--site", "https://shop.example", "--answers", str(f), "--sitemap", str(index))
     out = r.stdout
     assert r.returncode == 3
-    assert out.index("The research browser is not connected yet.") < out.index("WAITING browser")
+    assert out.index("The research browser") < out.index("WAITING browser")
     assert "growth wizard confirm browser" in out                       # the exact command is still there, second
 
 

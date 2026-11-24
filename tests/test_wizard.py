@@ -46,7 +46,13 @@ def test_wizard_does_every_step_then_waits_on_the_guided_ones(tmp_path):
 
 
 def test_setup_is_not_done_until_browser_and_region_are_confirmed(tmp_path):
+    """Terminal mode (the 2.x way). Chat mode, the 3.0 default, is tested in test_research_gate.py."""
     proj, _, _ = start(tmp_path)
+    cfg = json.loads((proj / "growth.json").read_text())
+    cfg["approvals"]["mode"] = "terminal"
+    (proj / "growth.json").write_text(json.dumps(cfg, indent=2))
+    import harness
+    harness.install(proj, cfg.get("name") or "Shop", "https://shop.example")       # the agent permissions follow the mode
     assert growth(tmp_path, "wizard", cwd=proj).returncode == 3                      # still waiting: resumes at browser
     growth(tmp_path, "wizard", "confirm", "browser", "--name", "Browser 1", cwd=proj)
     assert growth(tmp_path, "wizard", cwd=proj).returncode == 3                      # recorded, not yet approved by the owner

@@ -16,7 +16,13 @@
   growth approve list | verify                   show the log (delegated lines carry a [delegated] tag); check nobody edited it by hand
   growth approve key                             make the signing key (~/.config/growth-ops-kit/approvals.key)
 
-Each approval is typed by a person in a real terminal: the command shows what is approved and a 4-digit code, and runs
+Chat mode (growth.json approvals.mode "chat", the default for new projects since 3.0; owner, 24 Nov 2026: "remove all
+fuckings such permissions ... i am alredy saying you to do here"): nothing is typed in a terminal. The owner says yes in
+the conversation; the lead records it with --delegated (any kind, browser and region included), and the kit records the
+research browser and Google region itself once it has checked them. The line keeps the owner's words, the chain and
+the signature, so the log still shows who said what and when.
+
+Terminal mode (approvals.mode "terminal", the 2.x behaviour): each approval is typed by a person in a real terminal: the command shows what is approved and a 4-digit code, and runs
 only when `approve <code>` is typed back. The generated agent permissions deny this command. The log line records what
 was approved, the sha256 of the approved content, who, when, the hash of the previous line (a chain) and, once the key
 exists, an HMAC signature with a key kept in your home folder outside the project.
@@ -150,15 +156,34 @@ def verify(docs) -> tuple[list[dict], list[str]]:
     return out, probs
 
 
-def delegation(docs_or_project) -> dict | None:
-    """growth.json "approvals" when delegate_local is on, else None. `docs` is the project's docs folder (its parent holds growth.json)."""
+def _approvals_cfg(docs_or_project) -> dict:
     p = Path(docs_or_project)
     p = p.parent if p.name == "docs" else p
     try:
         a = json.loads((p / "growth.json").read_text()).get("approvals") or {}
     except (OSError, ValueError, AttributeError):
-        return None
-    return a if isinstance(a, dict) and a.get("delegate_local") is True else None
+        return {}
+    return a if isinstance(a, dict) else {}
+
+
+def chat_mode(docs_or_project) -> bool:
+    """growth.json approvals.mode is "chat": the owner's yes is given in the conversation, never typed in a terminal."""
+    return _approvals_cfg(docs_or_project).get("mode") == "chat"
+
+
+def delegation(docs_or_project) -> dict | None:
+    """growth.json "approvals" when delegate_local is on or the project is in chat mode, else None. `docs` is the
+    project's docs folder (its parent holds growth.json)."""
+    a = _approvals_cfg(docs_or_project)
+    return a if a and (a.get("delegate_local") is True or a.get("mode") == "chat") else None
+
+
+def record_checked(docs, kind: str, content, summary: str, how: str) -> dict:
+    """Chat mode: the kit checked it (the research browser is connected, Google's region matches): record it in the log
+    as a delegated line that says how it was checked. Used by the setup wizard; nothing for the owner to type."""
+    a = delegation(docs) or {}
+    return record(docs, kind, kind, content, summary, by=delegated_by(a), via=f"checked: {how}",
+                  extra={"mode": "delegated", "owner_words": str(a.get("owner_words") or ""), "since": str(a.get("since") or "")})
 
 
 def delegated_by(a: dict) -> str:
@@ -499,7 +524,7 @@ def main(argv=None, tty=None) -> int:
     what, rest = argv[0], argv[1:]
     delegated = "--delegated" in rest
     rest = [x for x in rest if x != "--delegated"]
-    if delegated and what not in DELEGABLE:
+    if delegated and what not in DELEGABLE and not chat_mode(_project()):
         raise SystemExit(f"growth approve {what} is never delegated: the owner types it in their own terminal "
                          "(the research browser, Google region and any go-live or release act stay with the owner)")
     flags = {}
