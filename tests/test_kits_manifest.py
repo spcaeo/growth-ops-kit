@@ -9,7 +9,7 @@ import kits
 
 ROOT = Path(__file__).resolve().parent.parent
 # tools that are not in the dispatcher's TOOLS dict yet: the work board's commands and the lane and runner of a later piece
-NEW_TOOLS = {"store", "board", "work", "pace", "lock", "unlock", "kits", "lane", "run"}
+NEW_TOOLS = {"store", "board", "work", "pace", "lock", "unlock", "kits", "lane", "runner"}
 WAYS = {"ahead", "parallel", "page", "single", "paced", "owner"}
 
 
@@ -37,7 +37,7 @@ def test_new_tools_sit_where_the_design_puts_them():
     where = {t: n for n, k in kits.kits().items() for t in k["tools"]}
     for t in ("store", "board", "work", "pace", "lock", "unlock"):
         assert where[t] == "core"
-    assert where["lane"] == "build" and where["run"] == "evidence"
+    assert where["lane"] == "build" and where["runner"] == "evidence"
 
 
 def test_every_job_kind_is_in_exactly_one_kit_and_is_well_formed():

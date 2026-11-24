@@ -100,7 +100,7 @@
     "evidence": {
       "purpose": "Proof in the project: full-page shots at the rulebook's widths, the click-test of every control, page archives. Runs in a headless browser from the pool.",
       "group": "F proof",
-      "tools": ["page_archive", "run"],
+      "tools": ["page_archive", "runner"],
       "libraries": [],
       "jobs": {
         "shots": {"way": "parallel", "runner": "machine", "resource": "browser", "stage": "evidence", "what": "screenshots at 1366 and 390 and the other rulebook widths, newer than the page's last change"},
