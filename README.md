@@ -33,7 +33,11 @@ cd growth-ops-kit
 ./setup.sh              # checks your tools, installs the add-ons, links `growth`, runs the tests on the demo site
 ```
 
-`setup.sh` links the `growth` command into `~/.local/bin`. If it says that folder is not on your PATH, add the line it
+`setup.sh` puts its add-ons in `~/.growth-ops-kit/venv` and links the `growth` command into `~/.local/bin`. To keep
+everything inside the kit folder instead (nothing in your home folder), run
+`GROWTH_VENV=$PWD/.venv GROWTH_BIN=$PWD/.bin ./setup.sh`, answer no to the PATH question, and use `./growth`.
+
+`setup.sh` links the `growth` command into `~/.local/bin` by default. If it says that folder is not on your PATH, add the line it
 prints to your shell profile (for example `export PATH="$HOME/.local/bin:$PATH"`) and open a new terminal; or run
 `./growth ...` from the kit folder. It offers to add the PATH line for you (it asks first).
 

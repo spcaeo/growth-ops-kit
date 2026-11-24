@@ -30,3 +30,7 @@ kit/rules/*.lock
 # the demo tests also run the tools in the demo project itself: the database and the lock files they make stay out of git
 examples/demo-site/project/state/
 examples/demo-site/project/**/*.lock
+
+# setup.sh may keep its tools inside the kit (GROWTH_VENV=./.venv, GROWTH_BIN=./.bin): never part of the repo
+.venv/
+.bin/
