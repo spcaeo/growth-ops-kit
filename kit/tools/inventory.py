@@ -122,15 +122,16 @@ def google():
         return {}, {}, ""
 
 
-def build(sm: dict, pages: dict, gsc=None, readers=None, work=None):
-    """Rows for inventory.json. `pages` is {path: (status, html)} (the page as the site serves it)."""
+def build(sm: dict, pages: dict, gsc=None, readers=None, work=None, listed_is_live: bool = False):
+    """Rows for inventory.json. `pages` is {path: (status, html)} (the page as the site serves it). listed_is_live (the
+    sitemap-only run): a page the sitemap lists counts as live, not fetched (row "fetched": false)."""
     gsc, readers, work = gsc or {}, readers or {}, work or []
     rows = []
     for path, lastmod in sm.items():
-        status, doc = pages.get(path, (0, ""))
+        status, doc = pages.get(path, (200 if listed_is_live else 0, ""))
         silo, pillar, kind, stage = classify(path)
         g = gsc.get(key(path), (0, 0, None))
-        row = {"path": path, "in_sitemap": True, "lastmod": lastmod, "status": "live" if status == 200 else f"http {status}",
+        row = {"path": path, "in_sitemap": True, "fetched": path in pages, "lastmod": lastmod, "status": "live" if status == 200 else f"http {status}",
                "type": kind, "silo": silo, "pillar": pillar, "stage": stage,
                "gsc_clicks": g[0] or 0, "gsc_impressions": g[1] or 0, "gsc_position": g[2], "visitors": readers.get(key(path), 0),
                **page_facts(doc)}
@@ -149,9 +150,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
     base = (a.base or SITE_URL).rstrip("/")
     if not a.offline:
-        fetch_rule.assert_may_fetch(base + "/")
+        fetch_rule.assert_may_fetch(base + "/", sitemap_only=a.no_pages)            # the sitemap only: no page is visited
         if not a.base:
-            fetch_rule.assert_may_fetch(CFG.get("sitemap_url") or base + "/sitemap.xml")
+            fetch_rule.assert_may_fetch(CFG.get("sitemap_url") or base + "/sitemap.xml", sitemap_only=a.no_pages)
     sitemap_path = urllib.parse.urlsplit(CFG.get("sitemap_url") or "/sitemap.xml").path or "/sitemap.xml"
     if a.offline:
         source, get = a.offline, None
@@ -171,7 +172,7 @@ def main(argv=None):
     gsc, readers, gsc_range = google()
     work_f = OUT / "work-log.json"
     work = json.loads(work_f.read_text()) if work_f.exists() else []
-    rows = build(sm, pages, gsc, readers, work)
+    rows = build(sm, pages, gsc, readers, work, listed_is_live=a.no_pages)
     OUT.mkdir(exist_ok=True)
     meta = {"generated": now(), "base": base, "sitemap_source": str(source), "search_console_range": gsc_range,
             "sitemap_urls": len(sm), "rows": len(rows)}

@@ -19,7 +19,7 @@ DOSSIER_WORDS = 20
 # required, so a page key that merely contains "review" does not pass); "-research-check", "-fact-check", "-claims" or
 # "-research-<date>" for the fact check.
 DATE = r"\d{4}-\d{2}-\d{2}"
-REVIEW_NAME = rf"-(audit|review)-.*{DATE}"
+REVIEW_NAME = rf"-(audit|review)-(?!fixes-).*{DATE}"   # never the builder's review-fixes file (24 Nov 2026)
 RESEARCH_NAME = rf"-(research-check|fact-check|claims)\b|-research-{DATE}"
 
 

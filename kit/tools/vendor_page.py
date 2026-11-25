@@ -155,7 +155,11 @@ def main(argv=None):
         # the raw text is saved and hashed, so the gate can check the quote is really in it (audit H9)
         import hashlib
         import re as _re
-        rf = PROJECT / "research" / "raw" / f"{a.key}-{_re.sub(r'[^a-z0-9]+', '-', a.vendor.lower()).strip('-')}-{dt.date.today().isoformat()}.txt"
+        # one file per page read: the source address is part of the name, so a second page of the same vendor on the
+        # same day never overwrites the first one's evidence (24 Nov 2026: 17 rows went stale at once)
+        src = a.url or a.source_url
+        tag = hashlib.sha256(src.encode()).hexdigest()[:8]
+        rf = PROJECT / "research" / "raw" / f"{a.key}-{_re.sub(r'[^a-z0-9]+', '-', a.vendor.lower()).strip('-')}-{dt.date.today().isoformat()}-{tag}.txt"
         rf.parent.mkdir(parents=True, exist_ok=True)
         rf.write_text(raw)
         rec["vendor_facts"].append({"vendor": a.vendor, "fact": a.fact, "value": a.value, "shown_as": a.value, "view": a.view, "how_read": "raw",

@@ -32,6 +32,13 @@ Before you act (written by `growth wizard`; edit outside these markers):
 - Show progress: the status bar at the bottom of the window follows the open task; say which step you are on, and never go
   silent for long.
 - No research step starts until the research browser is connected and Google is set to the target country (`growth doctor` A14).
+- Talk to the owner simply and quietly (owner, 24 Nov 2026: "not to create so much updates and noise in chat"): simple English,
+  short sentences, the answer first. One short line when a step finishes, not a running commentary. Never paste tool output,
+  logs, hook text or file dumps. End with what you need from the owner, or "nothing". One question at a time, with your
+  recommendation. Book-keeping (logging owner messages, ticking steps) happens silently and is never reported.
+- Every next step or question is explained, never a bare label like "the WordPress copy, when you say go" (owner, 24 Nov 2026:
+  "what is that why are we doing"): say what it is, why we do it, what changes and what does not, how long it takes, and then
+  ask one clear question the owner can answer with yes or no.
 {CLAUDE_END}
 """
 STAGE_MESSAGE = "Re-reading the page checkpoints"
@@ -64,6 +71,7 @@ OLD_UNSAFE_ALLOW = ["Bash(git branch*)", "Bash(python3 -m pytest*)", "Bash(pytes
 
 
 OURS = 'GROWTH_PROJECT="$CLAUDE_PROJECT_DIR" '
+REFRESH_SECONDS = 30     # Claude Code re-runs the status line on this timer too (statusLine.refreshInterval, seconds)
 
 
 def run_growth() -> str:
@@ -176,11 +184,13 @@ def install(folder: Path, name: str, site: str, kit_root: Path = KIT_ROOT, permi
         if not post:
             del cfg_s["hooks"]["PostToolUse"]
         if "statusLine" not in cfg_s:       # the owner watches the open task tick off at the bottom of the window (never replaced)
-            cfg_s["statusLine"] = {"type": "command", "padding": 0, "command": status_command}
+            cfg_s["statusLine"] = {"type": "command", "padding": 0, "command": status_command, "refreshInterval": REFRESH_SECONDS}
         elif "${GROWTH_KIT:-" in str(cfg_s["statusLine"].get("command", "")) and "statusline.py" in cfg_s["statusLine"]["command"]:
             cfg_s["statusLine"]["command"] = status_command
         elif str(cfg_s["statusLine"].get("command", "")).endswith(" statusline"):
             cfg_s["statusLine"]["command"] = _refresh(cfg_s["statusLine"]["command"], status_command)
+        if str(cfg_s["statusLine"].get("command", "")).endswith(" statusline"):
+            cfg_s["statusLine"].setdefault("refreshInterval", REFRESH_SECONDS)
         if permissions:
             allow, deny = permissions_wanted(cfg or _project_cfg(folder), kit_root)
             perm = cfg_s.setdefault("permissions", {})
@@ -198,7 +208,65 @@ def install(folder: Path, name: str, site: str, kit_root: Path = KIT_ROOT, permi
         if CLAUDE_START not in text:
             md.write_text(text.rstrip("\n") + ("\n\n" if text.strip() else "") + CLAUDE_BLOCK)
             made.append(md)
+        elif CLAUDE_END in text:                      # our own block, between the markers, follows the kit (never the owner's text)
+            a, rest = text.split(CLAUDE_START, 1)
+            b = rest.split(CLAUDE_END, 1)[1]
+            fresh = a + CLAUDE_BLOCK.rstrip("\n") + b
+            if fresh != text:
+                md.write_text(fresh)
+                made.append(md)
     return made
+
+
+def workspace_of(project: Path, cfg: dict | None = None) -> Path | None:
+    """The outer folder the owner opens Claude Code in (growth.json "workspace"), when the project sits inside it."""
+    w = (cfg if cfg is not None else _project_cfg(project)).get("workspace") or ""
+    if not w:
+        return None
+    w, project = Path(w).expanduser().resolve(), Path(project).resolve()
+    return w if w != project and w in project.parents else None
+
+
+def pinned(project: Path, what: str, kit_root: Path = KIT_ROOT) -> str:
+    """A hook or status command for the workspace: the project is named by its path, since $CLAUDE_PROJECT_DIR is the workspace."""
+    return f'GROWTH_PROJECT="{Path(project).resolve()}" "${{GROWTH_KIT:-{kit_root}}}/growth" {what}'
+
+
+def install_workspace(project: Path, cfg: dict | None = None, kit_root: Path = KIT_ROOT) -> list[Path]:
+    """Owner, 24 Nov 2026: "progress bar or workflow of claude code by default". Claude Code reads .claude/settings.json from the
+    folder it is opened in; when that is the workspace around the project, the status bar, the Stop hook and the stage hook go
+    there too, pinned to the project. Adds only what is missing; never replaces the owner's own status line or hooks."""
+    ws_dir = workspace_of(project, cfg)
+    if not ws_dir:
+        return []
+    settings = ws_dir / ".claude" / "settings.json"
+    with atomic.locked(settings):
+        s = _load(settings)
+        before = json.dumps(s, sort_keys=True)
+        if "statusLine" not in s:
+            s["statusLine"] = {"type": "command", "padding": 0, "command": pinned(project, "statusline", kit_root), "refreshInterval": REFRESH_SECONDS}
+        elif str(s["statusLine"].get("command", "")).endswith(" statusline"):
+            s["statusLine"].setdefault("refreshInterval", REFRESH_SECONDS)
+        hooks = s.setdefault("hooks", {})
+        if "hook stop" not in json.dumps(hooks.get("Stop", [])):
+            hooks.setdefault("Stop", []).append({"hooks": [{"type": "command", "command": pinned(project, "hook stop", kit_root),
+                                                            "statusMessage": STOP_MESSAGE}]})
+        if "hook stage" not in json.dumps(hooks.get("PostToolUse", [])):
+            hooks.setdefault("PostToolUse", []).append({"matcher": "Bash", "hooks": [{"type": "command",
+                                                        "command": pinned(project, "hook stage", kit_root), "statusMessage": STAGE_MESSAGE}]})
+        if json.dumps(s, sort_keys=True) != before:
+            atomic.write_json(settings, s, indent=2)
+            return [settings]
+    return []
+
+
+def workspace_ok(project: Path, cfg: dict | None = None) -> bool | None:
+    """None when there is no workspace; else True when its settings show the bar and run the Stop hook."""
+    ws_dir = workspace_of(project, cfg)
+    if not ws_dir:
+        return None
+    s = _load(ws_dir / ".claude" / "settings.json")
+    return "statusline" in str((s.get("statusLine") or {}).get("command", "")) and "hook stop" in json.dumps(s.get("hooks", {}).get("Stop", []))
 
 
 def _project_cfg(folder: Path) -> dict:
@@ -256,6 +324,11 @@ def check(project: Path, cfg: dict) -> list[tuple[str, str, str, str]]:
     out.append(("Workflow guard (hook stage)", "ok" if stage and all(h.get("statusMessage") for h in stage) else "todo",
                 "the stage hook re-reads the page checkpoints after each task step" if stage and all(h.get("statusMessage") for h in stage)
                 else "no `hook stage` PostToolUse hook (or no statusMessage), so checkpoints are not re-read at each stage", fix))
+    wok = workspace_ok(project, cfg)
+    if wok is not None:
+        out.append(("Workspace progress bar", "ok" if wok else "todo",
+                    f"the bar and the Stop hook also run where Claude Code is opened ({workspace_of(project, cfg)})" if wok
+                    else f"Claude Code opened in {workspace_of(project, cfg)} shows no progress bar and runs no Stop hook", fix))
     sl = settings.get("statusLine") or {}
     out.append(("Status line", "ok" if "statusline" in str(sl.get("command", "")) else "todo",
                 "status line shows the open task as a bar" if "statusline" in str(sl.get("command", "")) else "no growth status line in .claude/settings.json", fix))

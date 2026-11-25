@@ -4,6 +4,27 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 3.0.1 - 2026-11-25
+
+Fixes found while running 3.0 on its first project (24 Nov 2026). No page rule changes: a page is READY under 3.0.1
+exactly when it is under 3.0.0.
+- **Quiet chat.** One short line when a step finishes; soft rules and hook text stay out of the owner's chat (the journal
+  keeps them). Every next step is explained, never a bare label (book rule "Simple English, answer first").
+- **Steps log kept quietly.** `growth owner_messages log-missing` writes one row per owner message not logged yet (the
+  Stop hook runs it), with "to fill" notes the agent completes; a short answer ("yes", "done") maps to its row once; the
+  same message seen twice gets one row; messages count from the project's start (`owner_messages_since`).
+- **Secrets never echoed.** A password or key typed into the chat is hidden in the Stop hook output and in log rows.
+- **Workspace progress bar.** When the project sits inside the folder Claude Code is opened in (`growth.json`
+  `workspace`), that folder's `.claude/settings.json` gets the status bar and the Stop hook too, pinned to the project;
+  the owner's own status line or hooks are never replaced. The bar refreshes every 30 s.
+- **Approvals.** A new log gets its signing key before its first line, so early honest lines no longer read as
+  "tampered"; a second run of a decision adds no second line.
+- **Research.** Helper agents cannot reach the research browser: the lead does every browser step and saves the result
+  under `research/`; helpers work from those files (lessons). Review files are never mistaken for review-fix files.
+- **Smaller.** Helper roles read from a role label first ("review: ..."); the home page, pricing and `money_pages` get
+  the money-page playbook; the gate finds the preview worktree from the preview address; a sitemap-only inventory
+  run visits no page (no-crawl); a fetch on a no-crawl live host is refused with a plain reason.
+
 ## 3.0.0 - 2026-11-24
 
 Many hands, one database: several agents work on one site at the same time without waiting for each other (book

@@ -180,8 +180,13 @@ def cmd_add(a, kind=None, text=None):
     render(e["pages"])
     print(e["id"])
     if e["kind"] == "decision":
-        print(f"A decision counts only when the owner approves it: the owner runs   growth approve decision {e['id']}   "
-              "in their own terminal.")
+        import approvals
+        if approvals.chat_mode(PROJECT):
+            print(f"A decision counts only when the owner approves it: when the owner says yes in chat, record it with "
+                  f"growth approve decision {e['id']} --delegated")
+        else:
+            print(f"A decision counts only when the owner approves it: the owner runs   growth approve decision {e['id']}   "
+                  "in their own terminal.")
 
 
 def cmd_ask(a):

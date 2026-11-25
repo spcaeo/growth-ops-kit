@@ -110,7 +110,7 @@ def last_exchange(transcript, start=0):
 
 
 # A line that withdraws a link ("withdrawn", "not ready", "do not open") may name it: that is the correction itself.
-WITHDRAW = re.compile(r"\b(withdraw\w*|not (yet )?ready|not approved|do not open|don'?t open|ignore (that|the) link)\b", re.I)
+WITHDRAW = re.compile(r"\b(withdraw\w*|(not|isn'?t|aren'?t) (yet )?ready|not approved|do not open|don'?t open|ignore (that|the) link)\b", re.I)
 
 
 def _without_withdrawals(text):

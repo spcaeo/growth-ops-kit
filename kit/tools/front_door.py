@@ -88,8 +88,12 @@ def default_key(path: str) -> str:
 
 
 def guess_type(path: str, cfg: dict) -> str:
+    """The home page, pricing and the pages in growth.json "money_pages" sell: they get the money-page playbook (book: "the
+    main service pages, pricing and the home page"). 24 Nov 2026: the home page was guessed "core" (change-a-page)."""
     segs = [s for s in path.split("/") if s]
-    if path in (cfg.get("core_pages") or {}) or not segs:
+    if not segs or path in (cfg.get("money_pages") or []) or segs == ["pricing"]:
+        return "money"
+    if path in (cfg.get("core_pages") or {}):
         return "core"
     if len(segs) >= 2:
         return "post"

@@ -22,7 +22,8 @@ COUNTRIES = {
     "MX": ("Mexico", "es"), "BR": ("Brazil", "pt"), "JP": ("Japan", "ja"), "PH": ("Philippines", "en"),
 }
 NOT_A_REGION = ("current region", "current location", "auto", "automatic", "unknown", "")
-REGION_FIX = "Google Search settings > Other settings > Language & region > Results region, choose {country}, save"
+REGION_FIX = ("Google Search settings > Other settings > Language & region (https://www.google.com/preferences?hl=en&lang=1): "
+             'click "Results region", pick {country} from the list by clicking it (scroll to it; never type into the list\'s search box), click Confirm, then reload the page and read Results region again. If Google says "Can\'t update your setting right now" or the page reads "Current Region" after the reload, try once more; if it still does not stick, stop and ask the owner to pick it by hand in the open tab (Google can refuse a tool\'s click and accept a person\'s), then reload and read it again')
 
 
 def norm(s) -> str:
@@ -51,9 +52,24 @@ def required(cfg: dict) -> bool:
     return bool((cfg.get("research_browser") or {}).get("required"))
 
 
-def fix_browser(name: str = "") -> str:
+def chat_mode(cfg: dict | None) -> bool:
+    """Chat mode (the 3.0 default): the agent's own check is the confirmation; no owner step in a terminal."""
+    return ((cfg or {}).get("approvals") or {}).get("mode", "chat") == "chat"
+
+
+def owner_tail(cfg: dict | None, step: str, terminal: bool = True) -> str:
+    """The owner's terminal step, named only in terminal mode (owner, 24 Nov 2026: no permission steps in chat mode)."""
+    if chat_mode(cfg):
+        return ""
+    return f", and the owner runs growth approve {step}" + (" in their own terminal" if terminal else "")
+
+
+def fix_browser(name: str = "", cfg: dict | None = None) -> str:
+    if chat_mode(cfg):
+        return ("the agent checks list_connected_browsers itself; when one is connected: growth wizard confirm browser --name "
+                f"\"{name or '<its name>'}\"; only when none is connected, the owner types /chrome in Claude Code and picks the browser")
     return (f"in Claude Code type /chrome, choose {name or 'the browser named in SETUP.md'}, check \"By default: on\"; then "
-            f"growth wizard confirm browser --name \"{name or 'Browser 1'}\", and the owner runs growth approve browser in their own terminal")
+            f"growth wizard confirm browser --name \"{name or 'Browser 1'}\"" + owner_tail(cfg, "browser"))
 
 
 def approval_problem(project, step: str, content) -> str | None:
@@ -80,7 +96,7 @@ def problems(project, cfg: dict) -> list[str]:
     browser = wizard_state.get(project, "browser")
     bname = (browser.get("answer") or {}).get("name", "") if isinstance(browser.get("answer"), dict) else ""
     if browser.get("status") != "done":
-        out.append("research browser not connected: " + fix_browser(bname))
+        out.append("research browser not connected: " + fix_browser(bname, cfg))
     else:
         p = approval_problem(project, "browser", approvals.browser_content(bname))
         if p:
@@ -92,10 +108,11 @@ def problems(project, cfg: dict) -> list[str]:
         if region.get("status") != "done":
             if seen and not region_matches(seen, market):
                 out.append(f"Google's region reads \"{seen}\", not {want}: " + REGION_FIX.format(country=want)
-                           + "; then growth wizard confirm region --seen \"" + want + "\", and the owner runs growth approve region")
+                           + "; then growth wizard confirm region --seen \"" + want + "\"" + owner_tail(cfg, "region", False))
             else:
-                out.append(f"Google region for {want} not verified and confirmed by the owner: growth wizard confirm region --seen "
-                           f"\"<what Google's settings page says>\", then the owner runs growth approve region in their own terminal")
+                out.append(f"Google region for {want} not verified" + ("" if chat_mode(cfg) else " and confirmed by the owner")
+                           + ": the agent opens https://www.google.com/preferences?hl=en in the research browser, reads Results region, "
+                           f"then growth wizard confirm region --seen \"<what Google's settings page says>\"" + owner_tail(cfg, "region"))
         elif not region_matches(seen, market):
             out.append(f"recorded region \"{seen}\" is not the target market {want}: re-check it")
         else:

@@ -147,3 +147,23 @@ def test_chat_mode_the_kit_checks_browser_and_region_itself_and_nothing_waits_fo
 def test_chat_mode_a_wrong_region_is_still_refused(tmp_path):
     folder, _ = project(tmp_path, mode="chat")
     assert growth(tmp_path, "wizard", "confirm", "region", "--seen", "India", cwd=folder).returncode == 1
+
+
+def test_chat_mode_messages_name_no_owner_terminal_step(tmp_path):
+    """Owner, 24 Nov 2026: no permission steps. In chat mode the doctor and research-check text never send the owner to a
+    terminal; in terminal mode they still name growth approve."""
+    folder, cfg = project(tmp_path, mode="chat")
+    text = " ".join(gate.problems(folder, {**cfg, "research_browser": {"required": True}}))
+    assert "growth approve" not in text and "own terminal" not in text
+    assert "list_connected_browsers" in text and "growth wizard confirm region" in text
+    folder2, cfg2 = project(tmp_path / "t", mode="terminal")
+    text2 = " ".join(gate.problems(folder2, {**cfg2, "research_browser": {"required": True}}))
+    assert "growth approve browser" in text2 and "growth approve region" in text2
+
+
+def test_region_fix_says_pick_from_the_list_and_read_back():
+    """24 Nov 2026: typing into the region list's search box and trusting one Confirm did not stick; the steps say pick from
+    the list, Confirm, reload, read again, and hand it to the owner when Google refuses."""
+    t = gate.REGION_FIX.format(country="United States")
+    for must in ("pick United States from the list", "never type", "Confirm", "reload", "Can't update your setting", "ask the owner"):
+        assert must in t, must

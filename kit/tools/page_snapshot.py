@@ -109,6 +109,9 @@ def main():
     key = a.path.rstrip("/") or "/"   # one form for matching; the site's own form comes from its inventory row
     today = date.today()
     frm = (today - timedelta(days=a.days)).isoformat()
+    if not (INV / "inventory.json").is_file():
+        raise SystemExit("No page list yet. Run growth inventory first (on a site being rebuilt: growth inventory --no-pages, "
+                         "which reads only the sitemap).")
     inv = json.loads((INV / "inventory.json").read_text())["pages"]
     row = next((r for r in inv if (r["path"].rstrip("/") or "/") == key and r["status"] == "live"), None)
     if not row:

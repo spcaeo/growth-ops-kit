@@ -51,7 +51,7 @@ def test_the_status_bar_shows_setup_progress_from_minute_one(tmp_path):
     folder, _ = new_project.make(tmp_path / "p", "https://shop.example")
     growth(tmp_path, "doctor", cwd=folder)
     line = growth(tmp_path, "statusline", cwd=folder).stdout
-    assert line.startswith("T1 ▰") and "now:" in line
+    assert line.startswith("T1 Project setup ▰") and "now:" in line
 
 
 def test_the_onboard_skill_and_the_task_share_doctors_step_list(tmp_path):

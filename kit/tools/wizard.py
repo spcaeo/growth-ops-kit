@@ -11,7 +11,7 @@ target country.
   growth wizard answer <step> <value>   # record one answer (value is JSON or plain text); used by the /onboard skill
   growth wizard confirm browser --name "Browser 1"          # the agent records what it sees ...
   growth wizard confirm region --seen "United States"
-  growth approve browser   /   growth approve region         # ... and the owner confirms it, in their own terminal
+  growth approve browser   /   growth approve region         # ... terminal mode only: the owner confirms it in their own terminal
   growth wizard research-check [--connected "Browser 1"] [--task T5 --step 3]   # start of every research step
 
 What it will never do: push, merge, deploy, change DNS, read the live site page by page, print a key. Questions come from an
@@ -247,6 +247,7 @@ def install_harness(project: Path, wanted: dict) -> list[str]:
     cfg = cfg_of(project)
     made = harness.install(project, cfg.get("name", ""), cfg.get("site_url", ""), permissions=wanted.get("permissions", True), cfg=cfg)
     out = [f"wrote {p.relative_to(project)}" for p in made]
+    out += [f"wrote {p} (the progress bar where Claude Code is opened)" for p in harness.install_workspace(project, cfg)]
     if wanted.get("git_hooks"):
         out += harness.install_git_hooks(project, cfg)
     return out or ["nothing to add: the harness was already complete"]
@@ -420,7 +421,7 @@ def step_region(s: Session) -> str:
     want = gate.country_name(cfg_of(s.project).get("market") or {}) or "your target country"
     if _chat(s.project):
         say(f"WAITING region: the agent checks it (not the owner): in the research browser open https://www.google.com/preferences?hl=en , read "
-            f"\"Results region\" (set it to {want} if it differs, then Save), and record what it says:")
+            f"\"Results region\"; if it is not {want}: " + gate.REGION_FIX.split(": ", 1)[1].format(country=want) + "; then record what it says:")
         say(f"  growth wizard confirm region --seen \"<what the page says>\"   (done at once when it is {want})")
         raise Waiting("region")
     say(f"Google's results region is not confirmed as {want} yet. Open Google's search settings, read the Results region, tell me what it says.")
@@ -502,15 +503,34 @@ def finish(project: Path, human: bool = False) -> int:
     return 0
 
 
+PLAIN = {"market": "Your markets: which countries and languages", "site_repo": "Where the site's code lives (or none yet)",
+         "analytics": "Analytics keys (traffic and Search Console numbers)", "live_rule": "May the kit read the live site page by page",
+         "approver": "Who says yes before a page goes live", "harness": "The agent's guard rails and the progress bar",
+         "detect": "What the site is built with, its sitemap and redirects (found by the kit)",
+         "browser": "The research browser (Chrome), checked by the agent", "region": "Google set to your main country, checked by the agent"}
+
+
+def progress(project: Path, i: int, step: str) -> str:
+    """One plain line the agent passes on to the owner: where setup is, as a bar, and what this step is."""
+    done = sum(1 for s in ORDER if ws.get(project, s).get("status") in ws.CLOSED)
+    bar = "▰" * done + "▱" * (len(ORDER) - done)
+    return f"PROGRESS {bar} {done}/{len(ORDER)} · now step {i}: {PLAIN[step]}"
+
+
 def run(project: Path, session: Session, human: bool = False) -> int:
     say(f"Setup wizard for {cfg_of(project).get('name')} ({cfg_of(project).get('site_url')})")
     say("What to expect: market, site repo, analytics access, live-site rule, approver, the harness (one yes), detection, then two guided steps "
         "(research browser, Google region). It never pushes, merges, deploys, changes DNS, reads the live site page by page or prints a key.\n")
-    for step in ORDER:
+    say("The steps, in order:")
+    for i, step in enumerate(ORDER, 1):
+        say(f"  {i}. {PLAIN[step]}")
+    say("")
+    for i, step in enumerate(ORDER, 1):
         cur = ws.get(project, step)
         if cur.get("status") in ws.CLOSED:
-            say(f"[{cur['status']:>8}] {step}: {cur.get('date', '')[:10]} ({cur.get('source', '')})")
+            say(f"[{cur['status']:>8}] step {i} of {len(ORDER)} {step}: {cur.get('date', '')[:10]} ({cur.get('source', '')})")
             continue
+        say(progress(project, i, step))
         try:
             msg = HANDLERS[step](session)
         except Waiting as w:
@@ -518,7 +538,7 @@ def run(project: Path, session: Session, human: bool = False) -> int:
             write_setup_md(project)
             run_doctor(project)
             return WAIT
-        say(f"[    done] {step}: {msg}")
+        say(f"[    done] step {i} of {len(ORDER)} {step}: {msg}")
         write_setup_md(project)
         run_doctor(project)
     return finish(project, human)
@@ -610,7 +630,7 @@ def cmd_research_check(project: Path, connected: str | None, task: str, step: in
         names = [n.strip() for n in connected.split(",") if n.strip()]
         if name not in names:
             ws.record(project, "browser", "asked", test={"command": "list_connected_browsers", "result": ", ".join(names) or "[]"})
-            problems = ["the research browser is gone (connected: " + (", ".join(names) or "none") + "): " + gate.fix_browser(name)]
+            problems = ["the research browser is gone (connected: " + (", ".join(names) or "none") + "): " + gate.fix_browser(name, cfg)]
     if not problems:
         say("research browser OK: connected and Google region confirmed for the target market")
         return 0
@@ -698,7 +718,7 @@ def main(argv=None) -> int:
             if not ok and ws.get(project, "region").get("status") != "tested":
                 return 1
         else:
-            sys.exit("confirm browser --name \"...\"  |  confirm region --seen \"...\"   (then the owner: growth approve browser|region)")
+            sys.exit("confirm browser --name \"...\"  |  confirm region --seen \"...\"   (terminal mode only: then the owner runs growth approve browser|region)")
         write_setup_md(project)
         run_doctor(project)
         return 0

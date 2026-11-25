@@ -274,3 +274,11 @@ def test_released_page_stays_ready_after_its_worktree_is_removed(tmp_path, monke
     assert ready.is_ready("/pricing")                                      # merged into the site: what went live
     (p / "journal" / "ready.json").write_text(json.dumps({"/pricing": {"commit": "0" * 40}}))
     assert not ready.is_ready("/pricing")                                  # a commit the site never got: not ready
+
+
+def test_withdrawal_accepts_contractions():
+    # 24 Nov 2026: "the localhost address isn't ready to open yet" did not count as a withdrawal
+    from url_guard import WITHDRAW
+    for line in ["That address isn't ready yet.", "These links aren't ready.", "It is not ready.", "Withdrawn."]:
+        assert WITHDRAW.search(line), line
+    assert not WITHDRAW.search("The page is ready.")

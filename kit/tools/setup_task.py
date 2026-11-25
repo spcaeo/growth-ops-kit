@@ -68,6 +68,17 @@ def ensure(project, cfg: dict | None = None) -> str:
     return out[0]
 
 
+# Steps that cannot start before something outside the agent's hands exists (owner, 24 Nov 2026: the bar must say where we
+# are, not show a step as "now" that nobody can work on). step id -> (what it waits for, test on growth.json: True = still waiting)
+WAITS = {"A7": ("the site to build and serve", lambda c: not c.get("site_repo")),
+         "A7b": ("the site to build and serve", lambda c: not c.get("site_repo"))}
+
+
+def waiting_for(sid: str, cfg: dict) -> str:
+    w = WAITS.get(sid)
+    return w[0] if w and w[1](cfg) else ""
+
+
 def sync(project, results, cfg: dict | None = None) -> bool:
     """results: [(step name as doctor prints it, state "OK  "|"BUSY"|"TODO"|"FAIL", result line)]. Ticks done steps with the
     line as proof, un-ticks the others. Returns True when the list changed. Does nothing when there is no setup task."""
@@ -87,13 +98,23 @@ def sync(project, results, cfg: dict | None = None) -> bool:
             if step is None:
                 continue
             done = st.strip() in ("OK", "BUSY")
-            new = "done" if done else "todo"
+            wait = "" if done else waiting_for(sid, cfg)
+            new = "done" if done else ("waiting" if wait else "todo")
             proof = f"doctor {st.strip()}: {what}"[:240]
-            if step["status"] != new or (done and step.get("output") != proof):
+            if step["status"] != new or (done and step.get("output") != proof) or step.get("waiting_for", "") != wait:
                 step["status"], step["at"], step["output"] = new, _now(cfg), proof if done else None
+                if wait:
+                    step["waiting_for"] = wait
+                else:
+                    step.pop("waiting_for", None)
                 changed.append(1)
-        all_done = all(s["status"] == "done" for s in task["steps"])
-        want = "done" if all_done else ("doing" if task["status"] == "done" else task["status"])
+        left = [s for s in task["steps"] if s["status"] != "done"]
+        if not left:
+            want = "done"
+        elif all(s["status"] == "waiting" for s in left):
+            want = "waiting"                  # every open step waits on something outside: the bar says so instead of "now"
+        else:
+            want = "doing"
         if want != task["status"]:
             task["status"], task["finished"] = want, (_now(cfg) if want == "done" else None)
             changed.append(1)

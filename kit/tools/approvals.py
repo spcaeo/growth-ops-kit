@@ -80,6 +80,9 @@ def digest(obj) -> str:
 
 
 def key_path() -> Path:
+    """GROWTH_APPROVALS_KEY names another key file (the tests use it so no test ever reads or makes the real key)."""
+    if os.environ.get("GROWTH_APPROVALS_KEY"):
+        return Path(os.environ["GROWTH_APPROVALS_KEY"])
     return Path(os.path.expanduser("~")) / ".config" / "growth-ops-kit" / "approvals.key"
 
 
@@ -196,7 +199,9 @@ def record(docs, kind: str, ref: str, content, summary: str = "", by: str | None
     if kind not in KINDS:
         raise ValueError(f"unknown approval kind {kind}")
     p = log_path(docs)
-    key = read_key()
+    # a new log gets the signing key before its first line, so no honest line is ever unsigned (24 Nov 2026: the key
+    # was made at the 4th approval and the 3 earlier lines made the whole log read as "tampered")
+    key = read_key() or (ensure_key() if not _lines(docs) else None)
     with atomic.locked(p):        # read the last line, chain to it and append under one lock: two approvals at once never share an id or a prev hash
         lines = _lines(docs)
         entry = {"id": f"A{len(lines) + 1:04d}", "kind": kind, "ref": str(ref), "sha256": digest(content), "summary": summary[:200],
@@ -588,8 +593,13 @@ def main(argv=None, tty=None) -> int:
         if not e or e.get("kind") != "decision":
             raise SystemExit(f"no decision {rest[0]} in the journal (growth journal add --kind decision ...)")
         c = decision_content(e)
+        if status(docs, "decision", e["id"], c)[0] == "ok":          # a second run must not add a second line (24 Nov 2026)
+            print(f"decision {e['id']} is already approved; nothing added")
+            return 0
         approve(docs, "decision", e["id"], c, f"decision {e['id']} for {', '.join(e.get('pages') or [])}: {e.get('title', '')[:80]}",
                 json.dumps(c, indent=1, ensure_ascii=False), tty)
+        if delegated:
+            print(f"decision {e['id']} approved (recorded from the owner's yes in chat)")
     elif what in ("browser", "region"):
         import wizard_state as ws
         import research_gate as gate

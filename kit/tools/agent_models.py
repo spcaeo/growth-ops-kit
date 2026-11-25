@@ -64,6 +64,20 @@ def settings():
     return roles, family(cfg.get("lead")), exempt
 
 
+ROLE_PREFIX = re.compile(r"^\s*([A-Za-z][A-Za-z /&-]{1,30}):\s")
+
+
+def role_words(c, roles=None):
+    """The words a helper's role is read from. A description that opens with a role label ("review: ...",
+    "builder: ...") is judged by that label alone, so a reviewer described as "review: the plan before build" is not
+    taken for a builder by the word "build" later on (friction, 24 Nov 2026). Otherwise the name and the description."""
+    desc = str(c.get("description", ""))
+    m = ROLE_PREFIX.match(desc)
+    if m and any(re.search(p, m.group(1)) for p, _ in (roles or DEFAULT_ROLES)):
+        return m.group(1)
+    return f"{c.get('name', '')} {desc}".strip()
+
+
 def _is_tool_result(e):
     c = (e.get("message") or {}).get("content")
     return isinstance(c, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c)
@@ -124,7 +138,7 @@ def problems(calls, lead=None, roles=None, builders=None, exempt=None):
             continue
         who = f"{c.get('name', '')} {c.get('description', '')}".strip()
         model = family(c.get("model")) or family(seen_lead or lead) or cfg_lead
-        pat = next(((p, ok) for p, ok in roles if re.search(p, who)), None)
+        pat = next(((p, ok) for p, ok in roles if re.search(p, role_words(c, roles))), None)
         if pat is None:
             out.append(f"helper '{who}' has no role the kit knows, so its model cannot be judged. Name the role in its description "
                        "(builder, review, log/count, evidence) and start it again, or list the role in growth.json agent_models.")
@@ -174,7 +188,7 @@ def main():
     if not tp or not Path(tp).exists():
         return 0
     built = [(f"{c.get('name', '')} {c.get('description', '')}", family(c.get("model")) or lead)
-             for c, lead in agent_calls(tp, all_turns=True) if re.search(BUILDER, f"{c.get('name', '')} {c.get('description', '')}")]
+             for c, lead in agent_calls(tp, all_turns=True) if re.search(BUILDER, role_words(c))]
     probs = problems(agent_calls(tp), lead=transcripts.lead_model(tp), builders=lambda who: builders_for(who, built))
     for p in probs:
         print(p)

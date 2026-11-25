@@ -17,6 +17,10 @@ CASES = [
     ("rs", "Researcher: AU region vendor pages", "opus", 1),
     ("ev", "page 4 evidence: account-to-account dossier", "sonnet", 0),   # friction 53: 'account' is not 'count'
     ("x", "Count log lines", "haiku", 0),
+    # a leading role label wins over later words (24 Nov 2026: "review: ... before build" was taken for a builder)
+    ("", "review: home facts and fold plan before build", "opus", 0),
+    ("", "builder: restructure dossier for review", "sonnet", 0),
+    ("", "builder: restructure dossier for review", "opus", 1),
 ]
 
 

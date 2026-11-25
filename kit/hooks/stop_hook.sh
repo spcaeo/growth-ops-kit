@@ -32,6 +32,7 @@ else
 fi
 OUT=""     # soft rules: blocked once, then a warning
 HARD=""    # never softened: the golden rule (a URL not READY)
+"$G" owner_messages log-missing >/dev/null 2>&1      # quiet book-keeping: the row is written here, never asked for in chat
 if ! R=$("$G" owner_messages check 2>&1); then
   L=$(printf '%s\n' "$R" | grep -E '^(MISSING|ANSWER)')
   if [ -n "$L" ]; then
@@ -54,9 +55,8 @@ if [ -n "$WF" ] || [ -n "$HARD" ]; then
   printf '%s\n%s\n%s' "$WF" "$HARD" "$OUT" >&2
   exit 2
 fi
-if [ "$ACTIVE" = "true" ]; then
+if [ "$ACTIVE" = "true" ]; then     # soft rules are never shown in the owner's chat (owner, 24 Nov 2026: less noise); the journal keeps them
   "$G" journal add --kind note --title "Stop hook: warned through" --text "$OUT" --tag stop-hook >/dev/null 2>&1
-  python3 -c 'import json,sys; print(json.dumps({"systemMessage": "Rule checks still failing:\n" + sys.argv[1]}))' "$OUT"
   exit 0
 fi
 printf '%s' "$OUT" >&2

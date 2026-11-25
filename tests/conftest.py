@@ -7,6 +7,7 @@ import pytest
 
 sys.dont_write_bytecode = True                    # nothing is written inside the kit while the tests run
 os.environ["PYTHONDONTWRITEBYTECODE"] = "1"       # ... and neither do the tools the tests start
+os.environ["GROWTH_NO_REFRESH"] = "1"               # the status line never starts a background doctor during tests
 
 ROOT = Path(__file__).resolve().parent.parent
 KIT = ROOT / "kit"
@@ -40,3 +41,11 @@ def demo_project(tmp_path):
 def clean_env(monkeypatch):
     monkeypatch.delenv("GROWTH_PROJECT", raising=False)
     return monkeypatch
+
+
+
+@pytest.fixture(autouse=True)
+def _approvals_key_in_tmp(tmp_path, monkeypatch):
+    """No test reads or makes the real signing key (~/.config/growth-ops-kit/approvals.key): a new log makes the key at
+    its first line, and child `growth` processes inherit the same test key through GROWTH_APPROVALS_KEY."""
+    monkeypatch.setenv("GROWTH_APPROVALS_KEY", str(tmp_path / "approvals-key" / "approvals.key"))

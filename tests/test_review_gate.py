@@ -151,3 +151,11 @@ def test_a_review_the_owner_did_not_sign_off_or_that_changed_after_fails(tmp_pat
 def test_a_review_needs_a_builder_line(tmp_path):
     ln = review_line(tmp_path, answered().replace("Builder: model-a\n", ""))
     assert ln.level == "FAIL" and "Builder" in ln.what
+
+
+def test_the_review_fixes_file_is_not_the_review():
+    # 24 Nov 2026: home-review-fixes-<date>.md was read as the review and failed for its missing R verdicts
+    import re
+    from gatelib.c_evidence import REVIEW_NAME
+    assert re.search(REVIEW_NAME, "-review-2026-11-24.md")
+    assert not re.search(REVIEW_NAME, "-review-fixes-2026-11-24.md")

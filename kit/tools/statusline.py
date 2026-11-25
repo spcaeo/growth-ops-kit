@@ -89,13 +89,14 @@ def line(data: dict, style: str = "bars", manual: str = "") -> str:
     tasks = data.get("tasks") or []
     open_t = [t for t in tasks if t.get("status") != "done" and any(s.get("status") != "done" for s in t.get("steps") or [])]
     if not open_t:
-        return f"no open task · {len(tasks)} task(s) recorded" if tasks else "no task yet: growth tasks add \"...\""
+        return f"✓ all {len(tasks)} task(s) done" if tasks else "no task yet: growth tasks add \"...\""
     # the main job: a task being worked on (status doing) first, then one still to start; a task that is blocked or waiting
     # (for a date, for the owner) never takes the bar from live work (friction 47: blocked T3, 60 steps, hid doing T13).
     # Among equals, the one with most steps.
     tstat = lambda t: (t.get("status") or "todo").lower()  # noqa: E731
     rank = lambda t: (tstat(t) in ACTIVE, tstat(t) not in STUCK, len(t.get("steps") or []))  # noqa: E731
     main = max(open_t, key=rank)
+    title = " " + (main.get("title") or "")[:24] if main.get("title") == "Project setup" else ""
     steps = main.get("steps") or []
     done = sum(1 for s in steps if s.get("status") == "done")
     # "now" is the step being worked on (status doing), else the first step still to do; stuck steps are listed apart,
@@ -103,17 +104,44 @@ def line(data: dict, style: str = "bars", manual: str = "") -> str:
     now = next((s for s in steps if (s.get("status") or "").lower() in ACTIVE), None) or \
         next((s for s in steps if (s.get("status") or "todo").lower() not in ("done", *STUCK)), None)
     stuck = [s for s in steps if (s.get("status") or "").lower() in STUCK]
-    parts = [f"{main.get('id', '?')}{' (waiting)' if tstat(main) in STUCK else ''} {bar(done, len(steps), style)} {done}/{len(steps)}"]
+    parts = [f"{main.get('id', '?')}{title}{' (waiting)' if tstat(main) in STUCK else ''} {bar(done, len(steps), style)} {done}/{len(steps)}"]
     if now:
         parts.append(f"now: {now.get('n', '?')} {label(now)}")
-    if stuck:
-        parts.append("blocked: " + ", ".join(str(s.get("n", "?")) for s in stuck))
+    reasons: dict[str, list[str]] = {}
+    for s in stuck:
+        reasons.setdefault(s.get("waiting_for") or "", []).append(str(s.get("n", "?")))
+    for why, ns in reasons.items():
+        parts.append(f"waiting for {why} ({', '.join(ns)})" if why else "blocked: " + ", ".join(ns))
     if manual:
         parts.append(manual)
     if len(open_t) > 1:
         waiting = sum(1 for t in open_t if t is not main and tstat(t) in STUCK)
         parts.append(f"+{len(open_t) - 1} other open" + (f" ({waiting} waiting)" if waiting else ""))
     return " · ".join(parts)
+
+
+REFRESH_EVERY = 60     # seconds between background re-checks of the setup task (doctor takes about 2 s)
+
+
+def refresh_setup(project: Path, data: dict) -> None:
+    """While "Project setup" is open, re-run doctor in the background at most once a minute, so the bar follows where setup
+    really is (owner, 24 Nov 2026: it "does not auto clear or close or refresh"). Never blocks the line; never fails it."""
+    try:
+        import subprocess
+        import time
+        if not any(t.get("title") == "Project setup" and t.get("status") != "done" for t in data.get("tasks") or []):
+            return
+        stamp = project / "state" / "statusline-refresh.stamp"
+        if stamp.exists() and time.time() - stamp.stat().st_mtime < REFRESH_EVERY:
+            return
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.touch()
+        growth = Path(__file__).resolve().parents[2] / "growth"
+        subprocess.Popen([str(growth), "doctor"], cwd=project, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True,
+                         env={**os.environ, "GROWTH_PROJECT": str(project), "PYTHONDONTWRITEBYTECODE": "1"})
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def main() -> None:
@@ -128,6 +156,8 @@ def main() -> None:
         import records
         data = records.tasks_doc(project)
         print(line(data, settings(project).get("statusline_style") or "bars", manual_checks(project, data)))
+        if not os.environ.get("GROWTH_NO_REFRESH"):
+            refresh_setup(project, data)
     except FileNotFoundError:
         print("no task list yet (docs/tasks.json)")
     except Exception as e:  # noqa: BLE001  (a status line must never break the agent's window)

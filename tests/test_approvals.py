@@ -60,8 +60,11 @@ def test_a_hand_written_or_edited_line_is_seen(tmp_path, home):
 
 def test_an_unsigned_line_fails_once_a_key_exists_and_a_lost_key_is_seen(tmp_path, home):
     docs = project(tmp_path) / "docs"
-    approvals.record(docs, "review", "x-review-2026-11-18.md", b"text")      # no key yet: unsigned
-    approvals.ensure_key()
+    approvals.record(docs, "review", "x-review-2026-11-18.md", b"text")
+    log = docs / "approvals.jsonl"
+    e = json.loads(log.read_text())
+    e.pop("sig")                                                              # an old-style unsigned line
+    log.write_text(json.dumps(e) + "\n")
     assert approvals.verify(docs)[1] and "not signed" in approvals.verify(docs)[1][0]
     (docs / "approvals.jsonl").unlink()
     approvals.record(docs, "review", "x-review-2026-11-18.md", b"text")
@@ -87,7 +90,7 @@ def test_the_owner_approves_in_a_terminal_by_typing_the_code(tmp_path):
     assert rc == 0, out
     q = json.loads((p / "docs" / "tasks.json").read_text())["questions"][0]
     assert q["answer"] == "yes, name them" and q["approval"] == "A0001"
-    key = tmp_path / "home" / ".config" / "growth-ops-kit" / "approvals.key"
+    key = Path(os.environ["GROWTH_APPROVALS_KEY"])                        # the test key (conftest), never the real one
     assert key.is_file() and stat.S_IMODE(os.stat(key).st_mode) == 0o600          # made on the first approval, owner-only
     e = json.loads((p / "docs" / "approvals.jsonl").read_text())
     assert e["kind"] == "answer" and e["sig"] and e["via"].startswith("terminal")
@@ -187,3 +190,12 @@ def test_generated_permissions_allow_only_the_delegated_form_when_on():
         assert f"Bash(growth approve {never}*)" in deny
     assert "Bash(growth approvals*)" in deny and "Bash(growth wizard confirm*)" in deny
     assert harness.permissions_wanted({"approvals": {**DELEGATE, "delegate_local": False}}) == harness.permissions_wanted({})
+
+
+def test_the_first_line_of_a_new_log_is_signed(tmp_path, home):
+    # 24 Nov 2026: the key was made at the 4th approval, so the 3 earlier honest lines failed verify for good
+    docs = project(tmp_path) / "docs"
+    assert approvals.read_key() is None
+    approvals.record(docs, "decision", "J0001", {"id": "J0001"})
+    assert approvals.read_key() and approvals.verify(docs)[1] == []
+    assert json.loads((docs / "approvals.jsonl").read_text().splitlines()[0]).get("sig")

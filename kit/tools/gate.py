@@ -60,6 +60,23 @@ def fetch(url):
         return 0, ""
 
 
+def _hostport(url):
+    u = urllib.parse.urlsplit(url or "")
+    host = (u.hostname or "").lower().replace("127.0.0.1", "localhost")
+    return host, u.port or (443 if u.scheme == "https" else 80)
+
+
+def preview_repo_for(url):
+    """The worktree that serves the project's preview (growth.json preview_repo) when --url is the preview address
+    (growth.json preview_url). Without this, a gate run on the preview read the main checkout's branch and files
+    (24 Nov 2026: 'branch main', no shared components) while the page came from the worktree."""
+    pr, pu = CFG.get("preview_repo"), CFG.get("preview_url")
+    if not (pr and pu and url) or _hostport(url) != _hostport(pu):
+        return None
+    p = Path(str(pr)).expanduser()
+    return (p if p.is_absolute() else PROJECT / p).resolve()
+
+
 def site_repo_default():
     """growth.json site_repo as a folder, or None when the project keeps no site checkout."""
     from config import SITE_REPO
@@ -98,7 +115,7 @@ def cmd_page(a):
     if u.netloc.lower() in LIVE:
         print("Refusing to run the gate against the live site: pass a local URL.", file=sys.stderr)
         return 2
-    repo = Path(a.repo).resolve() if a.repo else site_repo_default()
+    repo = Path(a.repo).resolve() if a.repo else (preview_repo_for(a.url) or site_repo_default())
     key = a.key or default_key(a.path)
     static = not a.url
     ctx = Ctx(project=PROJECT, path=a.path, url=a.url or "", repo=repo, ptype=a.type, docs=DOCS, cfg=CFG, key=key, static=static)

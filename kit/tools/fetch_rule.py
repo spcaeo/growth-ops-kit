@@ -29,8 +29,12 @@ def blocked(url: str, cfg: dict | None = None) -> bool:
     return no_crawl(cfg) and is_live(url, cfg)
 
 
-def assert_may_fetch(url: str, cfg: dict | None = None) -> None:
-    """Exit with a plain refusal when the live-site rule is no-crawl and the address is on the live host."""
+def assert_may_fetch(url: str, cfg: dict | None = None, sitemap_only: bool = False) -> None:
+    """Exit with a plain refusal when the live-site rule is no-crawl and the address is on the live host.
+    sitemap_only=True: the sitemap files alone (`growth inventory --no-pages`), no page is visited; the page tracker reads
+    them the same way."""
+    if sitemap_only:
+        return
     if blocked(url, cfg):
         if cfg is None:
             import config

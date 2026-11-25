@@ -115,6 +115,9 @@ def make(folder: Path, site: str, name: str = "", stack: str = "static", force: 
     cfg_file = folder / "growth.json"
     cfg = json.loads(cfg_file.read_text())
     cfg["stack"] = stack
+    here = Path.cwd().resolve()
+    if not cfg.get("workspace") and here != folder and here in folder.parents:
+        cfg["workspace"] = str(here)     # owner, 24 Nov 2026: the progress bar shows where Claude Code is opened, not only inside the project
     if cfg_file in made and isinstance(cfg.get("tracker_port"), int):     # a new file only: never move a port the owner chose
         cfg["tracker_port"] = free_port(cfg["tracker_port"])
     cfg_file.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")

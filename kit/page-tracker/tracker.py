@@ -85,7 +85,8 @@ def tracked_files():
 def sync_ships(c):
     """Every commit on the site's branch (time = when it landed there; the site deploys on push to that branch)."""
     if not repo_meta.repo_ok():
-        print(f"git: no site repo at {config.REPO}; change dates skipped")
+        print("git: no site repo set yet (growth.json site_repo); change dates skipped" if not config.CFG.get("site_repo")
+              else f"git: no site repo at {config.REPO}; change dates skipped")
         return
     ref = repo_meta.branch_ref()
     for line in git("log", ref, "--format=%H\x1f%cI").splitlines():
@@ -132,7 +133,7 @@ def sync_changes(c):
                 n_changes += 1
             prev = text
     c.commit()
-    print(f"changes: {n_changes} from git history of {config.REPO}")
+    print(f"changes: {n_changes} from git history of {config.REPO}" if config.CFG.get("site_repo") else f"changes: {n_changes} (no site repo yet)")
 
 
 def _exists(sha, rel):

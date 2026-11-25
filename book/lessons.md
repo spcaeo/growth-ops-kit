@@ -41,6 +41,10 @@ business.
 
 ## A1. Onboarding: what each step needs that a checklist does not say
 
+- **Helper agents cannot use the research browser** (24 Nov 2026). Claude in Chrome reached only the session where
+  the owner typed `/chrome`; a research helper saw no browser at all, and the owner reconnected Chrome twice for
+  nothing. Cost: half a research step lost and two owner round trips. Guard: the lead does every browser step (Google
+  results, People Also Ask, AI answers) and saves each result to a file under `research/`; helpers work from those files.
 - **Ask the primary market first** (17 Nov 2026). The first AI-answer checks ran from the wrong country. A re-run set
   to the real market gave a different answer: the product was named first with a full price table. Guard: record the
   market in `growth.json` before any search; Google with that market's `gl`, `hl` and `pws=0`; AI prompts name a place
