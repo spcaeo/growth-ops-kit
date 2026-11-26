@@ -71,7 +71,7 @@
     "shared": {
       "purpose": "Changes to code every page uses (design system, shared components) and the registry that follows them: one writer at a time.",
       "group": "D shared code",
-      "tools": ["site_design", "registry_sync"],
+      "tools": ["site_design", "brand_kit", "registry_sync"],
       "libraries": [],
       "jobs": {
         "shared-change": {"way": "single", "runner": "agent:build", "resource": "shared-code", "stage": "", "what": "a change to shared code; holds the shared-code lock while it runs (not tied to one page)"}

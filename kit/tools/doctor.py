@@ -174,6 +174,14 @@ row("A2 Project adapted to this business", ok2 if ok2 or bad or not CFG.get("sit
     "fill in growth.json (site_url, name, product), rewrite the files that still name the old site, "
     "and set build_dir to a production build so the site is searched too"
     + ("; add the emails and booking links of docs/brand-scan.md to BRAND.md section 1a (or write why one is left out)" if scan_ok is False else ""))
+# A2b brand kit (soft: open until brand/brand.json exists and its guidelines and token files are built from it; never a FAIL)
+try:
+    from brandkit import store as brand_store
+    _bk_ok, _bk_note = brand_store.status(PROJECT)
+except Exception as e:  # noqa: BLE001  a broken brand folder must never stop the doctor
+    _bk_ok, _bk_note = None, f"the brand folder could not be read ({type(e).__name__})"
+row("A2b Brand kit", True if _bk_ok else None, _bk_note,
+    "growth brand-kit learn --base <preview address>, show the owner brand/brand-guidelines.html, take changes with growth brand-kit set, then growth brand-kit build")
 # A3 site repo studied (optional: a site with no code checkout is read through its live pages only)
 if not CFG.get("site_repo"):
     row("A3 Site repo cloned and studied", True, "no site repo (growth.json site_repo is empty): live-page checks only")
@@ -397,14 +405,14 @@ row("A15 Work is tracked in a task", None if _wp else True,
     "growth tasks add \"<title>\" \"<owner's words>\" (a chat that is not page work: --type chat)")
 
 # The 16 steps are shown to a person as 4 stages (a bar each); a script, a pipe or --verbose gets every step, as before.
-STAGES = [("Your site", ("A1", "A2", "A3", "A7", "A7b", "A11")),
+STAGES = [("Your site", ("A1", "A2", "A2b", "A3", "A7", "A7b", "A11")),
           ("Access", ("A4", "A5", "A8")),
           ("Agent setup", ("A6", "A9", "A10", "A12", "A13", "A15")),
           ("Research browser", ("A14",))]
 # One plain sentence per step, said when that step is not done (the exact result and the fix line follow it).
 PLAIN = {
     "A1": "I have no notes about your business yet.", "A2": "The project settings are not filled in, or still name an old site.",
-    "A3": "I have not studied your site's code folder yet.", "A4": "Analytics is switched on but its keys are not ready.",
+    "A2b": "There is no brand kit yet (colours, fonts, logo and rules in one place).", "A3": "I have not studied your site's code folder yet.", "A4": "Analytics is switched on but its keys are not ready.",
     "A5": "You have not yet proved that the kit can safely change your live site.", "A6": "The task list is missing.",
     "A7": "I do not have a full list of your site's pages yet.", "A7b": "I have not mapped how your pages link to each other yet.",
     "A8": "The search history is not loaded, or something starts it automatically.", "A9": "Your journal page is out of date.",

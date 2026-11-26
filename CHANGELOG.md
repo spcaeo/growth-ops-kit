@@ -4,6 +4,36 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 3.1.0 - 2026-11-26
+
+A brand kit the project makes for itself, and the owner can change: guidelines, colour guidelines and design tokens, reusable
+from project to project. No page rule changes: a page is READY under 3.1.0 exactly when it is under 3.0.2.
+- **`growth brand-kit learn --base <preview address>`** reads the site in one headless browser (3 to 6 pages: the home page and
+  pages that differ, from the inventory or the sitemap, or `--page` ones). The live host of a no-crawl project is refused and
+  the browser is stopped from asking it; analytics scripts are never loaded. It reads:
+  colours from computed styles weighted by painted area and merged when near-identical, then given jobs (background, surface,
+  text, muted text, primary from the main call-to-action button, text on primary, accent, border, links, success, warning,
+  error); font families with the weights used; the type scale (h1 to h6, body, small) with sizes and line heights; spacing
+  steps, corner radius, shadows; buttons and links at rest, hover and keyboard focus; the logo (with a copy of the file) and the
+  favicon and app icons; the CSS variables; and, when they exist, the name, call-to-action wording and contact facts from
+  `docs/brand-scan.json` and the voice and the words never to use from BRAND.md. It writes `brand/brand.generated.json`.
+- **The owner's changes:** `brand/brand.overrides.json`, written by hand or by `growth brand-kit set <path> <value>` (for example
+  `colors.primary "#0B6E4F"`) and `growth brand-kit unset <path>`. `learn` never touches it, so it can run again and again.
+  `brand/brand.json` is the merge: overrides win, and every value says whether it came from the site, an override or a default
+  (a changed primary colour is followed by the buttons). `growth brand-kit show` lists every path.
+- **`growth brand-kit build`** makes, from brand.json alone and byte for byte the same every time: a tint and shade scale (50
+  to 900) for each colour; a WCAG contrast table of the usable text and background pairs (AA and AAA marked); `brand/brand-guidelines.html`,
+  one self-contained page (swatches with hex, RGB and HSL, contrast, type specimens, buttons in each state, spacing, radius, shadows,
+  logo with clear space and do and do not, voice, call-to-action wording, contact facts); `brand/BRAND-GUIDELINES.md`, the same in
+  words; and `brand/exports/`: `tokens.css` (custom properties), `tokens.json` (W3C Design Tokens), `tailwind.brand.cjs`, `tokens.scss`.
+- **`export <dir>` and `import <dir or brand.json>`** move a kit between projects. Import turns it into the new project's overrides
+  (values only; defaults are worked out again), refuses to replace changes already there unless `--force`, and the project can still fine-tune.
+- **`check`:** brand.json is valid, the body and button colour pairs pass AA (or it lists them with the command that fixes each),
+  and the builds are current.
+- **Doctor A2b "Brand kit"** (soft, never FAIL): open until brand/brand.json exists and its guidelines and token files are built from it.
+  **Onboarding skill:** a step after A2 runs learn, shows the owner the guidelines page, takes changes with `set`, then builds.
+  **BRAND.md template:** section 8a points at the kit.
+
 ## 3.0.2 - 2026-11-26
 
 Onboarding now reads the facts a site states about itself, so BRAND.md is written from the site and not from memory. No page

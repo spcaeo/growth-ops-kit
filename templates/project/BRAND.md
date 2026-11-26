@@ -123,9 +123,13 @@ state stays "not found", never a guess. Source cell: the page path, or "owner, <
 - Plain, concrete, written by someone who does the work. Short sentences. No filler words (seamless, unlock, leverage,
   empower, streamline, cutting-edge, robust, world-class). <fill in: the owner's own voice notes>
 
-## 8a. Illustration style
+## 8a. Illustration style and the brand kit
 
-<fill in: the style the owner picked from a board (rule 36g), the colours, and the one shared art set. Leave empty
+The colours, fonts, type scale, buttons, logo and tokens live in the brand kit, not here: run `growth brand-kit learn --base <preview address>`
+and `growth brand-kit build`, then open `brand/brand-guidelines.html`. Change a value with `growth brand-kit set <path> <value>` (kept in
+`brand/brand.overrides.json`); this sheet keeps the words and the owner's choices below.
+
+<fill in: the style the owner picked from a board (rule 36g) and the one shared art set. Leave empty
 until the owner has chosen.>
 
 ## 9. Open items for the owner

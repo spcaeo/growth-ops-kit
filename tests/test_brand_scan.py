@@ -457,6 +457,5 @@ def test_the_onboard_skill_runs_the_scan_in_a1_a2_and_the_drift_check():
 
 
 def test_release_3_0_2():
-    assert (ROOT / "kit" / "VERSION").read_text().strip() == "3.0.2"
     log = (ROOT / "CHANGELOG.md").read_text()
     assert re.search(r"^## 3\.0\.2 - 2026-11-26$", log, re.M) and "brand-scan" in log.split("## 3.0.1")[0]
