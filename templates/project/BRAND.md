@@ -11,7 +11,7 @@ owner: <fill in: who decides for the business>
 one wording each, and what no page may claim. When this sheet and the page rulebook disagree on a **fact**, this sheet
 wins; on **how a page is built**, the rulebook wins. Then fix the other one.
 
-The rulebook points at section numbers of this sheet: section 1 (who we are), section 4 (the one CTA and conversion),
+The rulebook points at section numbers of this sheet: section 1 (who we are; 1a holds the company and contact facts), section 4 (the one CTA and conversion),
 section 5 (pricing words), section 6 (proof allowed), section 7 (what we never claim), section 10 (the permission
 log). Keep the numbers.
 
@@ -38,6 +38,39 @@ Machine-readable words (the banned offer words, the words never to say, the old-
   - Origin story: only facts the owner approves, or leave empty
 -->
 
+## 1a. Company and contact facts
+
+**Run `growth brand-scan` first** (it reads the terms, privacy, contact and about pages, the footer, llms.txt and the
+JSON-LD, and writes `docs/brand-scan.md` with a draft of these lines). Copy what is right, keep the source in every row,
+and ask the owner only for what the scan could not find or found twice with different values. A value the site does not
+state stays "not found", never a guess. Source cell: the page path, or "owner, <date>".
+
+| Field | Wording | Source |
+| --- | --- | --- |
+| Legal name | <fill in> | <fill in> |
+| Registered or postal address | <fill in> | <fill in> |
+| Governing law (terms of service) | <fill in> | <fill in> |
+| Email, sales or new business | <fill in> | <fill in> |
+| Email, support | <fill in> | <fill in> |
+| Email, privacy or data protection | <fill in> | <fill in> |
+| Email, legal | <fill in> | <fill in> |
+| Email, careers or press | <fill in> | <fill in> |
+| Other emails on the company's domain, and what each is for | <fill in> | <fill in> |
+| Phone numbers | <fill in> | <fill in> |
+| Booking link (Calendly, Cal.com, HubSpot meetings ...) | <fill in> | <fill in> |
+| Social profiles (LinkedIn, X, Facebook, Instagram, YouTube, GitHub, Clutch, G2) | <fill in> | <fill in> |
+| Terms of service last updated | <fill in> | <fill in> |
+| Privacy policy last updated | <fill in> | <fill in> |
+| Laws and standards the legal pages name (GDPR, HIPAA, SOC 2 ...) | <fill in> | <fill in> |
+
+<!-- What goes in each <fill in> cell above (delete this comment when done):
+  - Every email the scan found on the company's own domain is named here, or a line says why it is left out
+    (`growth doctor` A2 checks this when docs/brand-scan.json exists).
+  - Legal name: the entity named in the terms or privacy page ("... Pvt. Ltd."), not the trading name
+  - Governing law: the place whose law governs the terms, as the page words it
+  - Source: the page path it came from (for example /terms-of-use), or "owner, 2026-11-26"
+-->
+
 ## 2. What we sell
 
 - <fill in: the offer, one line each, in the words the site already uses>
@@ -55,6 +88,8 @@ Machine-readable words (the banned offer words, the words never to say, the old-
 | The reason line | <fill in> |
 | Call or step length | <fill in> |
 | The market (also in `growth.json`) | <fill in> |
+| Booking link | <fill in> |
+| Other CTA wordings found on the site | <fill in> |
 
 <!-- What goes in each <fill in> cell above (delete this comment when done):
   - The one CTA label: the exact button words, for example "Get a quote"
@@ -62,6 +97,8 @@ Machine-readable words (the banned offer words, the words never to say, the old-
   - The reason line: the one line beside the button that says what the reader gets (rule 32a)
   - Call or step length: for example "15-minute quote call"; one length everywhere (rule 4)
   - The market (also in `growth.json`): country and language, for example US, English
+  - Booking link: the address a visitor books a call at, with its source page (a path), or "none"
+  - Other CTA wordings found on the site: the other buttons that ask for action ("Get a free estimate", "Hire developers"), each with the pages it is on and its source (`growth brand-scan` lists them)
 -->
 
 ## 5. Pricing words (state exactly these, nothing more)

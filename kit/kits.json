@@ -33,7 +33,7 @@
     "site": {
       "purpose": "Groundwork on the whole site: the inventory, the link graph, the sitemaps, the stack, the page tracker and a page's before snapshot.",
       "group": "A groundwork",
-      "tools": ["inventory", "link_graph", "link_map", "sitemaps", "detect", "page_tracker", "page_snapshot"],
+      "tools": ["inventory", "brand_scan", "link_graph", "link_map", "sitemaps", "detect", "page_tracker", "page_snapshot"],
       "libraries": [],
       "jobs": {
         "inventory": {"way": "ahead", "runner": "machine", "resource": "none", "stage": "", "use_by_days": 7, "what": "rebuild the site inventory (not tied to one page; a timer or the lead adds it)"},

@@ -160,11 +160,20 @@ if CFG.get("old_brand_words"):
     site_note = f"; project: {n_proj} files searched, {len(leftover)} mention the old brand" + site_note
 bad = leftover + [f"site: {h}" for h in site_hits]
 ok2 = bool(CFG.get("site_url")) and not bad and site_ok
+# a brand scan (growth brand-scan) exists: BRAND.md must name each company-domain email and booking link it found, or say why not.
+# Soft: it keeps A2 open (TODO), never FAIL, and a project with no scan is not asked for one.
+try:
+    from brandscan import check as brand_check
+    scan_ok, scan_note = brand_check.check(DOCS / "brand-scan.json", PROJECT / "BRAND.md")
+except Exception as e:  # noqa: BLE001  a broken scan file or reader must never stop the doctor
+    scan_ok, scan_note = None, f"; brand scan not checked ({type(e).__name__})"
+ok2 = ok2 and scan_ok is not False
 row("A2 Project adapted to this business", ok2 if ok2 or bad or not CFG.get("site_url") else None,
-    "growth.json filled in + no old-brand words" + site_note
+    "growth.json filled in + no old-brand words" + site_note + scan_note
     + (f" (still named in: {', '.join(bad[:5])})" if bad else ""),
     "fill in growth.json (site_url, name, product), rewrite the files that still name the old site, "
-    "and set build_dir to a production build so the site is searched too")
+    "and set build_dir to a production build so the site is searched too"
+    + ("; add the emails and booking links of docs/brand-scan.md to BRAND.md section 1a (or write why one is left out)" if scan_ok is False else ""))
 # A3 site repo studied (optional: a site with no code checkout is read through its live pages only)
 if not CFG.get("site_repo"):
     row("A3 Site repo cloned and studied", True, "no site repo (growth.json site_repo is empty): live-page checks only")

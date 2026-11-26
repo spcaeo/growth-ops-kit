@@ -4,6 +4,33 @@ The kit and the book share one version number. Dates are written year-month-day.
 
 ## Unreleased
 
+## 3.0.2 - 2026-11-26
+
+Onboarding now reads the facts a site states about itself, so BRAND.md is written from the site and not from memory. No page
+rule changes: a page is READY under 3.0.2 exactly when it is under 3.0.1.
+- **`growth brand-scan`** (new). It finds the pages itself: home, robots.txt, the sitemap, llms.txt and llms-full.txt (also
+  under /.well-known/), and the terms, privacy, cookie, security, contact, about, pricing, booking, careers and press pages
+  named in the header, the footer and the sitemap (25 pages by default, `--max-pages`). Plain requests, one a second, no
+  name or email in the User-Agent. A no-crawl project refuses the live host and says to use `--base <preview address>`;
+  a redirect to the live host is not followed either.
+- **What it reads, each finding with its page and the day it was read:** the legal name, postal address, governing law and
+  last-updated date from the terms and privacy pages, the privacy contact and the laws they name (GDPR, HIPAA, CCPA ...);
+  every email (mailto links, text, written out with [at] and [dot], Cloudflare-hidden ones) grouped on the company's domain or
+  not and labelled support, sales, privacy, legal, careers or info; phone numbers; booking links (Calendly, Cal.com,
+  HubSpot meetings, SavvyCal, TidyCal, Acuity, YouCanBook.me, Zcal, Chili Piper, Google Calendar appointment pages,
+  Microsoft Bookings); the wording of every call to action, counted by page, with the likely main one; llms.txt and
+  llms-full.txt (title, summary, sections, links); social profiles; and the Organization data in JSON-LD.
+- **Output:** `docs/brand-scan.json` (every finding with its source) and `docs/brand-scan.md` (a draft of the BRAND.md lines,
+  each with its source, and a list of what the site says twice or not at all). It never changes BRAND.md and never stores a secret.
+- **BRAND.md template:** new section 1a "Company and contact facts" (legal name, address, governing law, emails by purpose,
+  phones, booking link, social profiles, terms and privacy dates) and two new section 4 rows, "Booking link" and "Other CTA
+  wordings found on the site". Every cell carries its source. The section numbers are unchanged.
+- **Onboarding skill:** A1 runs `growth brand-scan` first; A2 writes the facts into BRAND.md with their sources and asks the
+  owner only what the scan could not find or found twice with different values; the drift check runs the scan again and
+  compares emails, main CTA and booking link.
+- **Doctor A2:** when `docs/brand-scan.json` exists, BRAND.md must name every company-domain email and every booking link the scan
+  found, or say why one is left out. A gap keeps A2 open (TODO, never FAIL); a project with no scan, or a broken scan file, is unaffected.
+
 ## 3.0.1 - 2026-11-25
 
 Fixes found while running 3.0 on its first project (24 Nov 2026). No page rule changes: a page is READY under 3.0.1
